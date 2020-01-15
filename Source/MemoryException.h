@@ -11,11 +11,11 @@ class MemoryException : public std::exception {
 public:
     inline MemoryException(const char* func, int32_t line, const char* message) noexcept
         : MemoryException(func, line, message, {}, 0) {}
-    inline MemoryException(const char* func, int32_t line, const char* message, const std::vector<int>& offsets) noexcept
+    inline MemoryException(const char* func, int32_t line, const char* message, const std::vector<__int64>& offsets) noexcept
         : MemoryException(func, line, message, offsets, 0) {}
-    inline MemoryException(const char* func, int32_t line, const char* message, const std::vector<int>& offsets, size_t numItems) noexcept
+    inline MemoryException(const char* func, int32_t line, const char* message, const std::vector<__int64>& offsets, size_t numItems) noexcept
         : _func(func), _line(line), _message(message), _offsets(offsets), _numItems(numItems) {}
-    
+
     ~MemoryException() = default;
     inline const char* what() const noexcept {
         return _message;
@@ -24,7 +24,7 @@ public:
         std::string msg = "MemoryException thrown in function ";
         msg += exc._func;
         msg += " on line " + std::to_string(exc._line) + ":\n" + exc._message + "\nOffsets:";
-        for (int offset : exc._offsets) {
+        for (__int64 offset : exc._offsets) {
             msg += " " + std::to_string(offset);
         }
         msg += "\n";
@@ -41,7 +41,7 @@ private:
     const char* _func;
     int32_t _line;
     const char* _message;
-    const std::vector<int> _offsets;
+    const std::vector<__int64> _offsets;
     size_t _numItems = 0;
 };
 

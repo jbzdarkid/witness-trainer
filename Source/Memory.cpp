@@ -45,9 +45,9 @@ void Memory::Heartbeat(HWND window, WPARAM wParam) {
         // Process has exited, clean up.
         _computedAddresses.clear();
         _handle = NULL;
+        PostMessage(window, WM_COMMAND, wParam, (LPARAM)ProcStatus::NotRunning);
         // Wait for the process to fully close; otherwise we might accidentally re-attach to it.
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-        PostMessage(window, WM_COMMAND, wParam, (LPARAM)ProcStatus::NotRunning);
         return;
     }
 
@@ -117,27 +117,25 @@ int Memory::ExecuteSigScans(int blockSize) {
     for (int i=0; i<0x300000; i+=0x1000) {
         std::vector<byte> data = ReadData<byte>({i}, 0x1100);
 
-        bool modified = false;
         for (auto& [scanBytes, sigScan] : _sigScans) {
             if (sigScan.found) continue;
             int index = find(data, scanBytes);
             if (index == -1) continue;
-            if (sigScan.scanFunc(i, index, data)) modified = true;
+            sigScan.scanFunc(i, index, data);
             sigScan.found = true;
             notFound--;
         }
-        if (modified) WriteData<byte>({i}, data);
     }
     return notFound;
 }
 
-void* Memory::ComputeOffset(std::vector<int> offsets) {
+void* Memory::ComputeOffset(std::vector<__int64> offsets) {
     // Leave off the last offset, since it will be either read/write, and may not be of type uintptr_t.
-    int final_offset = offsets.back();
+    const __int64 final_offset = offsets.back();
     offsets.pop_back();
 
     uintptr_t cumulativeAddress = _baseAddress;
-    for (const int offset : offsets) {
+    for (const __int64 offset : offsets) {
         cumulativeAddress += offset;
 
         const auto search = _computedAddresses.find(cumulativeAddress);

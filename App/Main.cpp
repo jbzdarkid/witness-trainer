@@ -12,6 +12,7 @@
 #define LOAD_POS 0x406
 #define LOAD_ANG 0x407
 #define FOV_CURRENT 0x408
+#define DOORS_PRACTICE 0x409
 
 // Globals
 HWND g_hwnd;
@@ -50,15 +51,21 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 case HEARTBEAT:
                     switch ((ProcStatus)lParam) {
                         case ProcStatus::NotRunning:
-                            // Shut down trainer, wait for startup
                             if (g_trainer) {
                                 g_trainer = nullptr;
+                                // If you restart the game, both of these will be disabled.
+                                CheckDlgButton(hwnd, NOCLIP_ENABLED, false);
+                                CheckDlgButton(hwnd, DOORS_PRACTICE, false);
                             }
                             break;
                         case ProcStatus::Running:
                             if (!g_trainer) {
+                                // Trainer started, game is running
                                 g_trainer = std::make_shared<Trainer>(g_witnessProc);
                                 SetWindowText(g_noclipSpeed, std::to_wstring(g_trainer->GetNoclipSpeed()).c_str());
+                                SetWindowText(g_fovCurrent, std::to_wstring(g_trainer->GetFov()).c_str());
+                                CheckDlgButton(hwnd, NOCLIP_ENABLED, g_trainer->GetNoclip());
+                                CheckDlgButton(hwnd, DOORS_PRACTICE, g_trainer->GetRandomDoorsPractice());
                             }
                             g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
                             SetPosText(g_trainer->GetCameraPos(), g_currentPos);
@@ -113,6 +120,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                         int length = GetWindowText(g_fovCurrent, text.data(), static_cast<int>(text.size()));
                         text.resize(length);
                         g_trainer->SetFov(wcstof(text.c_str(), nullptr));
+                    }
+                    break;
+                case DOORS_PRACTICE:
+                    if (g_trainer) {
+                        bool doorsPractice = IsDlgButtonChecked(hwnd, DOORS_PRACTICE);
+                        g_trainer->SetRandomDoorsPractice(!doorsPractice);
+                        CheckDlgButton(hwnd, DOORS_PRACTICE, !doorsPractice);
                     }
                     break;
             }
@@ -186,20 +200,23 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     CreateLabel(10, 64, 100, L"Field of View");
     g_fovCurrent = CreateText(100, 60, 150, L"", FOV_CURRENT);
 
-    CreateButton(10, 100, 100, L"Save Position", SAVE_POS);
-    g_currentPos = CreateLabel(15, 130, 90, 48);
+    CreateLabel(10, 90, 160, L"Random Doors Practice");
+    CreateCheckbox(175, 92, DOORS_PRACTICE);
+
+    CreateButton(10, 110, 100, L"Save Position", SAVE_POS);
+    g_currentPos = CreateLabel(15, 140, 90, 48);
     SetPosText({0.0f, 0.0f, 0.0f}, g_currentPos);
 
-    CreateButton(110, 100, 100, L"Load Position", LOAD_POS);
-    g_savedPos = CreateLabel(115, 130, 90, 48);
+    CreateButton(110, 110, 100, L"Load Position", LOAD_POS);
+    g_savedPos = CreateLabel(115, 140, 90, 48);
     SetPosText({0.0f, 0.0f, 0.0f}, g_savedPos);
 
-    CreateButton(10, 200, 100, L"Save Angle", SAVE_ANG);
-    g_currentAng = CreateLabel(15, 230, 90, 32);
+    CreateButton(10, 190, 100, L"Save Angle", SAVE_ANG);
+    g_currentAng = CreateLabel(15, 220, 90, 32);
     SetAngText({0.0f, 0.0f}, g_currentAng);
 
-    CreateButton(110, 200, 100, L"Load Angle", LOAD_ANG);
-    g_savedAng = CreateLabel(115, 230, 90, 32);
+    CreateButton(110, 190, 100, L"Load Angle", LOAD_ANG);
+    g_savedAng = CreateLabel(115, 220, 90, 32);
     SetAngText({0.0f, 0.0f}, g_savedAng);
 
     g_witnessProc->StartHeartbeat(g_hwnd, HEARTBEAT);
