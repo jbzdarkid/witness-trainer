@@ -49,14 +49,13 @@ Trainer::Trainer(const std::shared_ptr<Memory>& memory) : _memory(memory){
         _doorClose = offset + index + 0x04;
     });
 
-    // Move this? Something awkward is happening if you solve while the doors are closing.
+    // Improve this? Something awkward is happening if you solve while the doors are closing.
     _memory->AddSigScan({0x76, 0x18, 0x48, 0x8B, 0xCF, 0x89, 0x9F}, [&](int offset, int index, const std::vector<byte>& data) {
-        // When the panel powers on, mark it as having never been solved
-        _memory->WriteData<byte>({offset + index + 0x37}, {
-            0x48, 0x63, 0x00, // movsxd rax, dword ptr ds:[rax]
-            0xC6, 0x87, 0xA0, 0x02, 0x00, 0x00, 0x00, // mov byte ptr ds:[rdi+0x2A0], 0x00
-            0x66, 0x90, // nop
-        });
+        _powerOn = offset + index + 0x37;
+    });
+
+    _memory->AddSigScan({0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x70, 0x10, 0x48, 0x89, 0x78, 0x18, 0x48, 0x8B, 0x3D}, [&](int offset, int index, const std::vector<byte>& data) {
+        _campaignState = ReadStaticInt(offset, index + 0x27, data);
     });
 
     _memory->ExecuteSigScans();
@@ -85,6 +84,12 @@ std::vector<float> Trainer::GetCameraAng() {
 float Trainer::GetFov() {
     if (_fovCurrent == 0) return 0.0f;
     return _memory->ReadData<float>({_fovCurrent}, 1)[0];
+}
+
+bool Trainer::CanSave() {
+    if (_campaignState == 0) return true;
+    // bool do_not_save;
+    return _memory->ReadData<byte>({_campaignState, 0x50}, 1)[0] == 0x00;
 }
 
 bool Trainer::GetRandomDoorsPractice() {
@@ -117,8 +122,13 @@ void Trainer::SetFov(float fov) {
     _memory->WriteData<float>({_fovCurrent}, {fov});
 }
 
+void Trainer::SetCanSave(bool canSave) {
+    if (_campaignState == 0) return;
+    _memory->WriteData<byte>({_campaignState, 0x50}, {canSave ? (byte)0x00 : (byte)0x01});
+}
+
 void Trainer::SetRandomDoorsPractice(bool enable) {
-    if (_globals == 0 || _solvedTargetOffset == 0 || _doorOpen == 0 || _doorClose == 0) return;
+    if (_globals == 0 || _solvedTargetOffset == 0 || _doorOpen == 0 || _doorClose == 0 || _powerOn == 0) return;
 
     int hasEverBeenSolvedOffset = _solvedTargetOffset + 0x04;
     int idToPowerOffset = _solvedTargetOffset + 0x20;
@@ -136,6 +146,13 @@ void Trainer::SetRandomDoorsPractice(bool enable) {
         // When the panel is solved, power nothing.
         _memory->WriteData<int>({_globals, 0x18, 0x1983*8, idToPowerOffset}, {0x00000000});
         _memory->WriteData<int>({_globals, 0x18, 0x1987*8, idToPowerOffset}, {0x00000000});
+        // When the panel powers on, mark it as having never been solved
+        _memory->WriteData<byte>({_powerOn}, {
+            0x48, 0x63, 0x00, // movsxd rax, dword ptr [rax]
+            0xC6, 0x87, 0x00, 0x00, 0x00, 0x00, 0x00, // mov byte ptr ds:[rdi + <offset>], 0x00
+            0x66, 0x90, // nop
+        });
+        _memory->WriteData<int>({_powerOn + 0x05}, {hasEverBeenSolvedOffset});
     } else {
         // When the panel opens, if it is not solved, reset it and power it on
         _memory->WriteData<byte>({_doorOpen}, {0x76, 0x08});
@@ -148,5 +165,13 @@ void Trainer::SetRandomDoorsPractice(bool enable) {
         // When the panel is solved, power the double doors.
         _memory->WriteData<int>({_globals, 0x18, 0x1983*8, idToPowerOffset}, {0x00017C68});
         _memory->WriteData<int>({_globals, 0x18, 0x1987*8, idToPowerOffset}, {0x00017C68});
+        // When the panel powers on, do not modify its previously-solved state
+        _memory->WriteData<byte>({_powerOn}, {
+            0x48, 0x85, 0xC0, // test rax, rax
+            0x74, 0x5C, // je +0x5C
+            0x48, 0x63, 0x00, // movsxd rax, dword ptr [rax]
+            0x85, 0xC0, // test eax, eax
+            0x74, 0x55, // je +0x55
+        });
     }
 }
