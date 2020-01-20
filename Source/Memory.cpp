@@ -36,11 +36,11 @@ void Memory::BringToFront() {
         DWORD pid;
         GetWindowThreadProcessId(hwnd, &pid);
         if (pid == (DWORD)targetPid) {
-            SetActiveWindow(hwnd);
+            SetForegroundWindow(hwnd);
             return FALSE; // Stop enumerating
         }
         return TRUE; // Continue enumerating
-    }, (LPARAM)_handle);
+    }, (LPARAM)_pid);
 }
 
 void Memory::Heartbeat(HWND window, WPARAM wParam) {
@@ -74,7 +74,8 @@ bool Memory::Initialize() {
     HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     while (Process32NextW(snapshot, &entry)) {
         if (_processName == entry.szExeFile) {
-            _handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, entry.th32ProcessID);
+            _pid = entry.th32ProcessID;
+            _handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, _pid);
             break;
         }
     }

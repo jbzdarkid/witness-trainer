@@ -55,6 +55,7 @@ private:
     std::wstring _processName;
     std::map<uintptr_t, uintptr_t> _computedAddresses;
     uintptr_t _baseAddress = 0;
+    DWORD _pid = 0;
     HANDLE _handle = nullptr;
     struct SigScan {
         ScanFunc scanFunc;
