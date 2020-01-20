@@ -10,7 +10,7 @@ public:
     std::vector<float> GetCameraAng();
     float GetFov();
     bool CanSave();
-    float GetPlayerSpeed();
+    float GetSprintSpeed();
     bool GetRandomDoorsPractice();
 
     void SetNoclip(bool enabled);
@@ -19,7 +19,7 @@ public:
     void SetCameraAng(const std::vector<float>& ang);
     void SetFov(float fov);
     void SetCanSave(bool canSave);
-    void SetPlayerSpeed(float speed);
+    void SetSprintSpeed(float speed);
     void SetRandomDoorsPractice(bool enable);
 
 private:

@@ -111,7 +111,7 @@ bool Trainer::CanSave() {
     return _memory->ReadData<byte>({_campaignState, 0x50}, 1)[0] == 0x00;
 }
 
-float Trainer::GetPlayerSpeed() {
+float Trainer::GetSprintSpeed() {
     if (_runSpeed == 0) return 2.0;
     return _memory->ReadData<float>({_runSpeed}, 1)[0];
 }
@@ -151,9 +151,9 @@ void Trainer::SetCanSave(bool canSave) {
     _memory->WriteData<byte>({_campaignState, 0x50}, {canSave ? (byte)0x00 : (byte)0x01});
 }
 
-void Trainer::SetPlayerSpeed(float speed) {
+void Trainer::SetSprintSpeed(float speed) {
     if (_walkAcceleration == 0 || _walkDeceleration == 0 || _runSpeed == 0) return;
-    float multiplier = speed / GetPlayerSpeed();
+    float multiplier = speed / GetSprintSpeed();
     _memory->WriteData<float>({_runSpeed}, {speed});
     _memory->WriteData<float>({_walkAcceleration}, {_memory->ReadData<float>({_walkAcceleration}, 1)[0] * multiplier});
     _memory->WriteData<float>({_walkDeceleration}, {_memory->ReadData<float>({_walkDeceleration}, 1)[0] * multiplier});

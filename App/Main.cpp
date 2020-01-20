@@ -13,7 +13,7 @@
 #define LOAD_ANG 0x407
 #define FOV_CURRENT 0x408
 #define CAN_SAVE 0x409
-#define PLAYER_SPEED 0x410
+#define SPRINT_SPEED 0x410
 #define DOORS_PRACTICE 0x411
 #define ACTIVATE_GAME 0x412
 
@@ -25,7 +25,7 @@
 HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
-HWND g_noclipSpeed, g_currentPos, g_currentAng, g_savedPos, g_savedAng, g_fovCurrent, g_playerSpeed;
+HWND g_noclipSpeed, g_currentPos, g_currentAng, g_savedPos, g_savedAng, g_fovCurrent, g_sprintSpeed;
 std::vector<float> savedPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> savedAng = {0.0f, 0.0f};
 auto g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
@@ -72,7 +72,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                                 g_trainer = std::make_shared<Trainer>(g_witnessProc);
                                 SetWindowText(g_noclipSpeed, std::to_wstring(g_trainer->GetNoclipSpeed()).c_str());
                                 SetWindowText(g_fovCurrent, std::to_wstring(g_trainer->GetFov()).c_str());
-                                SetWindowText(g_playerSpeed, std::to_wstring(g_trainer->GetPlayerSpeed()).c_str());
+                                SetWindowText(g_sprintSpeed, std::to_wstring(g_trainer->GetSprintSpeed()).c_str());
                                 CheckDlgButton(hwnd, NOCLIP_ENABLED, g_trainer->GetNoclip());
                                 CheckDlgButton(hwnd, DOORS_PRACTICE, g_trainer->GetRandomDoorsPractice());
                             }
@@ -139,12 +139,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                         CheckDlgButton(hwnd, CAN_SAVE, !canSave);
                     }
                     break;
-                case PLAYER_SPEED:
+                case SPRINT_SPEED:
                     if (g_trainer) {
                         std::wstring text(128, L'\0');
-                        int length = GetWindowText(g_playerSpeed, text.data(), static_cast<int>(text.size()));
+                        int length = GetWindowText(g_sprintSpeed, text.data(), static_cast<int>(text.size()));
                         text.resize(length);
-                        g_trainer->SetPlayerSpeed(wcstof(text.c_str(), nullptr));
+                        g_trainer->SetSprintSpeed(wcstof(text.c_str(), nullptr));
                     }
                     break;
                 case DOORS_PRACTICE:
@@ -232,8 +232,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     g_noclipSpeed = CreateText(100, y, 150, L"", NOCLIP_SPEED);
     y += 30;
 
-    CreateLabel(10, y+4, 100, L"Player Speed");
-    g_playerSpeed = CreateText(100, y, 150, L"", PLAYER_SPEED);
+    CreateLabel(10, y+4, 100, L"Sprint Speed");
+    g_sprintSpeed = CreateText(100, y, 150, L"", SPRINT_SPEED);
     y += 30;
 
     CreateLabel(10, y+4, 100, L"Field of View");
