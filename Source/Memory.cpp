@@ -31,6 +31,18 @@ void Memory::StartHeartbeat(HWND window, WPARAM wParam, std::chrono::millisecond
     _thread.detach();
 }
 
+void Memory::BringToFront() {
+    EnumWindows([](HWND hwnd, LPARAM targetPid){
+        DWORD pid;
+        GetWindowThreadProcessId(hwnd, &pid);
+        if (pid == (DWORD)targetPid) {
+            SetActiveWindow(hwnd);
+            return FALSE; // Stop enumerating
+        }
+        return TRUE; // Continue enumerating
+    }, (LPARAM)_handle);
+}
+
 void Memory::Heartbeat(HWND window, WPARAM wParam) {
     if (!_handle && !Initialize()) {
         // Couldn't initialize, definitely not running

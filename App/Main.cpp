@@ -13,13 +13,19 @@
 #define LOAD_ANG 0x407
 #define FOV_CURRENT 0x408
 #define CAN_SAVE 0x409
-#define DOORS_PRACTICE 0x410
+#define PLAYER_SPEED 0x410
+#define DOORS_PRACTICE 0x411
+#define ACTIVATE_GAME 0x412
+
+// Feature requests:
+// - disable challenge time limit
+// - show collision?
 
 // Globals
 HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
-HWND g_noclipSpeed, g_currentPos, g_currentAng, g_savedPos, g_savedAng, g_fovCurrent;
+HWND g_noclipSpeed, g_currentPos, g_currentAng, g_savedPos, g_savedAng, g_fovCurrent, g_playerSpeed;
 std::vector<float> savedPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> savedAng = {0.0f, 0.0f};
 auto g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
@@ -66,6 +72,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                                 g_trainer = std::make_shared<Trainer>(g_witnessProc);
                                 SetWindowText(g_noclipSpeed, std::to_wstring(g_trainer->GetNoclipSpeed()).c_str());
                                 SetWindowText(g_fovCurrent, std::to_wstring(g_trainer->GetFov()).c_str());
+                                SetWindowText(g_playerSpeed, std::to_wstring(g_trainer->GetPlayerSpeed()).c_str());
                                 CheckDlgButton(hwnd, NOCLIP_ENABLED, g_trainer->GetNoclip());
                                 CheckDlgButton(hwnd, DOORS_PRACTICE, g_trainer->GetRandomDoorsPractice());
                             }
@@ -132,11 +139,24 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                         CheckDlgButton(hwnd, CAN_SAVE, !canSave);
                     }
                     break;
+                case PLAYER_SPEED:
+                    if (g_trainer) {
+                        std::wstring text(128, L'\0');
+                        int length = GetWindowText(g_playerSpeed, text.data(), static_cast<int>(text.size()));
+                        text.resize(length);
+                        g_trainer->SetPlayerSpeed(wcstof(text.c_str(), nullptr));
+                    }
+                    break;
                 case DOORS_PRACTICE:
                     if (g_trainer) {
                         bool doorsPractice = IsDlgButtonChecked(hwnd, DOORS_PRACTICE);
                         g_trainer->SetRandomDoorsPractice(!doorsPractice);
                         CheckDlgButton(hwnd, DOORS_PRACTICE, !doorsPractice);
+                    }
+                    break;
+                case ACTIVATE_GAME:
+                    if (g_witnessProc) {
+                        g_witnessProc->BringToFront();
                     }
                     break;
             }
@@ -201,44 +221,49 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     g_hwnd = CreateWindow(WINDOW_CLASS, PRODUCT_NAME, WS_OVERLAPPEDWINDOW,
       rect.right - 550, 200, 500, 500, nullptr, nullptr, hInstance, nullptr);
 
-    int x = 10;
+    int y = 10;
 
-    CreateLabel(10, x, 100, L"Noclip Enabled");
-    CreateCheckbox(115, x+2, NOCLIP_ENABLED);
-    x += 20;
+    CreateLabel(10, y, 100, L"Noclip Enabled");
+    CreateCheckbox(115, y+2, NOCLIP_ENABLED);
+    CreateButton(350, y, 120, L"Switch to game", ACTIVATE_GAME);
+    y += 20;
 
-    CreateLabel(10, x+4, 100, L"Noclip Speed");
-    g_noclipSpeed = CreateText(100, x, 150, L"", NOCLIP_SPEED);
-    x += 30;
+    CreateLabel(10, y+4, 100, L"Noclip Speed");
+    g_noclipSpeed = CreateText(100, y, 150, L"", NOCLIP_SPEED);
+    y += 30;
 
-    CreateLabel(10, x+4, 100, L"Field of View");
-    g_fovCurrent = CreateText(100, x, 150, L"", FOV_CURRENT);
-    x += 30;
+    CreateLabel(10, y+4, 100, L"Player Speed");
+    g_playerSpeed = CreateText(100, y, 150, L"", PLAYER_SPEED);
+    y += 30;
 
-    CreateLabel(10, x, 130, L"Can save the game");
-    CreateCheckbox(145, x+2, CAN_SAVE);
+    CreateLabel(10, y+4, 100, L"Field of View");
+    g_fovCurrent = CreateText(100, y, 150, L"", FOV_CURRENT);
+    y += 30;
+
+    CreateLabel(10, y, 130, L"Can save the game");
+    CreateCheckbox(145, y+2, CAN_SAVE);
     CheckDlgButton(g_hwnd, CAN_SAVE, true);
-    x += 20;
+    y += 20;
 
-    CreateLabel(10, x, 160, L"Random Doors Practice");
-    CreateCheckbox(175, x+2, DOORS_PRACTICE);
-    x += 20;
+    CreateLabel(10, y, 160, L"Random Doors Practice");
+    CreateCheckbox(175, y+2, DOORS_PRACTICE);
+    y += 20;
 
-    CreateButton(10, x, 100, L"Save Position", SAVE_POS);
-    CreateButton(110, x, 100, L"Load Position", LOAD_POS);
-    x += 30;
-    g_currentPos = CreateLabel(15, x, 90, 48);
-    g_savedPos = CreateLabel(115, x, 90, 48);
-    x += 50;
+    CreateButton(10, y, 100, L"Save Position", SAVE_POS);
+    CreateButton(110, y, 100, L"Load Position", LOAD_POS);
+    y += 30;
+    g_currentPos = CreateLabel(15, y, 90, 48);
+    g_savedPos = CreateLabel(115, y, 90, 48);
+    y += 50;
     SetPosText({0.0f, 0.0f, 0.0f}, g_currentPos);
     SetPosText({0.0f, 0.0f, 0.0f}, g_savedPos);
-    
-    CreateButton(10, x, 100, L"Save Angle", SAVE_ANG);
-    CreateButton(110, x, 100, L"Load Angle", LOAD_ANG);
-    x += 30;
-    g_currentAng = CreateLabel(15, x, 90, 32);
-    g_savedAng = CreateLabel(115, x, 90, 32);
-    x += 40;
+
+    CreateButton(10, y, 100, L"Save Angle", SAVE_ANG);
+    CreateButton(110, y, 100, L"Load Angle", LOAD_ANG);
+    y += 30;
+    g_currentAng = CreateLabel(15, y, 90, 32);
+    g_savedAng = CreateLabel(115, y, 90, 32);
+    y += 40;
     SetAngText({0.0f, 0.0f}, g_currentAng);
     SetAngText({0.0f, 0.0f}, g_savedAng);
 

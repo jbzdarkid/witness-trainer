@@ -9,8 +9,9 @@ public:
     std::vector<float> GetCameraPos();
     std::vector<float> GetCameraAng();
     float GetFov();
-    bool GetRandomDoorsPractice();
     bool CanSave();
+    float GetPlayerSpeed();
+    bool GetRandomDoorsPractice();
 
     void SetNoclip(bool enabled);
     void SetNoclipSpeed(float speed);
@@ -18,6 +19,7 @@ public:
     void SetCameraAng(const std::vector<float>& ang);
     void SetFov(float fov);
     void SetCanSave(bool canSave);
+    void SetPlayerSpeed(float speed);
     void SetRandomDoorsPractice(bool enable);
 
 private:
@@ -36,4 +38,7 @@ private:
     int _doorClose = 0;
     int _solvedTargetOffset = 0;
     int _powerOn = 0;
+    int _walkAcceleration = 0;
+    int _walkDeceleration = 0;
+    int _runSpeed = 0;
 };

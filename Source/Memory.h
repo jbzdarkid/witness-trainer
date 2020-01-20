@@ -17,6 +17,7 @@ public:
     Memory(const std::wstring& processName);
     ~Memory();
     void StartHeartbeat(HWND window, WPARAM wParam, std::chrono::milliseconds beat = std::chrono::milliseconds(100));
+    void BringToFront();
 
     Memory(const Memory& memory) = delete;
     Memory& operator=(const Memory& other) = delete;

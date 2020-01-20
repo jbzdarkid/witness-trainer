@@ -11,11 +11,12 @@ Trainer::Trainer(const std::shared_ptr<Memory>& memory) : _memory(memory){
         _cameraPos = ReadStaticInt(offset, index + 0x19, data) + 0x10;
 
         // This doesn't have a consistent offset from the scan, so search until we find "mov eax, [addr]"
-        while (true) {
-            index++;
-            if (data[index-2] == 0x8B && data[index-1] == 0x05) break;
+        for (; index < data.size(); index++) {
+            if (data[index-2] == 0x8B && data[index-1] == 0x05) {
+                _noclipEnabled = ReadStaticInt(offset, index, data);
+                break;
+            }
         }
-        _noclipEnabled = ReadStaticInt(offset, index, data);
     });
 
     _memory->AddSigScan({0xC7, 0x45, 0x77, 0x00, 0x00, 0x80, 0x3F, 0xC7, 0x45, 0x7F, 0x00, 0x00, 0x80, 0x3F}, [&](int offset, int index, const std::vector<byte>& data){
@@ -58,6 +59,24 @@ Trainer::Trainer(const std::shared_ptr<Memory>& memory) : _memory(memory){
         _campaignState = ReadStaticInt(offset, index + 0x27, data);
     });
 
+    _memory->AddSigScan({0xF3, 0x0F, 0x59, 0xE8, 0xF3, 0x0F, 0x59, 0xE0, 0xF3, 0x0F, 0x59, 0xD0, 0xF3, 0x0F, 0x58, 0xF5}, [&](int offset, int index, const std::vector<byte>& data) {
+        // This doesn't have a consistent offset from the scan, so search until we find "jmp +08"
+        for (; index < data.size(); index++) {
+            if (data[index-2] == 0xEB && data[index-1] == 0x08) {
+                _walkAcceleration = ReadStaticInt(offset, index - 0x06, data);
+                _walkDeceleration = ReadStaticInt(offset, index + 0x04, data);
+                break;
+            }
+        }
+        // Once again, there's no consistent offset, so we read until "movss xmm1, [addr]"
+        for (; index < data.size(); index++) {
+            if (data[index-4] == 0xF3 && data[index-3] == 0x0F && data[index-2] == 0x10 && data[index-1] == 0x0D) {
+                _runSpeed = ReadStaticInt(offset, index, data);
+                break;
+            }
+        }
+    });
+
     _memory->ExecuteSigScans();
 }
 
@@ -90,6 +109,11 @@ bool Trainer::CanSave() {
     if (_campaignState == 0) return true;
     // bool do_not_save;
     return _memory->ReadData<byte>({_campaignState, 0x50}, 1)[0] == 0x00;
+}
+
+float Trainer::GetPlayerSpeed() {
+    if (_runSpeed == 0) return 2.0;
+    return _memory->ReadData<float>({_runSpeed}, 1)[0];
 }
 
 bool Trainer::GetRandomDoorsPractice() {
@@ -125,6 +149,14 @@ void Trainer::SetFov(float fov) {
 void Trainer::SetCanSave(bool canSave) {
     if (_campaignState == 0) return;
     _memory->WriteData<byte>({_campaignState, 0x50}, {canSave ? (byte)0x00 : (byte)0x01});
+}
+
+void Trainer::SetPlayerSpeed(float speed) {
+    if (_walkAcceleration == 0 || _walkDeceleration == 0 || _runSpeed == 0) return;
+    float multiplier = speed / GetPlayerSpeed();
+    _memory->WriteData<float>({_runSpeed}, {speed});
+    _memory->WriteData<float>({_walkAcceleration}, {_memory->ReadData<float>({_walkAcceleration}, 1)[0] * multiplier});
+    _memory->WriteData<float>({_walkDeceleration}, {_memory->ReadData<float>({_walkDeceleration}, 1)[0] * multiplier});
 }
 
 void Trainer::SetRandomDoorsPractice(bool enable) {
