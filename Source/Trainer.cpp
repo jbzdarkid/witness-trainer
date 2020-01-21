@@ -59,7 +59,7 @@ Trainer::Trainer(const std::shared_ptr<Memory>& memory) : _memory(memory){
         _campaignState = ReadStaticInt(offset, index + 0x27, data);
     });
 
-    _memory->AddSigScan({0xF3, 0x0F, 0x59, 0xE8, 0xF3, 0x0F, 0x59, 0xE0, 0xF3, 0x0F, 0x59, 0xD0, 0xF3, 0x0F, 0x58, 0xF5}, [&](int offset, int index, const std::vector<byte>& data) {
+    _memory->AddSigScan({0xF3, 0x0F, 0x59, 0xFD, 0xF3, 0x0F, 0x5C, 0xC8}, [&](int offset, int index, const std::vector<byte>& data) {
         // This doesn't have a consistent offset from the scan, so search until we find "jmp +08"
         for (; index < data.size(); index++) {
             if (data[index-2] == 0xEB && data[index-1] == 0x08) {
