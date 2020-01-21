@@ -14,11 +14,11 @@
 #define FOV_CURRENT 0x408
 #define CAN_SAVE 0x409
 #define SPRINT_SPEED 0x410
-#define DOORS_PRACTICE 0x411
-#define ACTIVATE_GAME 0x412
+#define INFINITE_CHALLENGE 0x411
+#define DOORS_PRACTICE 0x412
+#define ACTIVATE_GAME 0x413
 
 // Feature requests:
-// - disable challenge time limit
 // - show collision?
 
 // Globals
@@ -64,6 +64,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                                 CheckDlgButton(hwnd, NOCLIP_ENABLED, false);
                                 CheckDlgButton(hwnd, DOORS_PRACTICE, false);
                                 CheckDlgButton(hwnd, CAN_SAVE, true);
+                                CheckDlgButton(hwnd, INFINITE_CHALLENGE, false);
                             }
                             break;
                         case ProcStatus::Running:
@@ -75,6 +76,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                                 SetWindowText(g_sprintSpeed, std::to_wstring(g_trainer->GetSprintSpeed()).c_str());
                                 CheckDlgButton(hwnd, NOCLIP_ENABLED, g_trainer->GetNoclip());
                                 CheckDlgButton(hwnd, DOORS_PRACTICE, g_trainer->GetRandomDoorsPractice());
+                                CheckDlgButton(hwnd, INFINITE_CHALLENGE, g_trainer->GetInfiniteChallenge());
                             }
                             g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
                             g_trainer->SetCanSave(IsDlgButtonChecked(hwnd, CAN_SAVE));
@@ -145,6 +147,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                         int length = GetWindowText(g_sprintSpeed, text.data(), static_cast<int>(text.size()));
                         text.resize(length);
                         g_trainer->SetSprintSpeed(wcstof(text.c_str(), nullptr));
+                    }
+                    break;
+                case INFINITE_CHALLENGE:
+                    if (g_trainer) {
+                        bool infiniteChallenge = IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE);
+                        g_trainer->SetInfiniteChallenge(!infiniteChallenge);
+                        CheckDlgButton(hwnd, INFINITE_CHALLENGE, !infiniteChallenge);
                     }
                     break;
                 case DOORS_PRACTICE:
@@ -245,8 +254,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     CheckDlgButton(g_hwnd, CAN_SAVE, true);
     y += 20;
 
-    CreateLabel(10, y, 160, L"Random Doors Practice");
-    CreateCheckbox(175, y+2, DOORS_PRACTICE);
+    CreateLabel(10, y, 155, L"Random Doors Practice");
+    CreateCheckbox(170, y+2, DOORS_PRACTICE);
+    y += 20;
+
+    CreateLabel(10, y, 185, L"Disable Challenge time limit");
+    CreateCheckbox(200, y+2, INFINITE_CHALLENGE);
     y += 20;
 
     CreateButton(10, y, 100, L"Save Position", SAVE_POS);

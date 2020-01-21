@@ -11,6 +11,7 @@ public:
     float GetFov();
     bool CanSave();
     float GetSprintSpeed();
+    bool GetInfiniteChallenge();
     bool GetRandomDoorsPractice();
 
     void SetNoclip(bool enabled);
@@ -20,6 +21,7 @@ public:
     void SetFov(float fov);
     void SetCanSave(bool canSave);
     void SetSprintSpeed(float speed);
+    void SetInfiniteChallenge(bool enable);
     void SetRandomDoorsPractice(bool enable);
 
 private:
@@ -41,4 +43,5 @@ private:
     int _walkAcceleration = 0;
     int _walkDeceleration = 0;
     int _runSpeed = 0;
+    int _recordPlayerUpdate = 0;
 };

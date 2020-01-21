@@ -77,6 +77,10 @@ Trainer::Trainer(const std::shared_ptr<Memory>& memory) : _memory(memory){
         }
     });
 
+    _memory->AddSigScan({0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00, 0xE9, 0xB3}, [&](int offset, int index, const std::vector<byte>& data) {
+        _recordPlayerUpdate = offset + index - 0x0C;
+    });
+
     _memory->ExecuteSigScans();
 }
 
@@ -114,6 +118,11 @@ bool Trainer::CanSave() {
 float Trainer::GetSprintSpeed() {
     if (_runSpeed == 0) return 2.0;
     return _memory->ReadData<float>({_runSpeed}, 1)[0];
+}
+
+bool Trainer::GetInfiniteChallenge() {
+    if (_recordPlayerUpdate == 0) return false;
+    return _memory->ReadData<byte>({_recordPlayerUpdate}, 1)[0] == 0x0F;
 }
 
 bool Trainer::GetRandomDoorsPractice() {
@@ -157,6 +166,17 @@ void Trainer::SetSprintSpeed(float speed) {
     _memory->WriteData<float>({_runSpeed}, {speed});
     _memory->WriteData<float>({_walkAcceleration}, {_memory->ReadData<float>({_walkAcceleration}, 1)[0] * multiplier});
     _memory->WriteData<float>({_walkDeceleration}, {_memory->ReadData<float>({_walkDeceleration}, 1)[0] * multiplier});
+}
+
+void Trainer::SetInfiniteChallenge(bool enable) {
+    if (_recordPlayerUpdate == 0) return;
+    if (enable) {
+        // Jump over abort_speed_run, with NOP padding
+        _memory->WriteData<byte>({_recordPlayerUpdate}, {0xEB, 0x07, 0x66, 0x90});
+    } else {
+        // (original code) Load entity_manager into rcx
+        _memory->WriteData<byte>({_recordPlayerUpdate}, {0x48, 0x8B, 0x4B, 0x18});
+    }
 }
 
 void Trainer::SetRandomDoorsPractice(bool enable) {
