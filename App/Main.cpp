@@ -42,134 +42,92 @@ void SetAngText(const std::vector<float>& ang, HWND hwnd) {
     SetWindowText(hwnd, text.c_str());
 }
 
-std::wstring GetWindowTextStr(HWND hwnd) {
+float GetWindowFloat(HWND hwnd) {
     std::wstring text(128, L'\0');
     int length = GetWindowText(hwnd, text.data(), static_cast<int>(text.size()));
     text.resize(length);
-    return text;
+    return wcstof(text.c_str(), nullptr);
+}
+
+// https://stackoverflow.com/a/12662950
+void ToggleOption(int message, void (Trainer::*setter)(bool)) {
+    if (!g_trainer) return;
+    bool enabled = IsDlgButtonChecked(g_hwnd, message);
+    (*g_trainer.*setter)(!enabled);
+    CheckDlgButton(g_hwnd, message, !enabled);
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    if (message == WM_DESTROY) {
+        PostQuitMessage(0);
+        return 0;
+    }
+    if (message != WM_COMMAND) {
+        return DefWindowProc(hwnd, message, wParam, lParam);
+    }
+
     try {
-        if (message == WM_DESTROY) {
-            PostQuitMessage(0);
-        } else if (message == WM_COMMAND || message == WM_TIMER || message == WM_NOTIFY) {
-            switch (LOWORD(wParam)) {
-                case HEARTBEAT:
-                    switch ((ProcStatus)lParam) {
-                        case ProcStatus::NotRunning:
-                            if (g_trainer) {
-                                g_trainer = nullptr;
-                                // If you restart the game, restore the defaults for a new game
-                                CheckDlgButton(hwnd, NOCLIP_ENABLED, false);
-                                CheckDlgButton(hwnd, DOORS_PRACTICE, false);
-                                CheckDlgButton(hwnd, CAN_SAVE, true);
-                                CheckDlgButton(hwnd, INFINITE_CHALLENGE, false);
-                            }
-                            break;
-                        case ProcStatus::Running:
-                            if (!g_trainer) {
-                                // Trainer started, game is running
-                                g_trainer = std::make_shared<Trainer>(g_witnessProc);
-                                SetWindowText(g_noclipSpeed, std::to_wstring(g_trainer->GetNoclipSpeed()).c_str());
-                                SetWindowText(g_fovCurrent, std::to_wstring(g_trainer->GetFov()).c_str());
-                                SetWindowText(g_sprintSpeed, std::to_wstring(g_trainer->GetSprintSpeed()).c_str());
-                                CheckDlgButton(hwnd, NOCLIP_ENABLED, g_trainer->GetNoclip());
-                                CheckDlgButton(hwnd, DOORS_PRACTICE, g_trainer->GetRandomDoorsPractice());
-                                CheckDlgButton(hwnd, INFINITE_CHALLENGE, g_trainer->GetInfiniteChallenge());
-                            }
-                            g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
-                            g_trainer->SetCanSave(IsDlgButtonChecked(hwnd, CAN_SAVE));
-                            SetPosText(g_trainer->GetCameraPos(), g_currentPos);
-                            SetAngText(g_trainer->GetCameraAng(), g_currentAng);
-                            if (g_hwnd != GetActiveWindow()) {
-                                // Only replace when in the background (i.e. if someone changed their FOV in-game)
-                                SetWindowText(g_fovCurrent, std::to_wstring(g_trainer->GetFov()).c_str());
-                            }
-                            break;
-                        }
-                    break;
-                case NOCLIP_ENABLED:
-                    if (g_trainer) {
-                        bool noclipEnabled = IsDlgButtonChecked(hwnd, NOCLIP_ENABLED);
-                        g_trainer->SetNoclip(!noclipEnabled);
-                        CheckDlgButton(hwnd, NOCLIP_ENABLED, !noclipEnabled);
-                    }
-                    break;
-                case NOCLIP_SPEED:
-                    if (g_trainer) {
-                        std::wstring text = GetWindowTextStr(g_noclipSpeed);
-                        g_trainer->SetNoclipSpeed(wcstof(text.c_str(), nullptr));
-                    }
-                    break;
-                case SAVE_POS:
-                    if (g_trainer) {
-                        savedPos = g_trainer->GetCameraPos();
-                        SetPosText(savedPos, g_savedPos);
-                    }
-                    break;
-                case LOAD_POS:
-                    if (g_trainer) {
-                        g_trainer->SetCameraPos(savedPos);
-                        SetPosText(savedPos, g_currentPos);
-                    }
-                    break;
-                case SAVE_ANG:
-                    if (g_trainer) {
-                        savedAng = g_trainer->GetCameraAng();
-                        SetAngText(savedAng, g_savedAng);
-                    }
-                    break;
-                case LOAD_ANG:
-                    if (g_trainer) {
-                        g_trainer->SetCameraAng(savedAng);
-                        SetAngText(savedAng, g_currentAng);
-                    }
-                    break;
-                case FOV_CURRENT:
-                    if (g_trainer) {
-                        std::wstring text(128, L'\0');
-                        int length = GetWindowText(g_fovCurrent, text.data(), static_cast<int>(text.size()));
-                        text.resize(length);
-                        g_trainer->SetFov(wcstof(text.c_str(), nullptr));
-                    }
-                    break;
-                case CAN_SAVE:
-                    if (g_trainer) {
-                        bool canSave = IsDlgButtonChecked(hwnd, CAN_SAVE);
-                        g_trainer->SetCanSave(!canSave);
-                        CheckDlgButton(hwnd, CAN_SAVE, !canSave);
-                    }
-                    break;
-                case SPRINT_SPEED:
-                    if (g_trainer) {
-                        std::wstring text(128, L'\0');
-                        int length = GetWindowText(g_sprintSpeed, text.data(), static_cast<int>(text.size()));
-                        text.resize(length);
-                        g_trainer->SetSprintSpeed(wcstof(text.c_str(), nullptr));
-                    }
-                    break;
-                case INFINITE_CHALLENGE:
-                    if (g_trainer) {
-                        bool infiniteChallenge = IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE);
-                        g_trainer->SetInfiniteChallenge(!infiniteChallenge);
-                        CheckDlgButton(hwnd, INFINITE_CHALLENGE, !infiniteChallenge);
-                    }
-                    break;
-                case DOORS_PRACTICE:
-                    if (g_trainer) {
-                        bool doorsPractice = IsDlgButtonChecked(hwnd, DOORS_PRACTICE);
-                        g_trainer->SetRandomDoorsPractice(!doorsPractice);
-                        CheckDlgButton(hwnd, DOORS_PRACTICE, !doorsPractice);
-                    }
-                    break;
-                case ACTIVATE_GAME:
-                    if (g_witnessProc) {
-                        g_witnessProc->BringToFront();
-                    }
-                    break;
+        if (LOWORD(wParam) == HEARTBEAT) {
+            switch ((ProcStatus)lParam) {
+            case ProcStatus::NotRunning:
+                if (g_trainer) {
+                    g_trainer = nullptr;
+                    // If you restart the game, restore the defaults for a new game
+                    CheckDlgButton(hwnd, NOCLIP_ENABLED, false);
+                    CheckDlgButton(hwnd, DOORS_PRACTICE, false);
+                    CheckDlgButton(hwnd, CAN_SAVE, true);
+                    CheckDlgButton(hwnd, INFINITE_CHALLENGE, false);
+                }
+                break;
+            case ProcStatus::Running:
+                if (!g_trainer) {
+                    // Trainer started, game is running
+                    g_trainer = std::make_shared<Trainer>(g_witnessProc);
+                    SetWindowText(g_noclipSpeed, std::to_wstring(g_trainer->GetNoclipSpeed()).c_str());
+                    SetWindowText(g_fovCurrent, std::to_wstring(g_trainer->GetFov()).c_str());
+                    SetWindowText(g_sprintSpeed, std::to_wstring(g_trainer->GetSprintSpeed()).c_str());
+                    CheckDlgButton(hwnd, NOCLIP_ENABLED, g_trainer->GetNoclip());
+                    CheckDlgButton(hwnd, DOORS_PRACTICE, g_trainer->GetRandomDoorsPractice());
+                    CheckDlgButton(hwnd, INFINITE_CHALLENGE, g_trainer->GetInfiniteChallenge());
+                }
+                g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
+                g_trainer->SetCanSave(IsDlgButtonChecked(hwnd, CAN_SAVE));
+                SetPosText(g_trainer->GetCameraPos(), g_currentPos);
+                SetAngText(g_trainer->GetCameraAng(), g_currentAng);
+                if (g_hwnd != GetActiveWindow()) {
+                    // Only replace when in the background (i.e. if someone changed their FOV in-game)
+                    SetWindowText(g_fovCurrent, std::to_wstring(g_trainer->GetFov()).c_str());
+                }
+                break;
             }
+            return 0;
         }
+
+        // All other messages need the trainer to be live in order to execute.
+        if (!g_trainer) return DefWindowProc(hwnd, message, wParam, lParam);
+
+        if (wParam == NOCLIP_ENABLED)           ToggleOption(NOCLIP_ENABLED, &Trainer::SetNoclip);
+        else if (wParam == CAN_SAVE)            ToggleOption(CAN_SAVE, &Trainer::SetCanSave);
+        else if (wParam == INFINITE_CHALLENGE)  ToggleOption(INFINITE_CHALLENGE, &Trainer::SetInfiniteChallenge);
+        else if (wParam == DOORS_PRACTICE)      ToggleOption(DOORS_PRACTICE, &Trainer::SetRandomDoorsPractice);
+        else if (wParam == NOCLIP_SPEED)        g_trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
+        else if (wParam == FOV_CURRENT)         g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
+        else if (wParam == SPRINT_SPEED)        g_trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
+        else if (wParam == ACTIVATE_GAME)       g_witnessProc->BringToFront();
+        else if (wParam == SAVE_POS) {
+            savedPos = g_trainer->GetCameraPos();
+            SetPosText(savedPos, g_savedPos);
+        } else if (wParam == LOAD_POS) {
+            g_trainer->SetCameraPos(savedPos);
+            SetPosText(savedPos, g_currentPos);
+        } else if (wParam == SAVE_ANG) {
+            savedAng = g_trainer->GetCameraAng();
+            SetAngText(savedAng, g_savedAng);
+        } else if (wParam == LOAD_ANG) {
+            g_trainer->SetCameraAng(savedAng);
+            SetAngText(savedAng, g_currentAng);
+        }
+
     } catch (MemoryException exc) {
         MemoryException::HandleException(exc);
     }
@@ -207,7 +165,13 @@ HWND CreateText(int x, int y, int width, LPCWSTR defaultText = L"", int message=
 }
 #pragma warning(pop)
 
+void Foo(void (Trainer::*function)(bool)) {
+
+}
+
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow) {
+    Foo(&Trainer::SetInfiniteChallenge);
+
     LoadLibrary(L"Msftedit.dll");
     WNDCLASSW wndClass = {
         CS_HREDRAW | CS_VREDRAW,
