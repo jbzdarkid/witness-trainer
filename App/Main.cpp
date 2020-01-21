@@ -106,24 +106,25 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         // All other messages need the trainer to be live in order to execute.
         if (!g_trainer) return DefWindowProc(hwnd, message, wParam, lParam);
 
-        if (wParam == NOCLIP_ENABLED)           ToggleOption(NOCLIP_ENABLED, &Trainer::SetNoclip);
-        else if (wParam == CAN_SAVE)            ToggleOption(CAN_SAVE, &Trainer::SetCanSave);
-        else if (wParam == INFINITE_CHALLENGE)  ToggleOption(INFINITE_CHALLENGE, &Trainer::SetInfiniteChallenge);
-        else if (wParam == DOORS_PRACTICE)      ToggleOption(DOORS_PRACTICE, &Trainer::SetRandomDoorsPractice);
-        else if (wParam == NOCLIP_SPEED)        g_trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
-        else if (wParam == FOV_CURRENT)         g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
-        else if (wParam == SPRINT_SPEED)        g_trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
-        else if (wParam == ACTIVATE_GAME)       g_witnessProc->BringToFront();
-        else if (wParam == SAVE_POS) {
+        WORD command = LOWORD(wParam);
+        if (command == NOCLIP_ENABLED)           ToggleOption(NOCLIP_ENABLED, &Trainer::SetNoclip);
+        else if (command == CAN_SAVE)            ToggleOption(CAN_SAVE, &Trainer::SetCanSave);
+        else if (command == INFINITE_CHALLENGE)  ToggleOption(INFINITE_CHALLENGE, &Trainer::SetInfiniteChallenge);
+        else if (command == DOORS_PRACTICE)      ToggleOption(DOORS_PRACTICE, &Trainer::SetRandomDoorsPractice);
+        else if (command == NOCLIP_SPEED)        g_trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
+        else if (command == FOV_CURRENT)         g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
+        else if (command == SPRINT_SPEED)        g_trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
+        else if (command == ACTIVATE_GAME)       g_witnessProc->BringToFront();
+        else if (command == SAVE_POS) {
             savedPos = g_trainer->GetCameraPos();
             SetPosText(savedPos, g_savedPos);
-        } else if (wParam == LOAD_POS) {
+        } else if (command == LOAD_POS) {
             g_trainer->SetCameraPos(savedPos);
             SetPosText(savedPos, g_currentPos);
-        } else if (wParam == SAVE_ANG) {
+        } else if (command == SAVE_ANG) {
             savedAng = g_trainer->GetCameraAng();
             SetAngText(savedAng, g_savedAng);
-        } else if (wParam == LOAD_ANG) {
+        } else if (command == LOAD_ANG) {
             g_trainer->SetCameraAng(savedAng);
             SetAngText(savedAng, g_currentAng);
         }

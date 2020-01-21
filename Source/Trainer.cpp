@@ -161,8 +161,9 @@ void Trainer::SetCanSave(bool canSave) {
 }
 
 void Trainer::SetSprintSpeed(float speed) {
-    if (_walkAcceleration == 0 || _walkDeceleration == 0 || _runSpeed == 0) return;
+    if (_walkAcceleration == 0 || _walkDeceleration == 0 || _runSpeed == 0 || speed == 0) return;
     float multiplier = speed / GetSprintSpeed();
+    if (multiplier == 1.0f) return;
     _memory->WriteData<float>({_runSpeed}, {speed});
     _memory->WriteData<float>({_walkAcceleration}, {_memory->ReadData<float>({_walkAcceleration}, 1)[0] * multiplier});
     _memory->WriteData<float>({_walkDeceleration}, {_memory->ReadData<float>({_walkDeceleration}, 1)[0] * multiplier});
