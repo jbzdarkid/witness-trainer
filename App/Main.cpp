@@ -166,13 +166,7 @@ HWND CreateText(int x, int y, int width, LPCWSTR defaultText = L"", int message=
 }
 #pragma warning(pop)
 
-void Foo(void (Trainer::*function)(bool)) {
-
-}
-
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow) {
-    Foo(&Trainer::SetInfiniteChallenge);
-
     LoadLibrary(L"Msftedit.dll");
     WNDCLASSW wndClass = {
         CS_HREDRAW | CS_VREDRAW,
