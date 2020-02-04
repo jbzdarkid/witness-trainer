@@ -25,8 +25,6 @@ public:
     void SetRandomDoorsPractice(bool enable);
 
 private:
-    int ReadStaticInt(int offset, int index, const std::vector<byte>& data);
-
     std::shared_ptr<Memory> _memory;
 
     int _noclipEnabled = 0;

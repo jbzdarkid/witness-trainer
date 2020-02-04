@@ -2,7 +2,8 @@
 
 enum class ProcStatus {
     NotRunning,
-    Running
+    Running,
+    Reload // This fires when autosaving, too!
 };
 
 using byte = unsigned char;
@@ -22,6 +23,7 @@ public:
     Memory(const Memory& memory) = delete;
     Memory& operator=(const Memory& other) = delete;
 
+    static int ReadStaticInt(int offset, int index, const std::vector<byte>& data);
     using ScanFunc = std::function<void(int offset, int index, const std::vector<byte>& data)>;
     void AddSigScan(const std::vector<byte>& scanBytes, const ScanFunc& scanFunc);
     int ExecuteSigScans(int blockSize = 0x1000);
@@ -55,11 +57,13 @@ private:
     std::wstring _processName;
     std::map<uintptr_t, uintptr_t> _computedAddresses;
     uintptr_t _baseAddress = 0;
+    int _campaignState = 0;
+    int64_t _lastTimeOfSave = 0L;
     DWORD _pid = 0;
     HANDLE _handle = nullptr;
     struct SigScan {
         ScanFunc scanFunc;
-        bool found;
+        bool found = false;
     };
     std::map<std::vector<byte>, SigScan> _sigScans;
 };

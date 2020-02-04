@@ -18,8 +18,16 @@
 #define DOORS_PRACTICE 0x412
 #define ACTIVATE_GAME 0x413
 
+// Bugs:
+
 // Feature requests:
-// - show collision?
+// - show collision, somehow
+// - Show solve count
+// - "Save the game" button on the trainer?
+// - "Load last save" button on the trainer?
+// - _timing asl to the trainer? Just something simple would be good enough, mostly
+// - Open saves folder
+// - Current Save Name
 
 // Globals
 HWND g_hwnd;
@@ -60,6 +68,20 @@ void ToggleOption(int message, void (Trainer::*setter)(bool)) {
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
     if (message == WM_DESTROY) {
         PostQuitMessage(0);
+        if (g_trainer) {
+            // Restore default game settings before shutting down.
+            g_trainer->SetNoclip(false);
+            g_trainer->SetRandomDoorsPractice(false);
+            g_trainer->SetCanSave(true);
+            g_trainer->SetInfiniteChallenge(false);
+            float fov = g_trainer->GetFov();
+            if (fov < 50.534019f) fov = 50.534019f;
+            if (fov > 88.507156f) fov = 88.507156f;
+            g_trainer->SetFov(fov);
+            g_trainer->SetSprintSpeed(2.0f);
+            g_trainer = nullptr;
+            g_witnessProc = nullptr; // Free any allocated memory
+        }
         return 0;
     }
     if (message != WM_COMMAND) {
@@ -71,13 +93,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             switch ((ProcStatus)lParam) {
             case ProcStatus::NotRunning:
                 if (g_trainer) {
-                    g_trainer = nullptr;
                     // If you restart the game, restore the defaults for a new game
                     CheckDlgButton(hwnd, NOCLIP_ENABLED, false);
                     CheckDlgButton(hwnd, DOORS_PRACTICE, false);
                     CheckDlgButton(hwnd, CAN_SAVE, true);
                     CheckDlgButton(hwnd, INFINITE_CHALLENGE, false);
+                    SetWindowText(g_sprintSpeed, L"2");
+                    g_trainer = nullptr;
                 }
+                break;
+            case ProcStatus::Reload:
                 break;
             case ProcStatus::Running:
                 if (!g_trainer) {
@@ -87,13 +112,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     SetWindowText(g_fovCurrent, std::to_wstring(g_trainer->GetFov()).c_str());
                     SetWindowText(g_sprintSpeed, std::to_wstring(g_trainer->GetSprintSpeed()).c_str());
                     CheckDlgButton(hwnd, NOCLIP_ENABLED, g_trainer->GetNoclip());
-                    CheckDlgButton(hwnd, DOORS_PRACTICE, g_trainer->GetRandomDoorsPractice());
                     CheckDlgButton(hwnd, INFINITE_CHALLENGE, g_trainer->GetInfiniteChallenge());
                 }
                 g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
                 g_trainer->SetCanSave(IsDlgButtonChecked(hwnd, CAN_SAVE));
                 SetPosText(g_trainer->GetCameraPos(), g_currentPos);
                 SetAngText(g_trainer->GetCameraAng(), g_currentAng);
+                g_trainer->SetRandomDoorsPractice(IsDlgButtonChecked(hwnd, DOORS_PRACTICE));
+
                 if (g_hwnd != GetActiveWindow()) {
                     // Only replace when in the background (i.e. if someone changed their FOV in-game)
                     SetWindowText(g_fovCurrent, std::to_wstring(g_trainer->GetFov()).c_str());
@@ -128,7 +154,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             g_trainer->SetCameraAng(savedAng);
             SetAngText(savedAng, g_currentAng);
         }
-
     } catch (MemoryException exc) {
         MemoryException::HandleException(exc);
     }

@@ -44,14 +44,28 @@ void Memory::BringToFront() {
 }
 
 void Memory::Heartbeat(HWND window, WPARAM wParam) {
+    // TODO: Split this, clarify _handle.
     if (!_handle && !Initialize()) {
         // Couldn't initialize, definitely not running
         PostMessage(window, WM_COMMAND, wParam, (LPARAM)ProcStatus::NotRunning);
         return;
     }
 
+    try {
+        int64_t timeOfSave = ReadData<int64_t>({_campaignState, 0x40}, 1)[0];
+        if (timeOfSave != _lastTimeOfSave) {
+            // Started a new game, loaded an save, or autosaved
+            _lastTimeOfSave = timeOfSave;
+            _computedAddresses.clear();
+            PostMessage(window, WM_COMMAND, wParam, (LPARAM)ProcStatus::Reload);
+            return;
+        }
+    } catch (MemoryException exc) {
+        MemoryException::HandleException(exc);
+    }
+
     DWORD exitCode = 0;
-    assert(_handle);
+    assert(_handle != 0);
     GetExitCodeProcess(_handle, &exitCode);
     if (exitCode != STILL_ACTIVE) {
         // Process has exited, clean up.
@@ -103,7 +117,17 @@ bool Memory::Initialize() {
         return false;
     }
 
+    AddSigScan({0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x70, 0x10, 0x48, 0x89, 0x78, 0x18, 0x48, 0x8B, 0x3D}, [&](int offset, int index, const std::vector<byte>& data) {
+        _campaignState = ReadStaticInt(offset, index + 0x27, data);
+    });
+    ExecuteSigScans();
+    if (_campaignState == 0) return false;
+
     return true;
+}
+
+int Memory::ReadStaticInt(int offset, int index, const std::vector<byte>& data) {
+    return offset + index + 0x4 + *(int*)&data[index]; // (address of next line) + (index interpreted as 4byte int)
 }
 
 void Memory::AddSigScan(const std::vector<byte>& scanBytes, const ScanFunc& scanFunc) {
@@ -152,10 +176,7 @@ void* Memory::ComputeOffset(std::vector<__int64> offsets) {
         cumulativeAddress += offset;
 
         const auto search = _computedAddresses.find(cumulativeAddress);
-        // This is an issue with re-randomization. Always. Just disable it in debug mode!
-#ifdef NDEBUG
         if (search == std::end(_computedAddresses)) {
-#endif
             // If the address is not yet computed, then compute it.
             uintptr_t computedAddress = 0;
             if (!ReadProcessMemory(_handle, reinterpret_cast<LPVOID>(cumulativeAddress), &computedAddress, sizeof(uintptr_t), NULL)) {
@@ -165,9 +186,7 @@ void* Memory::ComputeOffset(std::vector<__int64> offsets) {
                 MEMORY_THROW("Attempted to derefence NULL while computing offsets.", offsets);
             }
             _computedAddresses[cumulativeAddress] = computedAddress;
-#ifdef NDEBUG
         }
-#endif
 
         cumulativeAddress = _computedAddresses[cumulativeAddress];
     }
