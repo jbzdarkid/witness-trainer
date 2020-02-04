@@ -25,11 +25,11 @@
 
 // Feature requests:
 // - show collision, somehow
-// - Show solve count
+// - Show solve count / active panel + status
+// - Change current save name
 // - "Save the game" button on the trainer?
 // - "Load last save" button on the trainer?
 // - _timing asl to the trainer? Just something simple would be good enough, mostly
-// - Change current save name
 
 // Globals
 HWND g_hwnd;
