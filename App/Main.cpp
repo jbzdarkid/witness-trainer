@@ -1,6 +1,8 @@
 #include "pch.h"
 #include "Richedit.h"
 #include "Version.h"
+#include "shellapi.h"
+#include "Shlobj.h"
 
 #include "Trainer.h"
 
@@ -17,6 +19,7 @@
 #define INFINITE_CHALLENGE 0x411
 #define DOORS_PRACTICE 0x412
 #define ACTIVATE_GAME 0x413
+#define OPEN_SAVES 0x414
 
 // Bugs:
 
@@ -26,8 +29,7 @@
 // - "Save the game" button on the trainer?
 // - "Load last save" button on the trainer?
 // - _timing asl to the trainer? Just something simple would be good enough, mostly
-// - Open saves folder
-// - Current Save Name
+// - Change current save name
 
 // Globals
 HWND g_hwnd;
@@ -133,15 +135,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         if (!g_trainer) return DefWindowProc(hwnd, message, wParam, lParam);
 
         WORD command = LOWORD(wParam);
-        if (command == NOCLIP_ENABLED)           ToggleOption(NOCLIP_ENABLED, &Trainer::SetNoclip);
-        else if (command == CAN_SAVE)            ToggleOption(CAN_SAVE, &Trainer::SetCanSave);
-        else if (command == INFINITE_CHALLENGE)  ToggleOption(INFINITE_CHALLENGE, &Trainer::SetInfiniteChallenge);
-        else if (command == DOORS_PRACTICE)      ToggleOption(DOORS_PRACTICE, &Trainer::SetRandomDoorsPractice);
-        else if (command == NOCLIP_SPEED)        g_trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
-        else if (command == FOV_CURRENT)         g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
-        else if (command == SPRINT_SPEED)        g_trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
-        else if (command == ACTIVATE_GAME)       g_witnessProc->BringToFront();
-        else if (command == SAVE_POS) {
+        if (command == NOCLIP_ENABLED)          ToggleOption(NOCLIP_ENABLED, &Trainer::SetNoclip);
+        else if (command == CAN_SAVE)           ToggleOption(CAN_SAVE, &Trainer::SetCanSave);
+        else if (command == INFINITE_CHALLENGE) ToggleOption(INFINITE_CHALLENGE, &Trainer::SetInfiniteChallenge);
+        else if (command == DOORS_PRACTICE)     ToggleOption(DOORS_PRACTICE, &Trainer::SetRandomDoorsPractice);
+        else if (command == NOCLIP_SPEED)       g_trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
+        else if (command == FOV_CURRENT)        g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
+        else if (command == SPRINT_SPEED)       g_trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
+        else if (command == ACTIVATE_GAME)      g_witnessProc->BringToFront();
+        else if (command == OPEN_SAVES) {
+            PWSTR outPath;
+            size_t size = SHGetKnownFolderPath(FOLDERID_RoamingAppData, SHGFP_TYPE_CURRENT, NULL, &outPath);
+            ShellExecute(NULL, L"open", (outPath + std::wstring(L"\\The Witness")).c_str(), NULL, NULL, SW_SHOWDEFAULT);
+        } else if (command == SAVE_POS) {
             savedPos = g_trainer->GetCameraPos();
             SetPosText(savedPos, g_savedPos);
         } else if (command == LOAD_POS) {
@@ -219,6 +225,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     CreateLabel(10, y, 100, L"Noclip Enabled");
     CreateCheckbox(115, y+2, NOCLIP_ENABLED);
     CreateButton(350, y, 120, L"Switch to game", ACTIVATE_GAME);
+    CreateButton(350, y+30, 120, L"Open save folder", OPEN_SAVES);
     y += 20;
 
     CreateLabel(10, y+4, 100, L"Noclip Speed");
