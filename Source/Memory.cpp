@@ -44,14 +44,33 @@ void Memory::BringToFront() {
 }
 
 void Memory::Heartbeat(HWND window, WPARAM wParam) {
-    // TODO: Split this, clarify _handle.
     if (!_handle && !Initialize()) {
         // Couldn't initialize, definitely not running
         PostMessage(window, WM_COMMAND, wParam, (LPARAM)ProcStatus::NotRunning);
         return;
     }
+    assert(_handle);
+
+    DWORD exitCode = 0;
+    GetExitCodeProcess(_handle, &exitCode);
+    if (exitCode != STILL_ACTIVE) {
+        // Process has exited, clean up.
+        _computedAddresses.clear();
+        _handle = NULL;
+        PostMessage(window, WM_COMMAND, wParam, (LPARAM)ProcStatus::NotRunning);
+        // Wait for the process to fully close; otherwise we might accidentally re-attach to it.
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        return;
+    }
 
     try {
+        int64_t fullscreenEffectsManager = ReadData<int64_t>({_campaignState - 0x08}, 1)[0];
+        if (fullscreenEffectsManager == 0) {
+            // Game hasn't loaded yet, we're still sitting on the launcher
+            PostMessage(window, WM_COMMAND, wParam, (LPARAM)ProcStatus::NotRunning);
+            return;
+        }
+
         int64_t timeOfSave = ReadData<int64_t>({_campaignState, 0x40}, 1)[0];
         if (timeOfSave != _lastTimeOfSave) {
             // Started a new game, loaded an save, or autosaved
@@ -62,19 +81,6 @@ void Memory::Heartbeat(HWND window, WPARAM wParam) {
         }
     } catch (MemoryException exc) {
         MemoryException::HandleException(exc);
-    }
-
-    DWORD exitCode = 0;
-    assert(_handle != 0);
-    GetExitCodeProcess(_handle, &exitCode);
-    if (exitCode != STILL_ACTIVE) {
-        // Process has exited, clean up.
-        _computedAddresses.clear();
-        _handle = NULL;
-        PostMessage(window, WM_COMMAND, wParam, (LPARAM)ProcStatus::NotRunning);
-        // Wait for the process to fully close; otherwise we might accidentally re-attach to it.
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-        return;
     }
 
     PostMessage(window, WM_COMMAND, wParam, (LPARAM)ProcStatus::Running);
@@ -99,16 +105,18 @@ bool Memory::Initialize() {
     }
 
     // Next, get the process base address
-    DWORD numModules;
     std::vector<HMODULE> moduleList(1024);
-    EnumProcessModulesEx(_handle, &moduleList[0], static_cast<DWORD>(moduleList.size()), &numModules, 3);
+    DWORD numModules = static_cast<DWORD>(moduleList.size());
+    bool suceeded = EnumProcessModulesEx(_handle, &moduleList[0], numModules, &numModules, 3);
+    if (!suceeded) return false;
+    moduleList.resize(numModules);
 
     std::wstring name(1024, '\0');
-    for (DWORD i = 0; i < numModules / sizeof(HMODULE); i++) {
-        int length = GetModuleBaseNameW(_handle, moduleList[i], &name[0], static_cast<DWORD>(name.size()));
+    for (const auto& module : moduleList) {
+        int length = GetModuleBaseNameW(_handle, module, &name[0], static_cast<DWORD>(name.size()));
         name.resize(length);
         if (_processName == name) {
-            _baseAddress = (uintptr_t)moduleList[i];
+            _baseAddress = (uintptr_t)module;
             break;
         }
     }
@@ -120,8 +128,8 @@ bool Memory::Initialize() {
     AddSigScan({0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x70, 0x10, 0x48, 0x89, 0x78, 0x18, 0x48, 0x8B, 0x3D}, [&](int offset, int index, const std::vector<byte>& data) {
         _campaignState = ReadStaticInt(offset, index + 0x27, data);
     });
-    ExecuteSigScans();
-    if (_campaignState == 0) return false;
+    int numFailures = ExecuteSigScans();
+    if (numFailures > 0) return false;
 
     return true;
 }
@@ -162,6 +170,7 @@ int Memory::ExecuteSigScans(int blockSize) {
             sigScan.found = true;
             notFound--;
         }
+        if (notFound == 0) break;
     }
     return notFound;
 }
@@ -179,7 +188,7 @@ void* Memory::ComputeOffset(std::vector<__int64> offsets) {
         if (search == std::end(_computedAddresses)) {
             // If the address is not yet computed, then compute it.
             uintptr_t computedAddress = 0;
-            if (!ReadProcessMemory(_handle, reinterpret_cast<LPVOID>(cumulativeAddress), &computedAddress, sizeof(uintptr_t), NULL)) {
+            if (!ReadProcessMemory(_handle, reinterpret_cast<LPVOID>(cumulativeAddress), &computedAddress, sizeof(computedAddress), NULL)) {
                 MEMORY_THROW("Couldn't compute offset.", offsets);
             }
             if (computedAddress == 0) {

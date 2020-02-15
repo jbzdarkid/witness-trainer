@@ -20,24 +20,30 @@
 #define DOORS_PRACTICE 0x412
 #define ACTIVATE_GAME 0x413
 #define OPEN_SAVES 0x414
+#define SHOW_PANELS 0x415
 
 // Bugs:
 
 // Feature requests:
 // - show collision, somehow
-// - Show solve count / active panel + status
 // - Change current save name
+// - Extend current panel name to include EPs / others
 // - "Save the game" button on the trainer?
 // - "Load last save" button on the trainer?
 // - _timing asl to the trainer? Just something simple would be good enough, mostly
+// - Show currently traced line
+// - Icon for trainer
+// - LOD hack
+// - Improvement for 'while noclip is on', solve mode doesn't reset position (?)
 
 // Globals
 HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
-HWND g_noclipSpeed, g_currentPos, g_currentAng, g_savedPos, g_savedAng, g_fovCurrent, g_sprintSpeed;
+HWND g_noclipSpeed, g_currentPos, g_currentAng, g_savedPos, g_savedAng, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelName, g_panelState, g_panelPicture;
 std::vector<float> savedPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> savedAng = {0.0f, 0.0f};
+int currentPanel = -1;
 auto g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
 
 void SetPosText(const std::vector<float>& pos, HWND hwnd) {
@@ -57,6 +63,26 @@ float GetWindowFloat(HWND hwnd) {
     int length = GetWindowText(hwnd, text.data(), static_cast<int>(text.size()));
     text.resize(length);
     return wcstof(text.c_str(), nullptr);
+}
+
+void SetActivePanel(int activePanel) {
+    if (activePanel != -1) currentPanel = activePanel;
+
+    std::wstringstream ss;
+    if (activePanel != -1) {
+        ss << L"Active Panel:";
+    } else {
+        ss << L"Previous Panel:";
+    }
+    ss << L" 0x" << std::hex << std::setfill(L'0') << std::setw(5) << currentPanel;
+    SetWindowText(g_activePanel, ss.str().c_str());
+
+    if (currentPanel != -1) {
+        std::shared_ptr<Trainer::PanelData> panelData = g_trainer->GetPanelData(currentPanel);
+        SetWindowTextA(g_panelName, panelData->name.c_str());
+        SetWindowTextA(g_panelState, panelData->state.c_str());
+        // Todo (Future): draw path with GDI
+    }
 }
 
 // https://stackoverflow.com/a/12662950
@@ -94,15 +120,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         if (LOWORD(wParam) == HEARTBEAT) {
             switch ((ProcStatus)lParam) {
             case ProcStatus::NotRunning:
-                if (g_trainer) {
-                    // If you restart the game, restore the defaults for a new game
-                    CheckDlgButton(hwnd, NOCLIP_ENABLED, false);
-                    CheckDlgButton(hwnd, DOORS_PRACTICE, false);
-                    CheckDlgButton(hwnd, CAN_SAVE, true);
-                    CheckDlgButton(hwnd, INFINITE_CHALLENGE, false);
-                    SetWindowText(g_sprintSpeed, L"2");
-                    g_trainer = nullptr;
-                }
+                // Don't discard any settings, just free the trainer.
+                if (g_trainer) g_trainer = nullptr;
                 break;
             case ProcStatus::Reload:
                 break;
@@ -115,10 +134,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     SetWindowText(g_sprintSpeed, std::to_wstring(g_trainer->GetSprintSpeed()).c_str());
                     CheckDlgButton(hwnd, NOCLIP_ENABLED, g_trainer->GetNoclip());
                     CheckDlgButton(hwnd, INFINITE_CHALLENGE, g_trainer->GetInfiniteChallenge());
+                    CheckDlgButton(hwnd, CAN_SAVE, g_trainer->CanSave());
                 }
                 g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
                 g_trainer->SetCanSave(IsDlgButtonChecked(hwnd, CAN_SAVE));
-                SetPosText(g_trainer->GetCameraPos(), g_currentPos);
+                SetPosText(g_trainer->GetPlayerPos(), g_currentPos);
                 SetAngText(g_trainer->GetCameraAng(), g_currentAng);
                 g_trainer->SetRandomDoorsPractice(IsDlgButtonChecked(hwnd, DOORS_PRACTICE));
 
@@ -126,6 +146,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     // Only replace when in the background (i.e. if someone changed their FOV in-game)
                     SetWindowText(g_fovCurrent, std::to_wstring(g_trainer->GetFov()).c_str());
                 }
+                SetActivePanel(g_trainer->GetActivePanel());
                 break;
             }
             return 0;
@@ -142,16 +163,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         else if (command == NOCLIP_SPEED)       g_trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
         else if (command == FOV_CURRENT)        g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
         else if (command == SPRINT_SPEED)       g_trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
+        else if (command == SHOW_PANELS)        g_trainer->ShowMissingPanels();
         else if (command == ACTIVATE_GAME)      g_witnessProc->BringToFront();
         else if (command == OPEN_SAVES) {
             PWSTR outPath;
             size_t size = SHGetKnownFolderPath(FOLDERID_RoamingAppData, SHGFP_TYPE_CURRENT, NULL, &outPath);
             ShellExecute(NULL, L"open", (outPath + std::wstring(L"\\The Witness")).c_str(), NULL, NULL, SW_SHOWDEFAULT);
         } else if (command == SAVE_POS) {
-            savedPos = g_trainer->GetCameraPos();
+            savedPos = g_trainer->GetPlayerPos();
             SetPosText(savedPos, g_savedPos);
         } else if (command == LOAD_POS) {
-            g_trainer->SetCameraPos(savedPos);
+            g_trainer->SetPlayerPos(savedPos);
             SetPosText(savedPos, g_currentPos);
         } else if (command == SAVE_ANG) {
             savedAng = g_trainer->GetCameraAng();
@@ -220,56 +242,78 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     g_hwnd = CreateWindow(WINDOW_CLASS, PRODUCT_NAME, WS_OVERLAPPEDWINDOW,
       rect.right - 550, 200, 500, 500, nullptr, nullptr, hInstance, nullptr);
 
+    // Column 1
+    int x = 10;
     int y = 10;
 
-    CreateLabel(10, y, 100, L"Noclip Enabled");
+    CreateLabel(x, y, 100, L"Noclip Enabled");
     CreateCheckbox(115, y+2, NOCLIP_ENABLED);
-    CreateButton(350, y, 120, L"Switch to game", ACTIVATE_GAME);
-    CreateButton(350, y+30, 120, L"Open save folder", OPEN_SAVES);
     y += 20;
 
-    CreateLabel(10, y+4, 100, L"Noclip Speed");
+    CreateLabel(x, y+4, 100, L"Noclip Speed");
     g_noclipSpeed = CreateText(100, y, 150, L"", NOCLIP_SPEED);
     y += 30;
 
-    CreateLabel(10, y+4, 100, L"Sprint Speed");
+    CreateLabel(x, y+4, 100, L"Sprint Speed");
     g_sprintSpeed = CreateText(100, y, 150, L"", SPRINT_SPEED);
     y += 30;
 
-    CreateLabel(10, y+4, 100, L"Field of View");
+    CreateLabel(x, y+4, 100, L"Field of View");
     g_fovCurrent = CreateText(100, y, 150, L"", FOV_CURRENT);
     y += 30;
 
-    CreateLabel(10, y, 130, L"Can save the game");
+    CreateLabel(x, y, 130, L"Can save the game");
     CreateCheckbox(145, y+2, CAN_SAVE);
     CheckDlgButton(g_hwnd, CAN_SAVE, true);
     y += 20;
 
-    CreateLabel(10, y, 155, L"Random Doors Practice");
+    CreateLabel(x, y, 155, L"Random Doors Practice");
     CreateCheckbox(170, y+2, DOORS_PRACTICE);
     y += 20;
 
-    CreateLabel(10, y, 185, L"Disable Challenge time limit");
+    CreateLabel(x, y, 185, L"Disable Challenge time limit");
     CreateCheckbox(200, y+2, INFINITE_CHALLENGE);
     y += 20;
 
-    CreateButton(10, y, 100, L"Save Position", SAVE_POS);
-    CreateButton(110, y, 100, L"Load Position", LOAD_POS);
+    CreateButton(x, y, 100, L"Save Position", SAVE_POS);
+    CreateButton(x+100, y, 100, L"Load Position", LOAD_POS);
     y += 30;
-    g_currentPos = CreateLabel(15, y, 90, 48);
-    g_savedPos = CreateLabel(115, y, 90, 48);
+    g_currentPos = CreateLabel(x+5, y, 90, 48);
+    g_savedPos = CreateLabel(x+105, y, 90, 48);
     y += 50;
     SetPosText({0.0f, 0.0f, 0.0f}, g_currentPos);
     SetPosText({0.0f, 0.0f, 0.0f}, g_savedPos);
 
-    CreateButton(10, y, 100, L"Save Angle", SAVE_ANG);
-    CreateButton(110, y, 100, L"Load Angle", LOAD_ANG);
+    CreateButton(x, y, 100, L"Save Angle", SAVE_ANG);
+    CreateButton(x+100, y, 100, L"Load Angle", LOAD_ANG);
     y += 30;
-    g_currentAng = CreateLabel(15, y, 90, 32);
-    g_savedAng = CreateLabel(115, y, 90, 32);
+    g_currentAng = CreateLabel(x+5, y, 90, 32);
+    g_savedAng = CreateLabel(x+105, y, 90, 32);
     y += 40;
     SetAngText({0.0f, 0.0f}, g_currentAng);
     SetAngText({0.0f, 0.0f}, g_savedAng);
+
+    // Column 2
+    x = 270;
+    y = 10;
+
+    CreateButton(x, y, 200, L"Switch to game", ACTIVATE_GAME);
+    y += 30;
+
+    CreateButton(x, y, 200, L"Open save folder", OPEN_SAVES);
+    y += 30;
+
+    g_activePanel = CreateLabel(x, y, 200, L"No Active Panel");
+    y += 20;
+
+    g_panelName = CreateLabel(x, y, 200, L"");
+    y += 20;
+
+    g_panelState = CreateLabel(x, y, 200, L"");
+    y += 20;
+
+    CreateButton(x, y, 200, L"Show unsolved panels", SHOW_PANELS);
+    y += 30;
 
     g_witnessProc->StartHeartbeat(g_hwnd, HEARTBEAT);
 

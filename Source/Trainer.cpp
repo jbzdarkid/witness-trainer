@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Trainer.h"
+#include "Panels.h"
 
 Trainer::Trainer(const std::shared_ptr<Memory>& memory) : _memory(memory){
     _memory->AddSigScan({0x84, 0xC0, 0x75, 0x59, 0xBA, 0x20, 0x00, 0x00, 0x00}, [&](int offset, int index, const std::vector<byte>& data){
@@ -77,7 +78,94 @@ Trainer::Trainer(const std::shared_ptr<Memory>& memory) : _memory(memory){
         _recordPlayerUpdate = offset + index - 0x0C;
     });
 
+    _memory->AddSigScan({0xF2, 0x0F, 0x58, 0xC8, 0x66, 0x0F, 0x5A, 0xC1, 0xF2}, [&](int offset, int index, const std::vector<byte>& data) {
+        _activePanelOffsets.push_back(Memory::ReadStaticInt(offset, index + 0x36, data) + 1); // +1 because the line ends with an extra byte
+        _activePanelOffsets.push_back(data[index + 0x5A]); // This is 0x10 in both versions I have, but who knows.
+        _activePanelOffsets.push_back(*(int*)&data[index + 0x54]);
+    });
+
     _memory->ExecuteSigScans();
+}
+
+int Trainer::GetActivePanel() {
+    if (_activePanelOffsets.empty()) return 0;
+    return _memory->ReadData<int>(_activePanelOffsets, 1)[0] - 1;
+}
+
+std::shared_ptr<Trainer::PanelData> Trainer::GetPanelData(int id) {
+    if (_solvedTargetOffset == 0) return nullptr;
+
+    int nameOffset = _solvedTargetOffset - 0x7C;
+    int tracedEdgesOffset = _solvedTargetOffset - 0x6C;
+    int stateOffset = _solvedTargetOffset - 0x14;
+    int hasEverBeenSolvedOffset = _solvedTargetOffset + 0x04;
+    int numDotsOffset = _solvedTargetOffset + 0x11C;
+    int dotPositionsOffset = _solvedTargetOffset + 0x12C;
+
+    auto data = std::make_shared<PanelData>();
+    {
+        std::vector<char> tmp = _memory->ReadData<char>({_globals, 0x18, id*8, nameOffset, 0}, 100);
+        data->name = std::string(tmp.begin(), tmp.end());
+        // Remove garbage past the null terminator (we read 100 chars, but the string was probably shorter)
+        data->name.resize(strnlen_s(tmp.data(), tmp.size()));
+    }
+    int state = _memory->ReadData<int>({_globals, 0x18, id*8, stateOffset}, 1)[0];
+    int hasEverBeenSolved = _memory->ReadData<int>({_globals, 0x18, id*8, hasEverBeenSolvedOffset}, 1)[0];
+    data->solved = hasEverBeenSolved;
+    if (state == 0 && hasEverBeenSolved == 0) data->state = "Has never been solved";
+    else if (state == 0 && hasEverBeenSolved == 1) data->state = "Was previously solved";
+    else if (state == 1) data->state = "Solved";
+    else if (state == 2) data->state = "Failed";
+    else if (state == 3) data->state = "Exited";
+    else if (state == 4) data->state = "Negation pending";
+    else if (state == 5) data->state = "???";
+
+    int numEdges = _memory->ReadData<int>({_globals, 0x18, id*8, tracedEdgesOffset}, 1)[0];
+    /* BUG: Traced edges are being re-allocated, and thus moving around. I think memory needs to own this directly, so that it can carefully invalidate a cache entry. Or, it can ComputeOffset(false) to not cache.
+    if (numEdges > 0) {
+        std::vector<Traced_Edge> edges = _memory->ReadData<Traced_Edge>({_globals, 0x18, id*8, tracedEdgesOffset + 0x08, 0}, numEdges);
+        int numDots = _memory->ReadData<int>({_globals, 0x18, id*8, numDotsOffset}, 1)[0];
+        std::vector<float> positions = _memory->ReadData<float>({_globals, 0x18, id*8, dotPositionsOffset, 0}, numDots*2);
+        for (auto edge : edges) {
+            data->tracedEdges.push_back(positions[edge.index_a * 2]); // x1
+            data->tracedEdges.push_back(positions[edge.index_a * 2 + 1]); // y1
+            data->tracedEdges.push_back(positions[edge.index_b * 2]); // x2
+            data->tracedEdges.push_back(positions[edge.index_b * 2 + 1]); // y2
+        }
+    }
+    */
+    return data;
+}
+
+void Trainer::ShowMissingPanels() {
+    std::vector<std::string> missingPanels;
+    for (const auto& [id, panelName] : PANELS) {
+        std::shared_ptr<PanelData> data;
+        try {
+            data = GetPanelData(id);
+        } catch (MemoryException exc) {
+            continue;
+        }
+        if (!data->solved) missingPanels.push_back(panelName);
+    }
+    if (missingPanels.empty()) {
+        MessageBoxA(NULL, "No unsolved panels", "", MB_OK);
+        return;
+    }
+
+    std::string message;
+    for (const auto& missingPanel : missingPanels) {
+        if (message.size() == 0) {
+            message += missingPanel;
+        } else {
+            message += ", " + missingPanel;
+        }
+        if (message.size() > 1000) {
+            message += ", ...";
+            break;
+        }
+    }
+    MessageBoxA(NULL, message.c_str(), "Unsolved panels, in no particular order", MB_OK);
 }
 
 bool Trainer::GetNoclip() {
@@ -88,6 +176,11 @@ bool Trainer::GetNoclip() {
 float Trainer::GetNoclipSpeed() {
     if (_noclipSpeed == 0) return 0.0f;
     return _memory->ReadData<float>({_noclipSpeed}, 1)[0];
+}
+
+std::vector<float> Trainer::GetPlayerPos() {
+    if (_globals == 0) return {0.0f, 0.0f, 0.0f};
+    return _memory->ReadData<float>({_globals, 0x18, 0x1E465*8, 0x24}, 3);
 }
 
 std::vector<float> Trainer::GetCameraPos() {
@@ -134,6 +227,11 @@ void Trainer::SetNoclip(bool enabled) {
 void Trainer::SetNoclipSpeed(float speed) {
     if (_noclipSpeed == 0) return;
     _memory->WriteData<float>({_noclipSpeed}, {speed});
+}
+
+void Trainer::SetPlayerPos(const std::vector<float>& pos) {
+    if (_globals == 0) return;
+    _memory->WriteData<float>({_globals, 0x18, 0x1E465*8, 0x24}, pos);
 }
 
 void Trainer::SetCameraPos(const std::vector<float>& pos) {
