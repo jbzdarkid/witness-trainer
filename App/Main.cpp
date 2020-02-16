@@ -21,6 +21,7 @@
 #define ACTIVATE_GAME 0x413
 #define OPEN_SAVES 0x414
 #define SHOW_PANELS 0x415
+#define SHOW_NEARBY 0x416
 
 // Bugs:
 
@@ -164,6 +165,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         else if (command == FOV_CURRENT)        g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
         else if (command == SPRINT_SPEED)       g_trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
         else if (command == SHOW_PANELS)        g_trainer->ShowMissingPanels();
+        else if (command == SHOW_NEARBY)        g_trainer->ShowNearbyEntities();
         else if (command == ACTIVATE_GAME)      g_witnessProc->BringToFront();
         else if (command == OPEN_SAVES) {
             PWSTR outPath;
@@ -314,6 +316,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     CreateButton(x, y, 200, L"Show unsolved panels", SHOW_PANELS);
     y += 30;
+
+#ifndef NDEBUG
+    CreateButton(x, y, 200, L"Show nearby entities", SHOW_NEARBY);
+    y += 30;
+#endif
 
     g_witnessProc->StartHeartbeat(g_hwnd, HEARTBEAT);
 

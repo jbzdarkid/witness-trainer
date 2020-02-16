@@ -8,11 +8,12 @@ public:
     struct PanelData {
         std::string name;
         std::string state;
-        bool solved;
+        bool solved = false;
         std::vector<float> tracedEdges;
     };
     std::shared_ptr<PanelData> GetPanelData(int id);
     void ShowMissingPanels();
+    void ShowNearbyEntities();
 
     bool GetNoclip();
     float GetNoclipSpeed();

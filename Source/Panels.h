@@ -1,7 +1,6 @@
 #include <unordered_map>
-#include <string>
 
-std::unordered_map<int32_t, std::string> PANELS{
+std::unordered_map<int32_t, const char*> PANELS{
 	{0x34D96, "Boat Map"},
 	{0x34C7F, "Boat Speed"},
 	{0x021D5, "Boathouse Ramp Activation Shapers"},

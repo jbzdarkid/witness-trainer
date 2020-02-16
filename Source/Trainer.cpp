@@ -168,6 +168,55 @@ void Trainer::ShowMissingPanels() {
     MessageBoxA(NULL, message.c_str(), "Unsolved panels, in no particular order", MB_OK);
 }
 
+void Trainer::ShowNearbyEntities() {
+    int32_t maxId;
+    try {
+        maxId = _memory->ReadData<int>({_globals, 0x14}, 1)[0];
+    } catch (MemoryException exc) {
+        return;
+    }
+
+    std::vector<std::pair<float, int32_t>> nearbyEntities(10, {99999.9f, 0});
+
+    auto basePos = GetCameraPos();
+    for (int32_t id = 0; id < maxId; id++) {
+        if (id == 0x1E465) continue; // Skip over Entity_Human
+        try {
+            int32_t entity = _memory->ReadData<int>({_globals, 0x18, id*8}, 1)[0];
+            if (entity == 0) continue;
+            std::vector<float> pos = _memory->ReadData<float>({_globals, 0x18, id*8, 0x24}, 3);
+
+            float norm = std::pow(basePos[0] - pos[0], 2) + std::pow(basePos[1] - pos[1], 2) + std::pow(basePos[2] - pos[2], 2);
+            for (int i=0; i<nearbyEntities.size(); i++) {
+                if (norm < nearbyEntities[i].first) {
+                    nearbyEntities.insert(nearbyEntities.begin() + i, {norm, id});
+                    nearbyEntities.resize(nearbyEntities.size() - 1);
+                    break;
+                }
+            }
+        } catch (MemoryException exc) {
+            continue;
+        }
+    }
+
+    std::stringstream message;
+    message << "Entity ID\tDistance\t     X\t     Y\t     Z\tType\r\n";
+    for (const auto& [norm, entityId] : nearbyEntities) {
+        message << "0x" << std::hex << std::setfill('0') << std::setw(5) << entityId << '\t';
+        message << std::sqrt(norm) << '\t';
+
+        std::vector<float> pos = _memory->ReadData<float>({_globals, 0x18, entityId*8, 0x24}, 3);
+        message << pos[0] << '\t' << pos[1] << '\t' << pos[2] << '\t';
+
+        std::vector<char> tmp = _memory->ReadData<char>({_globals, 0x18, entityId*8, 0x08, 0x08, 0}, 100);
+        std::string typeName = std::string(tmp.begin(), tmp.end());
+        // Remove garbage past the null terminator (we read 100 chars, but the string was probably shorter)
+        typeName.resize(strnlen_s(tmp.data(), tmp.size()));
+        message << typeName << "\r\n";
+    }
+    MessageBoxA(NULL, message.str().c_str(), "Nearby entities", MB_OK);
+}
+
 bool Trainer::GetNoclip() {
     if (_noclipEnabled == 0) return false;
     return (bool)_memory->ReadData<int>({_noclipEnabled}, 1)[0];
