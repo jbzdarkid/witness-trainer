@@ -4,7 +4,7 @@
 #define TO_STRING(s) TO_STRING2(s)
 
 #define MAJOR 1
-#define MINOR 1
+#define MINOR 2
 #define PATCH 0
 
 #define VERSION_STR     TO_STRING(MAJOR) L"." TO_STRING(MINOR) L"." TO_STRING(PATCH)
