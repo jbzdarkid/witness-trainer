@@ -27,6 +27,7 @@
 
 // Feature requests:
 // - show collision, somehow
+//   I think I know how, need to find somewhere to execute it. Search for dead code via in_editing_mode
 // - Change current save name
 // - Extend current panel name to include EPs / others
 // - "Save the game" button on the trainer?
@@ -36,6 +37,7 @@
 // - Icon for trainer
 // - LOD hack
 // - Improvement for 'while noclip is on', solve mode doesn't reset position (?)
+// - possible improvements with last_saved_campaign
 
 // Globals
 HWND g_hwnd;
