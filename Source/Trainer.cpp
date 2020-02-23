@@ -149,7 +149,7 @@ void Trainer::ShowMissingPanels() {
         if (!data->solved) missingPanels.push_back(panelName);
     }
     if (missingPanels.empty()) {
-        MessageBoxA(NULL, "No unsolved panels", "", MB_OK);
+        MessageBoxA(NULL, "You solved all the panels!", "", MB_OK);
         return;
     }
 

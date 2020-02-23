@@ -38,6 +38,7 @@
 // - LOD hack
 // - Improvement for 'while noclip is on', solve mode doesn't reset position (?)
 // - possible improvements with last_saved_campaign
+// - Avoid hanging the UI during load; call Trainer::ctor on a background thread.
 
 // Globals
 HWND g_hwnd;
