@@ -35,7 +35,6 @@ std::unordered_map<int32_t, const char*> PANELS{
 	{0x09DA1, "Bunker Advanced 2"},
 	{0x09DA2, "Bunker Advanced 3"},
 	{0x09DAF, "Bunker Advanced 4"},
-	{0x0A099, "Bunker Glass Door"},
 	{0x0A010, "Bunker Glass 1"},
 	{0x0A01B, "Bunker Glass 2"},
 	{0x0A01F, "Bunker Glass 3"},

@@ -39,6 +39,8 @@
 // - Improvement for 'while noclip is on', solve mode doesn't reset position (?)
 // - possible improvements with last_saved_campaign
 // - Avoid hanging the UI during load; call Trainer::ctor on a background thread.
+// - Let me enable things even when trainer isn't running; just change the setting (?) and apply it later
+// - Previous Panel should show EP names
 
 // Globals
 HWND g_hwnd;
