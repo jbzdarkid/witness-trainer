@@ -39,6 +39,17 @@ public:
         return data;
     }
 
+    // Technically this is ReadChar*, but this name makes more sense with the return type.
+    std::string ReadString(std::vector<__int64> offsets) {
+        offsets.push_back(0L); // Assume we were passed a char*, this is the actual char[]
+        std::vector<char> tmp = ReadData<char>(offsets, 100);
+        std::string name(tmp.begin(), tmp.end());
+        // Remove garbage past the null terminator (we read 100 chars, but the string was probably shorter)
+        name.resize(strnlen_s(tmp.data(), tmp.size()));
+        assert(name.size() < tmp.size()); // Assert that there was a null terminator read. Otherwise, this is a truncated string.
+        return name;
+    }
+
     template <class T>
     void WriteData(const std::vector<__int64>& offsets, const std::vector<T>& data) {
         assert(data.size());

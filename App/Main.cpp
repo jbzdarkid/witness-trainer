@@ -27,20 +27,19 @@
 
 // Feature requests:
 // - show collision, somehow
-//   I think I know how, need to find somewhere to execute it. Search for dead code via in_editing_mode
 // - Change current save name
-// - Extend current panel name to include EPs / others
+// - Extend current panel name to include EPs (others?)
+// - possible improvements with last_saved_campaign (instead of using campaign save time)
 // - "Save the game" button on the trainer?
 // - "Load last save" button on the trainer?
-// - _timing asl to the trainer? Just something simple would be good enough, mostly
-// - Show currently traced line
 // - Icon for trainer
 // - LOD hack
 // - Improvement for 'while noclip is on', solve mode doesn't reset position (?)
-// - possible improvements with last_saved_campaign
+// - _timing asl to the trainer? Just something simple would be good enough, mostly
+
+// Bad/Hard ideas:
 // - Avoid hanging the UI during load; call Trainer::ctor on a background thread.
-// - Let me enable things even when trainer isn't running; just change the setting (?) and apply it later
-// - Previous Panel should show EP names
+// - Show currently traced line (hard, requires changes in Memory)
 
 // Globals
 HWND g_hwnd;
@@ -61,6 +60,12 @@ void SetPosText(const std::vector<float>& pos, HWND hwnd) {
 void SetAngText(const std::vector<float>& ang, HWND hwnd) {
     std::wstring text(25, '\0');
     swprintf_s(text.data(), text.size() + 1, L"\u0398 %8.5f\n\u03A6 %8.5f", ang[0], ang[1]);
+    SetWindowText(hwnd, text.c_str());
+}
+
+void SetFloatText(float f, HWND hwnd) {
+    std::wstring text(10, '\0');
+    swprintf_s(text.data(), text.size() + 1, L"%g", f);
     SetWindowText(hwnd, text.c_str());
 }
 
@@ -93,17 +98,17 @@ void SetActivePanel(int activePanel) {
 
 // https://stackoverflow.com/a/12662950
 void ToggleOption(int message, void (Trainer::*setter)(bool)) {
-    if (!g_trainer) return;
     bool enabled = IsDlgButtonChecked(g_hwnd, message);
-    (*g_trainer.*setter)(!enabled);
     CheckDlgButton(g_hwnd, message, !enabled);
+    // Note that this allows options to be toggled even when the trainer (i.e. game) isn't running.
+    if (g_trainer) (*g_trainer.*setter)(!enabled);
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
     if (message == WM_DESTROY) {
         PostQuitMessage(0);
         if (g_trainer) {
-            // Restore default game settings before shutting down.
+            // Restore default game settings before shutting down the trainer.
             g_trainer->SetNoclip(false);
             g_trainer->SetRandomDoorsPractice(false);
             g_trainer->SetCanSave(true);
@@ -133,24 +138,23 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 break;
             case ProcStatus::Running:
                 if (!g_trainer) {
-                    // Trainer started, game is running
+                    // Trainer started, game is running; or
+                    // Trainer running, game is started
                     g_trainer = std::make_shared<Trainer>(g_witnessProc);
-                    SetWindowText(g_noclipSpeed, std::to_wstring(g_trainer->GetNoclipSpeed()).c_str());
-                    SetWindowText(g_fovCurrent, std::to_wstring(g_trainer->GetFov()).c_str());
-                    SetWindowText(g_sprintSpeed, std::to_wstring(g_trainer->GetSprintSpeed()).c_str());
-                    CheckDlgButton(hwnd, NOCLIP_ENABLED, g_trainer->GetNoclip());
-                    CheckDlgButton(hwnd, INFINITE_CHALLENGE, g_trainer->GetInfiniteChallenge());
-                    CheckDlgButton(hwnd, CAN_SAVE, g_trainer->CanSave());
+                    SetFloatText(g_trainer->GetNoclipSpeed(), g_noclipSpeed);
+                    SetFloatText(g_trainer->GetFov(), g_fovCurrent);
+                    SetFloatText(g_trainer->GetSprintSpeed(), g_sprintSpeed);
                 }
                 g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
                 g_trainer->SetCanSave(IsDlgButtonChecked(hwnd, CAN_SAVE));
+                g_trainer->SetInfiniteChallenge(IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE));
+                g_trainer->SetRandomDoorsPractice(IsDlgButtonChecked(hwnd, DOORS_PRACTICE));
                 SetPosText(g_trainer->GetPlayerPos(), g_currentPos);
                 SetAngText(g_trainer->GetCameraAng(), g_currentAng);
-                g_trainer->SetRandomDoorsPractice(IsDlgButtonChecked(hwnd, DOORS_PRACTICE));
 
                 if (g_hwnd != GetActiveWindow()) {
                     // Only replace when in the background (i.e. if someone changed their FOV in-game)
-                    SetWindowText(g_fovCurrent, std::to_wstring(g_trainer->GetFov()).c_str());
+                    SetFloatText(g_trainer->GetFov(), g_fovCurrent);
                 }
                 SetActivePanel(g_trainer->GetActivePanel());
                 break;
@@ -158,20 +162,21 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             return 0;
         }
 
-        // All other messages need the trainer to be live in order to execute.
-        if (!g_trainer) return DefWindowProc(hwnd, message, wParam, lParam);
-
         WORD command = LOWORD(wParam);
         if (command == NOCLIP_ENABLED)          ToggleOption(NOCLIP_ENABLED, &Trainer::SetNoclip);
         else if (command == CAN_SAVE)           ToggleOption(CAN_SAVE, &Trainer::SetCanSave);
         else if (command == INFINITE_CHALLENGE) ToggleOption(INFINITE_CHALLENGE, &Trainer::SetInfiniteChallenge);
         else if (command == DOORS_PRACTICE)     ToggleOption(DOORS_PRACTICE, &Trainer::SetRandomDoorsPractice);
-        else if (command == NOCLIP_SPEED)       g_trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
-        else if (command == FOV_CURRENT)        g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
-        else if (command == SPRINT_SPEED)       g_trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
-        else if (command == SHOW_PANELS)        g_trainer->ShowMissingPanels();
-        else if (command == SHOW_NEARBY)        g_trainer->ShowNearbyEntities();
-        else if (command == ACTIVATE_GAME)      g_witnessProc->BringToFront();
+
+        // All other messages need the trainer to be live in order to execute.
+        if (!g_trainer) return DefWindowProc(hwnd, message, wParam, lParam);
+
+        if (command == NOCLIP_SPEED)        g_trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
+        else if (command == FOV_CURRENT)    g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
+        else if (command == SPRINT_SPEED)   g_trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
+        else if (command == SHOW_PANELS)    g_trainer->ShowMissingPanels();
+        else if (command == SHOW_NEARBY)    g_trainer->ShowNearbyEntities();
+        else if (command == ACTIVATE_GAME)  g_witnessProc->BringToFront();
         else if (command == OPEN_SAVES) {
             PWSTR outPath;
             size_t size = SHGetKnownFolderPath(FOLDERID_RoamingAppData, SHGFP_TYPE_CURRENT, NULL, &outPath);

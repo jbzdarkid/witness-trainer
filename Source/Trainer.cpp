@@ -95,6 +95,8 @@ int Trainer::GetActivePanel() {
 std::shared_ptr<Trainer::PanelData> Trainer::GetPanelData(int id) {
     if (_solvedTargetOffset == 0) return nullptr;
 
+
+
     int nameOffset = _solvedTargetOffset - 0x7C;
     int tracedEdgesOffset = _solvedTargetOffset - 0x6C;
     int stateOffset = _solvedTargetOffset - 0x14;
@@ -103,12 +105,7 @@ std::shared_ptr<Trainer::PanelData> Trainer::GetPanelData(int id) {
     int dotPositionsOffset = _solvedTargetOffset + 0x12C;
 
     auto data = std::make_shared<PanelData>();
-    {
-        std::vector<char> tmp = _memory->ReadData<char>({_globals, 0x18, id*8, nameOffset, 0}, 100);
-        data->name = std::string(tmp.begin(), tmp.end());
-        // Remove garbage past the null terminator (we read 100 chars, but the string was probably shorter)
-        data->name.resize(strnlen_s(tmp.data(), tmp.size()));
-    }
+    data->name = _memory->ReadString({_globals, 0x18, id*8, nameOffset});
     int state = _memory->ReadData<int>({_globals, 0x18, id*8, stateOffset}, 1)[0];
     int hasEverBeenSolved = _memory->ReadData<int>({_globals, 0x18, id*8, hasEverBeenSolvedOffset}, 1)[0];
     data->solved = hasEverBeenSolved;
@@ -118,7 +115,7 @@ std::shared_ptr<Trainer::PanelData> Trainer::GetPanelData(int id) {
     else if (state == 2) data->state = "Failed";
     else if (state == 3) data->state = "Exited";
     else if (state == 4) data->state = "Negation pending";
-    else if (state == 5) data->state = "???";
+    else data->state = "Unknown";
 
     int numEdges = _memory->ReadData<int>({_globals, 0x18, id*8, tracedEdgesOffset}, 1)[0];
     /* BUG: Traced edges are being re-allocated, and thus moving around. I think memory needs to own this directly, so that it can carefully invalidate a cache entry. Or, it can ComputeOffset(false) to not cache.
@@ -208,10 +205,7 @@ void Trainer::ShowNearbyEntities() {
         std::vector<float> pos = _memory->ReadData<float>({_globals, 0x18, entityId*8, 0x24}, 3);
         message << pos[0] << '\t' << pos[1] << '\t' << pos[2] << '\t';
 
-        std::vector<char> tmp = _memory->ReadData<char>({_globals, 0x18, entityId*8, 0x08, 0x08, 0}, 100);
-        std::string typeName = std::string(tmp.begin(), tmp.end());
-        // Remove garbage past the null terminator (we read 100 chars, but the string was probably shorter)
-        typeName.resize(strnlen_s(tmp.data(), tmp.size()));
+        std::string typeName = _memory->ReadString({_globals, 0x18, entityId*8, 0x08, 0x08});
         message << typeName << "\r\n";
     }
     MessageBoxA(NULL, message.str().c_str(), "Nearby entities", MB_OK);
