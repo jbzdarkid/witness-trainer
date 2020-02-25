@@ -32,9 +32,6 @@ public:
             msg += "Num Items: " + std::to_string(exc._numItems) + "\n";
         }
         OutputDebugStringA(msg.c_str());
-#ifndef NDEBUG
-        MessageBoxA(NULL, msg.c_str(), "Memory Exception Thrown", MB_OK);
-#endif
     }
 
 private:

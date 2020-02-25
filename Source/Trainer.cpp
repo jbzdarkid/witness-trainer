@@ -92,11 +92,18 @@ int Trainer::GetActivePanel() {
     return _memory->ReadData<int>(_activePanelOffsets, 1)[0] - 1;
 }
 
-std::shared_ptr<Trainer::PanelData> Trainer::GetPanelData(int id) {
+std::shared_ptr<Trainer::EntityData> Trainer::GetEntityData(int id) {
     if (_solvedTargetOffset == 0) return nullptr;
 
+    std::string typeName = _memory->ReadString({_globals, 0x18, id*8, 0x08, 0x08});
+    if (typeName == "Machine_Panel") return GetPanelData(id);
+    if (typeName == "Pattern_Point") return GetEPData(id);
+    DebugPrint("Don't know how to get data for entity type: " + typeName);
+    assert(false);
+    return nullptr;
+}
 
-
+std::shared_ptr<Trainer::EntityData> Trainer::GetPanelData(int id) {
     int nameOffset = _solvedTargetOffset - 0x7C;
     int tracedEdgesOffset = _solvedTargetOffset - 0x6C;
     int stateOffset = _solvedTargetOffset - 0x14;
@@ -104,7 +111,7 @@ std::shared_ptr<Trainer::PanelData> Trainer::GetPanelData(int id) {
     int numDotsOffset = _solvedTargetOffset + 0x11C;
     int dotPositionsOffset = _solvedTargetOffset + 0x12C;
 
-    auto data = std::make_shared<PanelData>();
+    auto data = std::make_shared<EntityData>();
     data->name = _memory->ReadString({_globals, 0x18, id*8, nameOffset});
     int state = _memory->ReadData<int>({_globals, 0x18, id*8, stateOffset}, 1)[0];
     int hasEverBeenSolved = _memory->ReadData<int>({_globals, 0x18, id*8, hasEverBeenSolvedOffset}, 1)[0];
@@ -134,12 +141,25 @@ std::shared_ptr<Trainer::PanelData> Trainer::GetPanelData(int id) {
     return data;
 }
 
+std::shared_ptr<Trainer::EntityData> Trainer::GetEPData(int id) {
+    auto data = std::make_shared<EntityData>();
+
+    // This is a bit of a hack. Oh well.
+    auto tmp = _memory->ReadData<int>({_globals, 0x18, id*8, 0xC8}, 1)[0];
+    if (tmp != 0) {
+        data->name = _memory->ReadString({_globals, 0x18, id*8, 0xC8});
+    } else {
+        data->name = _memory->ReadString({_globals, 0x18, id*8, 0xC0});
+    }
+    return data;
+}
+
 void Trainer::ShowMissingPanels() {
     std::vector<std::string> missingPanels;
     for (const auto& [id, panelName] : PANELS) {
-        std::shared_ptr<PanelData> data;
+        std::shared_ptr<EntityData> data;
         try {
-            data = GetPanelData(id);
+            data = GetEntityData(id);
         } catch (MemoryException exc) {
             continue;
         }

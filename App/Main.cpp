@@ -28,12 +28,11 @@
 // Feature requests:
 // - show collision, somehow
 // - Change current save name
-// - Extend current panel name to include EPs (others?)
-// - possible improvements with last_saved_campaign (instead of using campaign save time)
 // - "Save the game" button on the trainer?
 // - "Load last save" button on the trainer?
 // - Icon for trainer
 // - LOD hack
+// - possible improvements with last_saved_campaign (instead of using campaign save time), or time_of_last_save? Not sure.
 // - Improvement for 'while noclip is on', solve mode doesn't reset position (?)
 // - _timing asl to the trainer? Just something simple would be good enough, mostly
 
@@ -89,7 +88,7 @@ void SetActivePanel(int activePanel) {
     SetWindowText(g_activePanel, ss.str().c_str());
 
     if (currentPanel != -1) {
-        std::shared_ptr<Trainer::PanelData> panelData = g_trainer->GetPanelData(currentPanel);
+        std::shared_ptr<Trainer::EntityData> panelData = g_trainer->GetEntityData(currentPanel);
         SetWindowTextA(g_panelName, panelData->name.c_str());
         SetWindowTextA(g_panelState, panelData->state.c_str());
         // Todo (Future): draw path with GDI

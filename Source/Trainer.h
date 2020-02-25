@@ -5,13 +5,13 @@ public:
     Trainer(const std::shared_ptr<Memory>& memory);
 
     int GetActivePanel();
-    struct PanelData {
+    struct EntityData {
         std::string name;
         std::string state;
         bool solved = false;
         std::vector<float> tracedEdges;
     };
-    std::shared_ptr<PanelData> GetPanelData(int id);
+    std::shared_ptr<EntityData> GetEntityData(int id);
     void ShowMissingPanels();
     void ShowNearbyEntities();
 
@@ -57,6 +57,8 @@ private:
     int _recordPlayerUpdate = 0;
     std::vector<__int64> _activePanelOffsets;
 
+    std::shared_ptr<EntityData> GetPanelData(int id);
+    std::shared_ptr<EntityData> GetEPData(int id);
     struct Traced_Edge {
         int index_a;
         int index_b;
