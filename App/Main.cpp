@@ -64,7 +64,8 @@ void SetAngText(const std::vector<float>& ang, HWND hwnd) {
 
 void SetFloatText(float f, HWND hwnd) {
     std::wstring text(10, '\0');
-    swprintf_s(text.data(), text.size() + 1, L"%g", f);
+    int size = swprintf_s(text.data(), text.size() + 1, L"%.8g", f);
+    text.resize(size);
     SetWindowText(hwnd, text.c_str());
 }
 
@@ -113,8 +114,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             g_trainer->SetCanSave(true);
             g_trainer->SetInfiniteChallenge(false);
             float fov = g_trainer->GetFov();
-            if (fov < 50.534019f) fov = 50.534019f;
-            if (fov > 88.507156f) fov = 88.507156f;
+            if (fov < 50.53401947f) fov = 50.53401947f;
+            if (fov > 88.50715637f) fov = 88.50715637f;
             g_trainer->SetFov(fov);
             g_trainer->SetSprintSpeed(2.0f);
             g_trainer = nullptr;
