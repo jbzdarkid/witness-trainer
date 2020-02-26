@@ -27,18 +27,19 @@
 
 // Feature requests:
 // - show collision, somehow
-// - Change current save name
+// - Change current save name: Overwrite get_campaign_string_of_current_time
 // - "Save the game" button on the trainer?
 // - "Load last save" button on the trainer?
 // - Icon for trainer
-// - LOD hack
-// - possible improvements with last_saved_campaign (instead of using campaign save time), or time_of_last_save? Not sure.
-// - Improvement for 'while noclip is on', solve mode doesn't reset position (?)
-// - _timing asl to the trainer? Just something simple would be good enough, mostly
+// - Toggle console button
 
 // Bad/Hard ideas:
 // - Avoid hanging the UI during load; call Trainer::ctor on a background thread.
 // - Show currently traced line (hard, requires changes in Memory)
+// - Improvement for 'while noclip is on', solve mode doesn't reset position (?)
+// - _timing asl to the trainer? Just something simple would be good enough, mostly
+// - LOD hack
+// - possible improvements with last_saved_campaign (instead of using campaign save time), or time_of_last_save? Not sure.
 
 // Globals
 HWND g_hwnd;
@@ -263,15 +264,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     y += 20;
 
     CreateLabel(x, y+4, 100, L"Noclip Speed");
-    g_noclipSpeed = CreateText(100, y, 150, L"", NOCLIP_SPEED);
+    g_noclipSpeed = CreateText(100, y, 130, L"", NOCLIP_SPEED);
     y += 30;
 
     CreateLabel(x, y+4, 100, L"Sprint Speed");
-    g_sprintSpeed = CreateText(100, y, 150, L"", SPRINT_SPEED);
+    g_sprintSpeed = CreateText(100, y, 130, L"", SPRINT_SPEED);
     y += 30;
 
     CreateLabel(x, y+4, 100, L"Field of View");
-    g_fovCurrent = CreateText(100, y, 150, L"", FOV_CURRENT);
+    g_fovCurrent = CreateText(100, y, 130, L"", FOV_CURRENT);
     y += 30;
 
     CreateLabel(x, y, 130, L"Can save the game");
