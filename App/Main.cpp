@@ -28,6 +28,7 @@
 // Feature requests:
 // - show collision, somehow
 // - Change current save name: Overwrite get_campaign_string_of_current_time
+//  Nope, I mean the save name in-game.
 // - "Save the game" button on the trainer?
 // - "Load last save" button on the trainer?
 // - Icon for trainer
@@ -259,7 +260,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     int x = 10;
     int y = 10;
 
-    CreateLabel(x, y, 100, L"Noclip Enabled");
+    CreateLabel(x, y, 100, L"Noclip Enabled"); // BUG: Not rendering?
     CreateCheckbox(115, y+2, NOCLIP_ENABLED);
     y += 20;
 
