@@ -84,7 +84,31 @@ Trainer::Trainer(const std::shared_ptr<Memory>& memory) : _memory(memory){
         _activePanelOffsets.push_back(*(int*)&data[index + 0x54]);
     });
 
+    _memory->AddSigScan({0x41, 0xB8, 0x61, 0x00, 0x00, 0x00, 0x48, 0x8B, 0xD3}, [&](int offset, int index, const std::vector<byte>& data) {
+        for (; index > 0; index--) {
+            if (data[index+8] == 0x74 && data[index+9] == 0x10) {
+                _mainMenuColor = offset + index;
+                break;
+            }
+        }
+    });
+
     _memory->ExecuteSigScans();
+
+    SetMainMenuColor(true);
+}
+
+// Restore default game settings when shutting down the trainer.
+Trainer::~Trainer() {
+    SetNoclip(false);
+    SetRandomDoorsPractice(false);
+    SetCanSave(true);
+    SetInfiniteChallenge(false);
+    float fov = GetFov();
+    if (fov < 50.53401947f) SetFov(50.53401947f);
+    if (fov > 88.50715637f) SetFov(88.50715637f);
+    SetSprintSpeed(2.0f);
+    SetMainMenuColor(false);
 }
 
 int Trainer::GetActivePanel() {
@@ -182,7 +206,7 @@ void Trainer::ShowMissingPanels() {
             break;
         }
     }
-    MessageBoxA(NULL, message.c_str(), "Unsolved panels, in no particular order", MB_OK);
+    MessageBoxA(NULL, message.c_str(), "Unsolved, counted panels", MB_OK);
 }
 
 void Trainer::ShowNearbyEntities() {
@@ -334,6 +358,16 @@ void Trainer::SetInfiniteChallenge(bool enable) {
     } else {
         // (original code) Load entity_manager into rcx
         _memory->WriteData<byte>({_recordPlayerUpdate}, {0x48, 0x8B, 0x4B, 0x18});
+    }
+}
+
+void Trainer::SetMainMenuColor(bool enable) {
+    if (_mainMenuColor == 0) return;
+    if (enable) { // Set the main menu to red by *not* setting the green or blue component.
+        _memory->WriteData<byte>({_mainMenuColor}, {0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00}); // 8-byte NOP
+    } else { // Restore the original setting by copy/pasting from the block below.
+        std::vector<byte> code = _memory->ReadData<byte>({_mainMenuColor + 0x12}, 8);
+        _memory->WriteData<byte>({_mainMenuColor}, code);
     }
 }
 

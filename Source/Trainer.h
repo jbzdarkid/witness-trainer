@@ -3,6 +3,7 @@
 class Trainer {
 public:
     Trainer(const std::shared_ptr<Memory>& memory);
+    ~Trainer();
 
     int GetActivePanel();
     struct EntityData {
@@ -35,6 +36,7 @@ public:
     void SetCanSave(bool canSave);
     void SetSprintSpeed(float speed);
     void SetInfiniteChallenge(bool enable);
+    void SetMainMenuColor(bool enable);
     void SetRandomDoorsPractice(bool enable);
 
 private:
@@ -56,6 +58,7 @@ private:
     int _runSpeed = 0;
     int _recordPlayerUpdate = 0;
     std::vector<__int64> _activePanelOffsets;
+    int _mainMenuColor = 0;
 
     std::shared_ptr<EntityData> GetPanelData(int id);
     std::shared_ptr<EntityData> GetEPData(int id);

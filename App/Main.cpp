@@ -10,9 +10,7 @@
 #define NOCLIP_ENABLED 0x402
 #define NOCLIP_SPEED 0x403
 #define SAVE_POS 0x404
-#define SAVE_ANG 0x405
-#define LOAD_POS 0x406
-#define LOAD_ANG 0x407
+#define LOAD_POS 0x405
 #define FOV_CURRENT 0x408
 #define CAN_SAVE 0x409
 #define SPRINT_SPEED 0x410
@@ -24,6 +22,8 @@
 #define SHOW_NEARBY 0x416
 
 // Bugs:
+// - Use campaign_state changes to detect game reload (avoid crashes with "Can save the game")
+//  Wrong, because campaign_state isn't changing. But I still would like to avoid / figure out why we're crashing with "can save the game"
 
 // Feature requests:
 // - show collision, somehow
@@ -33,6 +33,9 @@
 // - "Load last save" button on the trainer?
 // - Icon for trainer
 // - Toggle console button
+// - Delete all saves (?)
+// - Fix noclip position -- maybe just repeatedly TP the player to the camera pos?
+//  Naive solution did not work. Maybe an action taken (only once) as we exit noclip?
 
 // Bad/Hard ideas:
 // - Avoid hanging the UI during load; call Trainer::ctor on a background thread.
@@ -46,21 +49,18 @@
 HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
-HWND g_noclipSpeed, g_currentPos, g_currentAng, g_savedPos, g_savedAng, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelName, g_panelState, g_panelPicture;
+HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelName, g_panelState, g_panelPicture;
 std::vector<float> savedPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> savedAng = {0.0f, 0.0f};
 int currentPanel = -1;
 auto g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
 
-void SetPosText(const std::vector<float>& pos, HWND hwnd) {
-    std::wstring text(40, '\0');
-    swprintf_s(text.data(), text.size() + 1, L"X %8.3f\nY %8.3f\nZ %8.3f", pos[0], pos[1], pos[2]);
-    SetWindowText(hwnd, text.c_str());
-}
-
-void SetAngText(const std::vector<float>& ang, HWND hwnd) {
-    std::wstring text(25, '\0');
-    swprintf_s(text.data(), text.size() + 1, L"\u0398 %8.5f\n\u03A6 %8.5f", ang[0], ang[1]);
+void SetPosAndAngText(const std::vector<float>& pos, const std::vector<float>& ang, HWND hwnd)
+{
+    assert(pos.size() == 3);
+    assert(ang.size() == 2);
+    std::wstring text(65, '\0');
+    swprintf_s(text.data(), text.size() + 1, L"X %8.3f\nY %8.3f\nZ %8.3f\n\u0398 %8.5f\n\u03A6 %8.5f", pos[0], pos[1], pos[2], ang[0], ang[1]);
     SetWindowText(hwnd, text.c_str());
 }
 
@@ -94,7 +94,7 @@ void SetActivePanel(int activePanel) {
         std::shared_ptr<Trainer::EntityData> panelData = g_trainer->GetEntityData(currentPanel);
         SetWindowTextA(g_panelName, panelData->name.c_str());
         SetWindowTextA(g_panelState, panelData->state.c_str());
-        // Todo (Future): draw path with GDI
+        // TODO(Future): draw path with GDI
     }
 }
 
@@ -110,16 +110,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     if (message == WM_DESTROY) {
         PostQuitMessage(0);
         if (g_trainer) {
-            // Restore default game settings before shutting down the trainer.
-            g_trainer->SetNoclip(false);
-            g_trainer->SetRandomDoorsPractice(false);
-            g_trainer->SetCanSave(true);
-            g_trainer->SetInfiniteChallenge(false);
-            float fov = g_trainer->GetFov();
-            if (fov < 50.53401947f) fov = 50.53401947f;
-            if (fov > 88.50715637f) fov = 88.50715637f;
-            g_trainer->SetFov(fov);
-            g_trainer->SetSprintSpeed(2.0f);
             g_trainer = nullptr;
             g_witnessProc = nullptr; // Free any allocated memory
         }
@@ -151,8 +141,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 g_trainer->SetCanSave(IsDlgButtonChecked(hwnd, CAN_SAVE));
                 g_trainer->SetInfiniteChallenge(IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE));
                 g_trainer->SetRandomDoorsPractice(IsDlgButtonChecked(hwnd, DOORS_PRACTICE));
-                SetPosText(g_trainer->GetPlayerPos(), g_currentPos);
-                SetAngText(g_trainer->GetCameraAng(), g_currentAng);
+                SetPosAndAngText(g_trainer->GetPlayerPos(), g_trainer->GetCameraAng(), g_currentPos);
 
                 if (g_hwnd != GetActiveWindow()) {
                     // Only replace when in the background (i.e. if someone changed their FOV in-game)
@@ -185,16 +174,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             ShellExecute(NULL, L"open", (outPath + std::wstring(L"\\The Witness")).c_str(), NULL, NULL, SW_SHOWDEFAULT);
         } else if (command == SAVE_POS) {
             savedPos = g_trainer->GetPlayerPos();
-            SetPosText(savedPos, g_savedPos);
+            savedAng = g_trainer->GetCameraAng();
+            SetPosAndAngText(savedPos, savedAng, g_savedPos);
         } else if (command == LOAD_POS) {
             g_trainer->SetPlayerPos(savedPos);
-            SetPosText(savedPos, g_currentPos);
-        } else if (command == SAVE_ANG) {
-            savedAng = g_trainer->GetCameraAng();
-            SetAngText(savedAng, g_savedAng);
-        } else if (command == LOAD_ANG) {
             g_trainer->SetCameraAng(savedAng);
-            SetAngText(savedAng, g_currentAng);
+            SetPosAndAngText(savedPos, savedAng, g_currentPos);
         }
     } catch (MemoryException exc) {
         MemoryException::HandleException(exc);
@@ -294,18 +279,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     y += 30;
     g_currentPos = CreateLabel(x+5, y, 90, 48);
     g_savedPos = CreateLabel(x+105, y, 90, 48);
-    y += 50;
-    SetPosText({0.0f, 0.0f, 0.0f}, g_currentPos);
-    SetPosText({0.0f, 0.0f, 0.0f}, g_savedPos);
-
-    CreateButton(x, y, 100, L"Save Angle", SAVE_ANG);
-    CreateButton(x+100, y, 100, L"Load Angle", LOAD_ANG);
-    y += 30;
-    g_currentAng = CreateLabel(x+5, y, 90, 32);
-    g_savedAng = CreateLabel(x+105, y, 90, 32);
-    y += 40;
-    SetAngText({0.0f, 0.0f}, g_currentAng);
-    SetAngText({0.0f, 0.0f}, g_savedAng);
+    y += 90;
+    SetPosAndAngText({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, g_currentPos);
+    SetPosAndAngText({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, g_savedPos);
 
     // Column 2
     x = 270;
