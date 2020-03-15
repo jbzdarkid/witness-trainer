@@ -277,8 +277,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     CreateButton(x, y, 100, L"Save Position", SAVE_POS);
     CreateButton(x+100, y, 100, L"Load Position", LOAD_POS);
     y += 30;
-    g_currentPos = CreateLabel(x+5, y, 90, 48);
-    g_savedPos = CreateLabel(x+105, y, 90, 48);
+    g_currentPos = CreateLabel(x+5, y, 90, 80);
+    g_savedPos = CreateLabel(x+105, y, 90, 80);
     y += 90;
     SetPosAndAngText({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, g_currentPos);
     SetPosAndAngText({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, g_savedPos);
