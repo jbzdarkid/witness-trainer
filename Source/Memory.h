@@ -60,6 +60,9 @@ public:
         }
     }
 
+    // Should only be modified by macros
+    static bool __canThrow;
+
 private:
     void Heartbeat(HWND window, WPARAM wParam);
     bool Initialize();

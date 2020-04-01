@@ -1,11 +1,22 @@
 #pragma once
 
-#define MEMORY_CATCH(expr)                 \
-try {                                      \
-    expr;                                  \
-do {} while (0)
+#define MEMORY_TRY \
+try { \
+    Memory::__canThrow = true;
 
-#define MEMORY_THROW(...) throw MemoryException(__func__, __LINE__, ##__VA_ARGS__);
+#define MEMORY_THROW(...) \
+if (Memory::__canThrow) { \
+    throw MemoryException(__func__, __LINE__, ##__VA_ARGS__); \
+} else { \
+    MemoryException::HandleException(MemoryException(__func__, __LINE__, ##__VA_ARGS__)); \
+}
+
+#define MEMORY_CATCH(action) \
+    Memory::__canThrow = false; \
+} catch (MemoryException exc) { \
+    MemoryException::HandleException(exc); \
+    action; \
+}
 
 class MemoryException : public std::exception {
 public:
@@ -20,6 +31,7 @@ public:
     inline const char* what() const noexcept {
         return _message;
     }
+
     static void HandleException(const MemoryException& exc) noexcept {
         std::string msg = "MemoryException thrown in function ";
         msg += exc._func;

@@ -6,6 +6,8 @@
 #undef PROCESSENTRY32
 #undef Process32Next
 
+bool Memory::__canThrow = false;
+
 Memory::Memory(const std::wstring& processName) : _processName(processName) {}
 
 Memory::~Memory() {
@@ -63,7 +65,7 @@ void Memory::Heartbeat(HWND window, WPARAM wParam) {
         return;
     }
 
-    try {
+    MEMORY_TRY
         int64_t fullscreenEffectsManager = ReadData<int64_t>({_campaignState - 0x08}, 1)[0];
         if (fullscreenEffectsManager == 0) {
             // Game hasn't loaded yet, we're still sitting on the launcher
@@ -79,9 +81,7 @@ void Memory::Heartbeat(HWND window, WPARAM wParam) {
             PostMessage(window, WM_COMMAND, wParam, (LPARAM)ProcStatus::Reload);
             return;
         }
-    } catch (MemoryException exc) {
-        MemoryException::HandleException(exc);
-    }
+    MEMORY_CATCH((void)0)
 
     PostMessage(window, WM_COMMAND, wParam, (LPARAM)ProcStatus::Running);
 }
@@ -176,6 +176,10 @@ int Memory::ExecuteSigScans(int blockSize) {
 }
 
 void* Memory::ComputeOffset(std::vector<__int64> offsets) {
+    if (offsets.front() == 0) {
+        MEMORY_THROW("Attempted to compute using null base offset", offsets);
+    }
+
     // Leave off the last offset, since it will be either read/write, and may not be of type uintptr_t.
     const __int64 final_offset = offsets.back();
     offsets.pop_back();

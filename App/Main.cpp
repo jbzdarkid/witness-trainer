@@ -36,6 +36,7 @@
 // - Delete all saves (?)
 // - Fix noclip position -- maybe just repeatedly TP the player to the camera pos?
 //  Naive solution did not work. Maybe an action taken (only once) as we exit noclip?
+// - Add count of missed panels to the "Show unsolved panels" dialogue
 
 // Bad/Hard ideas:
 // - Avoid hanging the UI during load; call Trainer::ctor on a background thread.
@@ -119,70 +120,66 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         return DefWindowProc(hwnd, message, wParam, lParam);
     }
 
-    try {
-        if (LOWORD(wParam) == HEARTBEAT) {
-            switch ((ProcStatus)lParam) {
-            case ProcStatus::NotRunning:
-                // Don't discard any settings, just free the trainer.
-                if (g_trainer) g_trainer = nullptr;
-                break;
-            case ProcStatus::Reload:
-                break;
-            case ProcStatus::Running:
-                if (!g_trainer) {
-                    // Trainer started, game is running; or
-                    // Trainer running, game is started
-                    g_trainer = std::make_shared<Trainer>(g_witnessProc);
-                    SetFloatText(g_trainer->GetNoclipSpeed(), g_noclipSpeed);
-                    SetFloatText(g_trainer->GetFov(), g_fovCurrent);
-                    SetFloatText(g_trainer->GetSprintSpeed(), g_sprintSpeed);
-                }
-                g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
-                g_trainer->SetCanSave(IsDlgButtonChecked(hwnd, CAN_SAVE));
-                g_trainer->SetInfiniteChallenge(IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE));
-                g_trainer->SetRandomDoorsPractice(IsDlgButtonChecked(hwnd, DOORS_PRACTICE));
-                SetPosAndAngText(g_trainer->GetPlayerPos(), g_trainer->GetCameraAng(), g_currentPos);
-
-                if (g_hwnd != GetActiveWindow()) {
-                    // Only replace when in the background (i.e. if someone changed their FOV in-game)
-                    SetFloatText(g_trainer->GetFov(), g_fovCurrent);
-                }
-                SetActivePanel(g_trainer->GetActivePanel());
-                break;
+    if (LOWORD(wParam) == HEARTBEAT) {
+        switch ((ProcStatus)lParam) {
+        case ProcStatus::NotRunning:
+            // Don't discard any settings, just free the trainer.
+            if (g_trainer) g_trainer = nullptr;
+            break;
+        case ProcStatus::Reload:
+            break;
+        case ProcStatus::Running:
+            if (!g_trainer) {
+                // Trainer started, game is running; or
+                // Trainer running, game is started
+                g_trainer = std::make_shared<Trainer>(g_witnessProc);
+                SetFloatText(g_trainer->GetNoclipSpeed(), g_noclipSpeed);
+                SetFloatText(g_trainer->GetFov(), g_fovCurrent);
+                SetFloatText(g_trainer->GetSprintSpeed(), g_sprintSpeed);
             }
-            return 0;
+            g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
+            g_trainer->SetCanSave(IsDlgButtonChecked(hwnd, CAN_SAVE));
+            g_trainer->SetInfiniteChallenge(IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE));
+            g_trainer->SetRandomDoorsPractice(IsDlgButtonChecked(hwnd, DOORS_PRACTICE));
+            SetPosAndAngText(g_trainer->GetPlayerPos(), g_trainer->GetCameraAng(), g_currentPos);
+
+            if (g_hwnd != GetActiveWindow()) {
+                // Only replace when in the background (i.e. if someone changed their FOV in-game)
+                SetFloatText(g_trainer->GetFov(), g_fovCurrent);
+            }
+            SetActivePanel(g_trainer->GetActivePanel());
+            break;
         }
+        return 0;
+    }
 
-        WORD command = LOWORD(wParam);
-        if (command == NOCLIP_ENABLED)          ToggleOption(NOCLIP_ENABLED, &Trainer::SetNoclip);
-        else if (command == CAN_SAVE)           ToggleOption(CAN_SAVE, &Trainer::SetCanSave);
-        else if (command == INFINITE_CHALLENGE) ToggleOption(INFINITE_CHALLENGE, &Trainer::SetInfiniteChallenge);
-        else if (command == DOORS_PRACTICE)     ToggleOption(DOORS_PRACTICE, &Trainer::SetRandomDoorsPractice);
+    WORD command = LOWORD(wParam);
+    if (command == NOCLIP_ENABLED)          ToggleOption(NOCLIP_ENABLED, &Trainer::SetNoclip);
+    else if (command == CAN_SAVE)           ToggleOption(CAN_SAVE, &Trainer::SetCanSave);
+    else if (command == INFINITE_CHALLENGE) ToggleOption(INFINITE_CHALLENGE, &Trainer::SetInfiniteChallenge);
+    else if (command == DOORS_PRACTICE)     ToggleOption(DOORS_PRACTICE, &Trainer::SetRandomDoorsPractice);
 
-        // All other messages need the trainer to be live in order to execute.
-        if (!g_trainer) return DefWindowProc(hwnd, message, wParam, lParam);
+    // All other messages need the trainer to be live in order to execute.
+    if (!g_trainer) return DefWindowProc(hwnd, message, wParam, lParam);
 
-        if (command == NOCLIP_SPEED)        g_trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
-        else if (command == FOV_CURRENT)    g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
-        else if (command == SPRINT_SPEED)   g_trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
-        else if (command == SHOW_PANELS)    g_trainer->ShowMissingPanels();
-        else if (command == SHOW_NEARBY)    g_trainer->ShowNearbyEntities();
-        else if (command == ACTIVATE_GAME)  g_witnessProc->BringToFront();
-        else if (command == OPEN_SAVES) {
-            PWSTR outPath;
-            size_t size = SHGetKnownFolderPath(FOLDERID_RoamingAppData, SHGFP_TYPE_CURRENT, NULL, &outPath);
-            ShellExecute(NULL, L"open", (outPath + std::wstring(L"\\The Witness")).c_str(), NULL, NULL, SW_SHOWDEFAULT);
-        } else if (command == SAVE_POS) {
-            savedPos = g_trainer->GetPlayerPos();
-            savedAng = g_trainer->GetCameraAng();
-            SetPosAndAngText(savedPos, savedAng, g_savedPos);
-        } else if (command == LOAD_POS) {
-            g_trainer->SetPlayerPos(savedPos);
-            g_trainer->SetCameraAng(savedAng);
-            SetPosAndAngText(savedPos, savedAng, g_currentPos);
-        }
-    } catch (MemoryException exc) {
-        MemoryException::HandleException(exc);
+    if (command == NOCLIP_SPEED)        g_trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
+    else if (command == FOV_CURRENT)    g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
+    else if (command == SPRINT_SPEED)   g_trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
+    else if (command == SHOW_PANELS)    g_trainer->ShowMissingPanels();
+    else if (command == SHOW_NEARBY)    g_trainer->ShowNearbyEntities();
+    else if (command == ACTIVATE_GAME)  g_witnessProc->BringToFront();
+    else if (command == OPEN_SAVES) {
+        PWSTR outPath;
+        size_t size = SHGetKnownFolderPath(FOLDERID_RoamingAppData, SHGFP_TYPE_CURRENT, NULL, &outPath);
+        ShellExecute(NULL, L"open", (outPath + std::wstring(L"\\The Witness")).c_str(), NULL, NULL, SW_SHOWDEFAULT);
+    } else if (command == SAVE_POS) {
+        savedPos = g_trainer->GetPlayerPos();
+        savedAng = g_trainer->GetCameraAng();
+        SetPosAndAngText(savedPos, savedAng, g_savedPos);
+    } else if (command == LOAD_POS) {
+        g_trainer->SetPlayerPos(savedPos);
+        g_trainer->SetCameraAng(savedAng);
+        SetPosAndAngText(savedPos, savedAng, g_currentPos);
     }
     return DefWindowProc(hwnd, message, wParam, lParam);
 }
