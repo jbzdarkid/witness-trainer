@@ -5,11 +5,11 @@ try { \
     Memory::__canThrow = true;
 
 #define MEMORY_THROW(...) \
-if (Memory::__canThrow) { \
-    throw MemoryException(__func__, __LINE__, ##__VA_ARGS__); \
-} else { \
-    MemoryException::HandleException(MemoryException(__func__, __LINE__, ##__VA_ARGS__)); \
-}
+    if (Memory::__canThrow) { \
+        throw MemoryException(__func__, __LINE__, ##__VA_ARGS__); \
+    } else { \
+        MemoryException::HandleException(MemoryException(__func__, __LINE__, ##__VA_ARGS__)); \
+    }
 
 #define MEMORY_CATCH(action) \
     Memory::__canThrow = false; \

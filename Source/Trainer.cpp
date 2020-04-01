@@ -282,6 +282,7 @@ std::vector<float> Trainer::GetCameraAng() {
 }
 
 float Trainer::GetFov() {
+    if (_fovCurrent == 0) return 0.0f; // FOV is not available on some old patches
     MEMORY_TRY
         return _memory->ReadData<float>({_fovCurrent}, 1)[0];
     MEMORY_CATCH(return 0.0f)

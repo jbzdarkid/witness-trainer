@@ -159,8 +159,11 @@ int find(const std::vector<byte> &data, const std::vector<byte>& search, size_t 
 
 int Memory::ExecuteSigScans(int blockSize) {
     int notFound = static_cast<int>(_sigScans.size());
+    std::vector<byte> data;
     for (int i=0; i<0x300000; i+=0x1000) {
-        std::vector<byte> data = ReadData<byte>({i}, 0x1100);
+        MEMORY_TRY
+             data = ReadData<byte>({i}, 0x1100);
+        MEMORY_CATCH(continue)
 
         for (auto& [scanBytes, sigScan] : _sigScans) {
             if (sigScan.found) continue;
