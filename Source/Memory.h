@@ -1,5 +1,4 @@
 #pragma once
-
 enum class ProcStatus {
     NotRunning,
     Running,
@@ -26,7 +25,7 @@ public:
     static int ReadStaticInt(int offset, int index, const std::vector<byte>& data);
     using ScanFunc = std::function<void(int offset, int index, const std::vector<byte>& data)>;
     void AddSigScan(const std::vector<byte>& scanBytes, const ScanFunc& scanFunc);
-    int ExecuteSigScans(int blockSize = 0x1000);
+    size_t ExecuteSigScans();
 
     template<class T>
     std::vector<T> ReadData(const std::vector<__int64>& offsets, size_t numItems) {

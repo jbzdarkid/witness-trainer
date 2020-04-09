@@ -157,19 +157,17 @@ int find(const std::vector<byte> &data, const std::vector<byte>& search, size_t 
     return -1;
 }
 
-int Memory::ExecuteSigScans(int blockSize) {
-    int notFound = static_cast<int>(_sigScans.size());
-    std::vector<byte> data;
-    for (int i=0; i<0x300000; i+=0x1000) {
-        MEMORY_TRY
-             data = ReadData<byte>({i}, 0x1100);
-        MEMORY_CATCH(continue)
-
+size_t Memory::ExecuteSigScans() {
+    size_t notFound = _sigScans.size();
+    std::vector<byte> buff;
+    buff.reserve(0x10100); // Reserve to avoid paying zeroing cost
+    for (uintptr_t i = _baseAddress; i < _baseAddress + 0x300000; i += 0x10000) {
+        if (!ReadProcessMemory(_handle, reinterpret_cast<void*>(i), &buff[0], buff.size(), nullptr)) continue;
         for (auto& [scanBytes, sigScan] : _sigScans) {
             if (sigScan.found) continue;
-            int index = find(data, scanBytes);
+            int index = find(buff, scanBytes);
             if (index == -1) continue;
-            sigScan.scanFunc(i, index, data);
+            sigScan.scanFunc(i, index, buff);
             sigScan.found = true;
             notFound--;
         }
@@ -179,7 +177,7 @@ int Memory::ExecuteSigScans(int blockSize) {
 }
 
 void* Memory::ComputeOffset(std::vector<__int64> offsets) {
-    if (offsets.front() == 0) {
+    if (offsets.size() == 0 || offsets.front() == 0) {
         MEMORY_THROW("Attempted to compute using null base offset", offsets);
     }
 
