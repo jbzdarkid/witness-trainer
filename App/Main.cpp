@@ -20,6 +20,7 @@
 #define OPEN_SAVES 0x414
 #define SHOW_PANELS 0x415
 #define SHOW_NEARBY 0x416
+#define EXPORT 0x417
 
 // Bugs:
 // - Use campaign_state changes to detect game reload (avoid crashes with "Can save the game")
@@ -160,13 +161,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     else if (command == DOORS_PRACTICE)     ToggleOption(DOORS_PRACTICE, &Trainer::SetRandomDoorsPractice);
 
     // All other messages need the trainer to be live in order to execute.
-    if (!g_trainer) return DefWindowProc(hwnd, message, wParam, lParam);
+    if (!g_trainer) {
+        if (HIWORD(wParam) == 0) { // Initiated by the user
+            MessageBoxA(g_hwnd, "The process must be running in order to use this button", "", MB_OK);
+        }
+        return DefWindowProc(hwnd, message, wParam, lParam);
+    }
 
     if (command == NOCLIP_SPEED)        g_trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
     else if (command == FOV_CURRENT)    g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
     else if (command == SPRINT_SPEED)   g_trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
     else if (command == SHOW_PANELS)    g_trainer->ShowMissingPanels();
     else if (command == SHOW_NEARBY)    g_trainer->ShowNearbyEntities();
+    else if (command == EXPORT)         g_trainer->ExportEntities();
     else if (command == ACTIVATE_GAME)  g_witnessProc->BringToFront();
     else if (command == OPEN_SAVES) {
         PWSTR outPath;
@@ -304,6 +311,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
 #ifndef NDEBUG
     CreateButton(x, y, 200, L"Show nearby entities", SHOW_NEARBY);
+    y += 30;
+
+    CreateButton(x, y, 200, L"Export all entities", EXPORT);
     y += 30;
 #endif
 

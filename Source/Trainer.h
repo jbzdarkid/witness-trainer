@@ -15,6 +15,7 @@ public:
     std::shared_ptr<EntityData> GetEntityData(int id);
     void ShowMissingPanels();
     void ShowNearbyEntities();
+    void ExportEntities();
 
     bool GetNoclip();
     float GetNoclipSpeed();

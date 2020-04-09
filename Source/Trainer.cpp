@@ -215,7 +215,7 @@ void Trainer::ShowNearbyEntities() {
         maxId = _memory->ReadData<int>({_globals, 0x14}, 1)[0];
     MEMORY_CATCH(return)
 
-        std::vector<std::pair<float, int32_t>> nearbyEntities(10, {99999.9f, 0});
+    std::vector<std::pair<float, int32_t>> nearbyEntities(10, {99999.9f, 0});
 
     auto basePos = GetCameraPos();
     for (int32_t id = 0; id < maxId; id++) {
@@ -236,19 +236,46 @@ void Trainer::ShowNearbyEntities() {
         MEMORY_CATCH(continue)
     }
 
-    std::stringstream message;
-    message << "Entity ID\tDistance\t     X\t     Y\t     Z\tType\r\n";
+    DebugPrint("Entity ID\tDistance\t     X\t     Y\t     Z\tType");
     for (const auto& [norm, entityId] : nearbyEntities) {
+        std::vector<float> pos;
+        std::string typeName;
+        MEMORY_TRY
+            pos = _memory->ReadData<float>({_globals, 0x18, entityId * 8, 0x24}, 3);
+            typeName = _memory->ReadString({_globals, 0x18, entityId * 8, 0x08, 0x08});
+        MEMORY_CATCH(continue)
+
+        std::stringstream message;
         message << "0x" << std::hex << std::setfill('0') << std::setw(5) << entityId << '\t';
         message << std::sqrt(norm) << '\t';
-
-        std::vector<float> pos = _memory->ReadData<float>({_globals, 0x18, entityId * 8, 0x24}, 3);
-        message << pos[0] << '\t' << pos[1] << '\t' << pos[2] << '\t';
-
-        std::string typeName = _memory->ReadString({_globals, 0x18, entityId * 8, 0x08, 0x08});
-        message << typeName << "\r\n";
+        message << pos[0] << '\t' << pos[1] << '\t' << pos[2] << '\t' << typeName;
+        DebugPrint(message.str());
     }
-    MessageBoxA(NULL, message.str().c_str(), "Nearby entities", MB_OK);
+}
+
+void Trainer::ExportEntities() {
+    int32_t maxId;
+    MEMORY_TRY
+        maxId = _memory->ReadData<int>({_globals, 0x14}, 1)[0];
+    MEMORY_CATCH(return)
+
+    DebugPrint("Entity ID\tType\tName\t     X\t     Y\t     Z");
+    for (int32_t id = 0; id < maxId; id++) {
+        MEMORY_TRY
+            int32_t entity = _memory->ReadData<int>({_globals, 0x18, id * 8}, 1)[0];
+            if (entity == 0) continue;
+            std::string typeName = _memory->ReadString({_globals, 0x18, id * 8, 0x08, 0x08});
+            std::string entityName = _memory->ReadString({_globals, 0x18, id * 8, 0x58});
+            std::vector<float> pos = _memory->ReadData<float>({_globals, 0x18, id * 8, 0x24}, 3);
+
+            std::stringstream message;
+            message << "0x" << std::hex << std::setfill('0') << std::setw(5) << id << '\t';
+            message << typeName << '\t';
+            message << entityName << '\t';
+            message << pos[0] << '\t' << pos[1] << '\t' << pos[2] << '\t';
+            DebugPrint(message.str());
+        MEMORY_CATCH(continue)
+    }
 }
 
 bool Trainer::GetNoclip() {
