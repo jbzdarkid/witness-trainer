@@ -128,7 +128,7 @@ bool Memory::Initialize() {
     AddSigScan({0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x70, 0x10, 0x48, 0x89, 0x78, 0x18, 0x48, 0x8B, 0x3D}, [&](int offset, int index, const std::vector<byte>& data) {
         _campaignState = ReadStaticInt(offset, index + 0x27, data);
     });
-    int numFailures = ExecuteSigScans();
+    size_t numFailures = ExecuteSigScans();
     if (numFailures > 0) return false;
 
     return true;
@@ -167,7 +167,7 @@ size_t Memory::ExecuteSigScans() {
             if (sigScan.found) continue;
             int index = find(buff, scanBytes);
             if (index == -1) continue;
-            sigScan.scanFunc(i, index, buff);
+            sigScan.scanFunc(static_cast<int>(i), index, buff);
             sigScan.found = true;
             notFound--;
         }
