@@ -94,6 +94,7 @@ void SetActivePanel(int activePanel) {
 
     if (currentPanel != -1) {
         std::shared_ptr<Trainer::EntityData> panelData = g_trainer->GetEntityData(currentPanel);
+        if (!panelData) return;
         SetWindowTextA(g_panelName, panelData->name.c_str());
         SetWindowTextA(g_panelState, panelData->state.c_str());
         // TODO(Future): draw path with GDI

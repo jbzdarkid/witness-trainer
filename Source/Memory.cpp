@@ -160,9 +160,11 @@ int find(const std::vector<byte> &data, const std::vector<byte>& search, size_t 
 size_t Memory::ExecuteSigScans() {
     size_t notFound = _sigScans.size();
     std::vector<byte> buff;
-    buff.reserve(0x10100); // Reserve to avoid paying zeroing cost
+    buff.resize(0x10100);
+    SIZE_T numBytesWritten;
     for (uintptr_t i = _baseAddress; i < _baseAddress + 0x300000; i += 0x10000) {
-        if (!ReadProcessMemory(_handle, reinterpret_cast<void*>(i), &buff[0], buff.size(), nullptr)) continue;
+        if (!ReadProcessMemory(_handle, reinterpret_cast<void*>(i), &buff[0], buff.size(), &numBytesWritten)) continue;
+        buff.resize(numBytesWritten);
         for (auto& [scanBytes, sigScan] : _sigScans) {
             if (sigScan.found) continue;
             int index = find(buff, scanBytes);
