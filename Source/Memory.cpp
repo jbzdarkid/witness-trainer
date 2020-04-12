@@ -73,7 +73,6 @@ void Memory::Heartbeat(HWND window, WPARAM wParam) {
             return;
         }
 
-        // Jump of >1 second, game was loaded
         int loadCount = ReadData<int>({_globals, 0x0, _loadCountOffset}, 1)[0];
         if (_previousLoadCount != loadCount) {
             _previousLoadCount = loadCount;
