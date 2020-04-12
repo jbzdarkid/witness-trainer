@@ -38,6 +38,7 @@
 // - Fix noclip position -- maybe just repeatedly TP the player to the camera pos?
 //  Naive solution did not work. Maybe an action taken (only once) as we exit noclip?
 // - Add count of missed panels to the "Show unsolved panels" dialogue
+// - Have "Switch to game" toggle to "Launch game"
 
 // Bad/Hard ideas:
 // - Avoid hanging the UI during load; call Trainer::ctor on a background thread.
@@ -54,7 +55,7 @@ std::shared_ptr<Trainer> g_trainer;
 HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelName, g_panelState, g_panelPicture;
 std::vector<float> savedPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> savedAng = {0.0f, 0.0f};
-int currentPanel = -1;
+int previousPanel = -1;
 auto g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
 
 void SetPosAndAngText(const std::vector<float>& pos, const std::vector<float>& ang, HWND hwnd)
@@ -81,19 +82,23 @@ float GetWindowFloat(HWND hwnd) {
 }
 
 void SetActivePanel(int activePanel) {
-    if (activePanel != -1) currentPanel = activePanel;
+    if (activePanel != -1) previousPanel = activePanel;
 
     std::wstringstream ss;
     if (activePanel != -1) {
         ss << L"Active Panel:";
-    } else {
+    } else if (previousPanel != -1) {
         ss << L"Previous Panel:";
+    } else {
+        ss << L"No Active Panel";
     }
-    ss << L" 0x" << std::hex << std::setfill(L'0') << std::setw(5) << currentPanel;
+    if (previousPanel != -1) {
+        ss << L" 0x" << std::hex << std::setfill(L'0') << std::setw(5) << previousPanel;
+    }
     SetWindowText(g_activePanel, ss.str().c_str());
 
-    if (currentPanel != -1) {
-        std::shared_ptr<Trainer::EntityData> panelData = g_trainer->GetEntityData(currentPanel);
+    if (previousPanel != -1) {
+        std::shared_ptr<Trainer::EntityData> panelData = g_trainer->GetEntityData(previousPanel);
         if (!panelData) return;
         SetWindowTextA(g_panelName, panelData->name.c_str());
         SetWindowTextA(g_panelState, panelData->state.c_str());
@@ -129,6 +134,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             if (g_trainer) g_trainer = nullptr;
             break;
         case ProcStatus::Reload:
+            previousPanel = -1;
             break;
         case ProcStatus::Running:
             if (!g_trainer) {

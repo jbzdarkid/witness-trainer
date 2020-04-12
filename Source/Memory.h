@@ -72,8 +72,9 @@ private:
     std::wstring _processName;
     std::map<uintptr_t, uintptr_t> _computedAddresses;
     uintptr_t _baseAddress = 0;
-    __int64 _campaignState = 0;
-    int64_t _lastTimeOfSave = 0L;
+    __int64 _globals = 0;
+    int _loadCountOffset = 0;
+    int _previousLoadCount = 0;
     DWORD _pid = 0;
     HANDLE _handle = nullptr;
     struct SigScan {

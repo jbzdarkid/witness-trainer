@@ -66,17 +66,17 @@ void Memory::Heartbeat(HWND window, WPARAM wParam) {
     }
 
     MEMORY_TRY
-        int64_t fullscreenEffectsManager = ReadData<int64_t>({_campaignState - 0x08}, 1)[0];
-        if (fullscreenEffectsManager == 0) {
+        int64_t entityManager = ReadData<int64_t>({_globals}, 1)[0];
+        if (entityManager == 0) {
             // Game hasn't loaded yet, we're still sitting on the launcher
             PostMessage(window, WM_COMMAND, wParam, (LPARAM)ProcStatus::NotRunning);
             return;
         }
 
-        int64_t timeOfSave = ReadData<int64_t>({_campaignState, 0x40}, 1)[0];
-        if (timeOfSave != _lastTimeOfSave) {
-            // Started a new game, loaded an save, or autosaved
-            _lastTimeOfSave = timeOfSave;
+        // Jump of >1 second, game was loaded
+        int loadCount = ReadData<int>({_globals, 0x0, _loadCountOffset}, 1)[0];
+        if (_previousLoadCount != loadCount) {
+            _previousLoadCount = loadCount;
             _computedAddresses.clear();
             PostMessage(window, WM_COMMAND, wParam, (LPARAM)ProcStatus::Reload);
             return;
@@ -125,8 +125,12 @@ bool Memory::Initialize() {
         return false;
     }
 
-    AddSigScan({0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x70, 0x10, 0x48, 0x89, 0x78, 0x18, 0x48, 0x8B, 0x3D}, [&](__int64 offset, int index, const std::vector<byte>& data) {
-        _campaignState = ReadStaticInt(offset, index + 0x27, data);
+    AddSigScan({0x74, 0x41, 0x48, 0x85, 0xC0, 0x74, 0x04, 0x48, 0x8B, 0x48, 0x10}, [&](__int64 offset, int index, const std::vector<byte>& data) {
+        _globals = Memory::ReadStaticInt(offset, index + 0x14, data);
+    });
+
+    AddSigScan({0x01, 0x00, 0x00, 0x66, 0xC7, 0x87}, [&](__int64 offset, int index, const std::vector<byte>& data) {
+        _loadCountOffset = *(int*)&data[index-1];
     });
     size_t numFailures = ExecuteSigScans();
     if (numFailures > 0) return false;
@@ -162,14 +166,14 @@ size_t Memory::ExecuteSigScans() {
     std::vector<byte> buff;
     buff.resize(0x10100);
     SIZE_T numBytesWritten;
-    for (uintptr_t i = _baseAddress; i < _baseAddress + 0x300000; i += 0x10000) {
-        if (!ReadProcessMemory(_handle, reinterpret_cast<void*>(i), &buff[0], buff.size(), &numBytesWritten)) continue;
+    for (uintptr_t i = 0; i < 0x300000; i += 0x10000) {
+        if (!ReadProcessMemory(_handle, reinterpret_cast<void*>(_baseAddress + i), &buff[0], buff.size(), &numBytesWritten)) continue;
         buff.resize(numBytesWritten);
         for (auto& [scanBytes, sigScan] : _sigScans) {
             if (sigScan.found) continue;
             int index = find(buff, scanBytes);
             if (index == -1) continue;
-            sigScan.scanFunc(i, index, buff);
+            sigScan.scanFunc(i, index, buff); // We're expecting i to be relative to the base address here.
             sigScan.found = true;
             notFound--;
         }
