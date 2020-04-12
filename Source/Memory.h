@@ -22,8 +22,8 @@ public:
     Memory(const Memory& memory) = delete;
     Memory& operator=(const Memory& other) = delete;
 
-    static int ReadStaticInt(int offset, int index, const std::vector<byte>& data);
-    using ScanFunc = std::function<void(int offset, int index, const std::vector<byte>& data)>;
+    static __int64 ReadStaticInt(__int64 offset, int index, const std::vector<byte>& data);
+    using ScanFunc = std::function<void(__int64 offset, int index, const std::vector<byte>& data)>;
     void AddSigScan(const std::vector<byte>& scanBytes, const ScanFunc& scanFunc);
     size_t ExecuteSigScans();
 
@@ -72,7 +72,7 @@ private:
     std::wstring _processName;
     std::map<uintptr_t, uintptr_t> _computedAddresses;
     uintptr_t _baseAddress = 0;
-    int _campaignState = 0;
+    __int64 _campaignState = 0;
     int64_t _lastTimeOfSave = 0L;
     DWORD _pid = 0;
     HANDLE _handle = nullptr;

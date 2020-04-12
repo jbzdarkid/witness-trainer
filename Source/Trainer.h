@@ -43,23 +43,23 @@ public:
 private:
     std::shared_ptr<Memory> _memory;
 
-    int _noclipEnabled = 0;
-    int _noclipSpeed = 0;
-    int _cameraPos = 0;
-    int _cameraAng = 0;
-    int _fovCurrent = 0;
-    int _globals = 0;
-    int _campaignState = 0;
-    int _doorOpen = 0;
-    int _doorClose = 0;
+    __int64 _noclipEnabled = 0;
+    __int64 _noclipSpeed = 0;
+    __int64 _cameraPos = 0;
+    __int64 _cameraAng = 0;
+    __int64 _fovCurrent = 0;
+    __int64 _globals = 0;
+    __int64 _campaignState = 0;
+    __int64 _doorOpen = 0;
+    __int64 _doorClose = 0;
     int _solvedTargetOffset = 0;
-    int _powerOn = 0;
-    int _walkAcceleration = 0;
-    int _walkDeceleration = 0;
-    int _runSpeed = 0;
-    int _recordPlayerUpdate = 0;
+    __int64 _powerOn = 0;
+    __int64 _walkAcceleration = 0;
+    __int64 _walkDeceleration = 0;
+    __int64 _runSpeed = 0;
+    __int64 _recordPlayerUpdate = 0;
     std::vector<__int64> _activePanelOffsets;
-    int _mainMenuColor = 0;
+    __int64 _mainMenuColor = 0;
 
     std::shared_ptr<EntityData> GetPanelData(int id);
     std::shared_ptr<EntityData> GetEPData(int id);

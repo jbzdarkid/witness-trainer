@@ -125,7 +125,7 @@ bool Memory::Initialize() {
         return false;
     }
 
-    AddSigScan({0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x70, 0x10, 0x48, 0x89, 0x78, 0x18, 0x48, 0x8B, 0x3D}, [&](int offset, int index, const std::vector<byte>& data) {
+    AddSigScan({0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x70, 0x10, 0x48, 0x89, 0x78, 0x18, 0x48, 0x8B, 0x3D}, [&](__int64 offset, int index, const std::vector<byte>& data) {
         _campaignState = ReadStaticInt(offset, index + 0x27, data);
     });
     size_t numFailures = ExecuteSigScans();
@@ -134,7 +134,7 @@ bool Memory::Initialize() {
     return true;
 }
 
-int Memory::ReadStaticInt(int offset, int index, const std::vector<byte>& data) {
+__int64 Memory::ReadStaticInt(__int64 offset, int index, const std::vector<byte>& data) {
     return offset + index + 0x4 + *(int*)&data[index]; // (address of next line) + (index interpreted as 4byte int)
 }
 
@@ -169,7 +169,7 @@ size_t Memory::ExecuteSigScans() {
             if (sigScan.found) continue;
             int index = find(buff, scanBytes);
             if (index == -1) continue;
-            sigScan.scanFunc(static_cast<int>(i), index, buff);
+            sigScan.scanFunc(i, index, buff);
             sigScan.found = true;
             notFound--;
         }
