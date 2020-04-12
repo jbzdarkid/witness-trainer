@@ -22,10 +22,6 @@
 #define SHOW_NEARBY 0x416
 #define EXPORT 0x417
 
-// Bugs:
-// - Use campaign_state changes to detect game reload (avoid crashes with "Can save the game")
-//  Wrong, because campaign_state isn't changing. But I still would like to avoid / figure out why we're crashing with "can save the game"
-
 // Feature requests:
 // - show collision, somehow
 // - Change current save name: Overwrite get_campaign_string_of_current_time
@@ -33,6 +29,7 @@
 // - "Save the game" button on the trainer?
 // - "Load last save" button on the trainer?
 // - Icon for trainer
+//  https://stackoverflow.com/questions/40933304
 // - Toggle console button
 // - Delete all saves (?)
 // - Fix noclip position -- maybe just repeatedly TP the player to the camera pos?
@@ -46,7 +43,6 @@
 // - Improvement for 'while noclip is on', solve mode doesn't reset position (?)
 // - _timing asl to the trainer? Just something simple would be good enough, mostly
 // - LOD hack
-// - possible improvements with last_saved_campaign (instead of using campaign save time), or time_of_last_save? Not sure.
 
 // Globals
 HWND g_hwnd;
