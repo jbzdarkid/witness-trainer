@@ -243,7 +243,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     RECT rect;
     GetClientRect(GetDesktopWindow(), &rect);
-    g_hwnd = CreateWindow(WINDOW_CLASS, PRODUCT_NAME, WS_OVERLAPPEDWINDOW,
+    g_hwnd = CreateWindow(WINDOW_CLASS, PRODUCT_NAME, WS_SYSMENU | WS_MINIMIZEBOX,
       rect.right - 550, 200, 500, 500, nullptr, nullptr, hInstance, nullptr);
 
     // Column 1
