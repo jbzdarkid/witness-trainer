@@ -206,7 +206,8 @@ void Trainer::ShowMissingPanels() {
             break;
         }
     }
-    MessageBoxA(NULL, message.c_str(), "Unsolved, counted panels", MB_OK);
+    std::string title = std::to_string(missingPanels.size()) + " unsolved, counted panels";
+    MessageBoxA(NULL, message.c_str(), title.c_str(), MB_OK);
 }
 
 void Trainer::ShowNearbyEntities() {

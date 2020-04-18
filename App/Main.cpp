@@ -34,7 +34,6 @@
 // - Delete all saves (?)
 // - Fix noclip position -- maybe just repeatedly TP the player to the camera pos?
 //  Naive solution did not work. Maybe an action taken (only once) as we exit noclip?
-// - Add count of missed panels to the "Show unsolved panels" dialogue
 // - Have "Switch to game" toggle to "Launch game"
 
 // Bad/Hard ideas:
