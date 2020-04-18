@@ -215,7 +215,7 @@ void Trainer::ShowNearbyEntities() {
         maxId = _memory->ReadData<int>({_globals, 0x14}, 1)[0];
     MEMORY_CATCH(return)
 
-    std::vector<std::pair<float, int32_t>> nearbyEntities(10, {99999.9f, 0});
+    std::vector<std::pair<float, int32_t>> nearbyEntities(20, {99999.9f, 0});
 
     auto basePos = GetCameraPos();
     for (int32_t id = 0; id < maxId; id++) {
