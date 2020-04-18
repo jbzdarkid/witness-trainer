@@ -179,8 +179,8 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetEPData(int id) {
         } else {
             data->name = _memory->ReadString({_globals, 0x18, id * 8, 0xC0});
         }
-        return data;
-    MEMORY_CATCH(return nullptr)
+    MEMORY_CATCH(void(0))
+    return data;
 }
 
 void Trainer::ShowMissingPanels() {

@@ -94,7 +94,6 @@ void SetActivePanel(int activePanel) {
 
     if (previousPanel != -1) {
         std::shared_ptr<Trainer::EntityData> panelData = g_trainer->GetEntityData(previousPanel);
-        if (!panelData) return;
         SetWindowTextA(g_panelName, panelData->name.c_str());
         SetWindowTextA(g_panelState, panelData->state.c_str());
         // TODO(Future): draw path with GDI
@@ -251,7 +250,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     int x = 10;
     int y = 10;
 
-    CreateLabel(x, y, 100, L"Noclip Enabled"); // BUG: Not rendering?
+    CreateLabel(x, y, 100, L"Noclip Enabled");
     CreateCheckbox(115, y+2, NOCLIP_ENABLED);
     y += 20;
 
