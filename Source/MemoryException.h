@@ -33,17 +33,19 @@ public:
     }
 
     static void HandleException(const MemoryException& exc) noexcept {
-        std::string msg = "MemoryException thrown in function ";
-        msg += exc._func;
-        msg += " on line " + std::to_string(exc._line) + ":\n" + exc._message + "\nOffsets:";
+        std::stringstream msg;
+        msg << "MemoryException thrown in function ";
+        msg << exc._func;
+        msg << " on line " << exc._line << ":\n" << "\nOffsets:";
         for (__int64 offset : exc._offsets) {
-            msg += " " + std::to_string(offset);
+            msg << " " << std::showbase << std::hex << offset;
         }
-        msg += "\n";
+        msg << "\n";
         if (exc._numItems != 0) {
-            msg += "Num Items: " + std::to_string(exc._numItems) + "\n";
+            msg << "Num Items: " << exc._numItems << "\n";
         }
-        OutputDebugStringA(msg.c_str());
+        void DebugPrint(std::string);
+        DebugPrint(msg.str());
     }
 
 private:

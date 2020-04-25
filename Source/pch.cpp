@@ -1,7 +1,7 @@
 #include "pch.h"
 
 void DebugPrint(std::string text) {
-#ifdef _DEBUG
+#ifndef NDEBUG
     if (text[text.size()-1] != '\n') {
         text += '\n';
     }

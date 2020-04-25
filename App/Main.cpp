@@ -35,6 +35,8 @@
 // - Fix noclip position -- maybe just repeatedly TP the player to the camera pos?
 //  Naive solution did not work. Maybe an action taken (only once) as we exit noclip?
 // - Have "Switch to game" toggle to "Launch game"
+// - Global Hotkeys
+// - Basic timer (which also needs hotkeys)
 
 // Bad/Hard ideas:
 // - Avoid hanging the UI during load; call Trainer::ctor on a background thread.
@@ -94,6 +96,7 @@ void SetActivePanel(int activePanel) {
 
     if (previousPanel != -1) {
         std::shared_ptr<Trainer::EntityData> panelData = g_trainer->GetEntityData(previousPanel);
+        if (!panelData) return;
         SetWindowTextA(g_panelName, panelData->name.c_str());
         SetWindowTextA(g_panelState, panelData->state.c_str());
         // TODO(Future): draw path with GDI

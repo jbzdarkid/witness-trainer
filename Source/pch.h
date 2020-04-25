@@ -2,6 +2,7 @@
 
 #define WIN32_LEAN_AND_MEAN 1
 #define VC_EXTRALEAN 1
+#undef NDEBUG // Enable asserts (even in release mode)
 #include <windows.h>
 #undef min
 #undef max
