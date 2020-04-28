@@ -37,6 +37,7 @@
 // - Have "Switch to game" toggle to "Launch game"
 // - Global Hotkeys
 // - Basic timer (which also needs hotkeys)
+// - Add "distance to panel" in the panel info. Might be fun to see *how far* some of the snipes are.
 
 // Bad/Hard ideas:
 // - Avoid hanging the UI during load; call Trainer::ctor on a background thread.
