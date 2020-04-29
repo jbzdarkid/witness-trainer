@@ -21,8 +21,10 @@
 #define SHOW_PANELS 0x415
 #define SHOW_NEARBY 0x416
 #define EXPORT 0x417
+#define START_TIMER 0x418
 
 // Feature requests:
+// - Global Hotkeys
 // - show collision, somehow
 // - Change current save name: Overwrite get_campaign_string_of_current_time
 //  Nope, I mean the save name in-game.
@@ -35,7 +37,6 @@
 // - Fix noclip position -- maybe just repeatedly TP the player to the camera pos?
 //  Naive solution did not work. Maybe an action taken (only once) as we exit noclip?
 // - Have "Switch to game" toggle to "Launch game"
-// - Global Hotkeys
 // - Basic timer (which also needs hotkeys)
 // - Add "distance to panel" in the panel info. Might be fun to see *how far* some of the snipes are.
 
@@ -121,7 +122,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         }
         return 0;
     }
-    if (message != WM_COMMAND) {
+    if (message == WM_HOTKEY) {
+        // LOWORD(wParam) contains the command
+    } else if (message != WM_COMMAND) {
         return DefWindowProc(hwnd, message, wParam, lParam);
     }
 
@@ -322,13 +325,19 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     y += 30;
 #endif
 
+    RegisterHotKey(g_hwnd, NOCLIP_ENABLED, MOD_NOREPEAT | MOD_CONTROL, 'N');
+    RegisterHotKey(g_hwnd, SAVE_POS, MOD_NOREPEAT | MOD_CONTROL, 'P');
+    RegisterHotKey(g_hwnd, LOAD_POS, MOD_NOREPEAT | MOD_CONTROL | MOD_SHIFT, 'P');
+    RegisterHotKey(g_hwnd, CAN_SAVE, MOD_NOREPEAT | MOD_CONTROL, 'S');
+    RegisterHotKey(g_hwnd, START_TIMER, MOD_NOREPEAT | MOD_CONTROL, 'T');
+
     g_witnessProc->StartHeartbeat(g_hwnd, HEARTBEAT);
 
     ShowWindow(g_hwnd, nCmdShow);
     UpdateWindow(g_hwnd);
 
     MSG msg;
-    while (GetMessage(&msg, nullptr, 0, 0) == TRUE) {
+    while (GetMessage(&msg, nullptr, 0, 0)) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
