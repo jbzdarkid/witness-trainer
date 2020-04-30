@@ -24,7 +24,6 @@
 #define START_TIMER 0x418
 
 // Feature requests:
-// - Global Hotkeys
 // - show collision, somehow
 // - Change current save name: Overwrite get_campaign_string_of_current_time
 //  Nope, I mean the save name in-game.
@@ -37,7 +36,7 @@
 // - Fix noclip position -- maybe just repeatedly TP the player to the camera pos?
 //  Naive solution did not work. Maybe an action taken (only once) as we exit noclip?
 // - Have "Switch to game" toggle to "Launch game"
-// - Basic timer (which also needs hotkeys)
+// - Basic timer
 // - Add "distance to panel" in the panel info. Might be fun to see *how far* some of the snipes are.
 
 // Bad/Hard ideas:
@@ -51,7 +50,7 @@
 HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
-HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelName, g_panelState, g_panelPicture;
+HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelName, g_panelState, g_panelPicture, g_activateGame;
 std::vector<float> savedPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> savedAng = {0.0f, 0.0f};
 int previousPanel = -1;
@@ -132,7 +131,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         switch ((ProcStatus)lParam) {
         case ProcStatus::NotRunning:
             // Don't discard any settings, just free the trainer.
-            if (g_trainer) g_trainer = nullptr;
+            if (g_trainer) {
+                g_trainer = nullptr;
+                SetWindowText(g_activateGame, L"Launch game");
+            }
             break;
         case ProcStatus::Reload:
             previousPanel = -1;
@@ -145,6 +147,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 SetFloatText(g_trainer->GetNoclipSpeed(), g_noclipSpeed);
                 SetFloatText(g_trainer->GetFov(), g_fovCurrent);
                 SetFloatText(g_trainer->GetSprintSpeed(), g_sprintSpeed);
+                SetWindowText(g_activateGame, L"Switch to game");
             }
             g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
             g_trainer->SetCanSave(IsDlgButtonChecked(hwnd, CAN_SAVE));
@@ -167,7 +170,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     else if (command == CAN_SAVE)           ToggleOption(CAN_SAVE, &Trainer::SetCanSave);
     else if (command == INFINITE_CHALLENGE) ToggleOption(INFINITE_CHALLENGE, &Trainer::SetInfiniteChallenge);
     else if (command == DOORS_PRACTICE)     ToggleOption(DOORS_PRACTICE, &Trainer::SetRandomDoorsPractice);
-    else if (!g_trainer) {
+    else if (command == ACTIVATE_GAME) {
+        if (!g_trainer) ShellExecute(NULL, L"open", L"steam://rungameid/210970", NULL, NULL, SW_SHOWDEFAULT);
+        else g_witnessProc->BringToFront();
+    } else if (!g_trainer) {
         // All other messages need the trainer to be live in order to execute.
         if (HIWORD(wParam) == 0) { // Initiated by the user
             MessageBox(g_hwnd, L"The process must be running in order to use this button", L"", MB_OK);
@@ -181,7 +187,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     else if (command == SHOW_PANELS)    g_trainer->ShowMissingPanels();
     else if (command == SHOW_NEARBY)    g_trainer->ShowNearbyEntities();
     else if (command == EXPORT)         g_trainer->ExportEntities();
-    else if (command == ACTIVATE_GAME)  g_witnessProc->BringToFront();
     else if (command == OPEN_SAVES) {
         PWSTR outPath;
         size_t size = SHGetKnownFolderPath(FOLDERID_RoamingAppData, SHGFP_TYPE_CURRENT, NULL, &outPath);
@@ -252,84 +257,59 @@ HWND CreateText(int x, int y, int width, LPCWSTR defaultText = L"", int message=
         x, y, width, 26,
         g_hwnd, (HMENU)message, g_hInstance, NULL);
 }
-
 #pragma warning(pop)
 
-int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow) {
-    LoadLibrary(L"Msftedit.dll");
-    WNDCLASS wndClass = {
-        CS_HREDRAW | CS_VREDRAW,
-        WndProc,
-        0,
-        0,
-        hInstance,
-        NULL,
-        LoadCursor(nullptr, IDC_ARROW),
-        (HBRUSH)(COLOR_WINDOW+1),
-        WINDOW_CLASS,
-        WINDOW_CLASS,
-    };
-    RegisterClass(&wndClass);
-
-    g_hInstance = hInstance;
-
-    RECT rect;
-    GetClientRect(GetDesktopWindow(), &rect);
-    g_hwnd = CreateWindow(WINDOW_CLASS, PRODUCT_NAME,
-        WS_SYSMENU | WS_MINIMIZEBOX,
-        rect.right - 550, 200, 500, 500,
-        nullptr, nullptr, hInstance, nullptr);
-
+void CreateComponents() {
     // Column 1
     int x = 10;
     int y = 10;
 
     CreateLabel(x, y, 100, L"Noclip Enabled");
-    CreateCheckbox(115, y+2, NOCLIP_ENABLED, L"Control-N");
+    CreateCheckbox(115, y + 2, NOCLIP_ENABLED, L"Control-N");
     RegisterHotKey(g_hwnd, NOCLIP_ENABLED, MOD_NOREPEAT | MOD_CONTROL, 'N');
     y += 20;
 
-    CreateLabel(x, y+4, 100, L"Noclip Speed");
+    CreateLabel(x, y + 4, 100, L"Noclip Speed");
     g_noclipSpeed = CreateText(100, y, 130, L"", NOCLIP_SPEED);
     y += 30;
 
-    CreateLabel(x, y+4, 100, L"Sprint Speed");
+    CreateLabel(x, y + 4, 100, L"Sprint Speed");
     g_sprintSpeed = CreateText(100, y, 130, L"", SPRINT_SPEED);
     y += 30;
 
-    CreateLabel(x, y+4, 100, L"Field of View");
+    CreateLabel(x, y + 4, 100, L"Field of View");
     g_fovCurrent = CreateText(100, y, 130, L"", FOV_CURRENT);
     y += 30;
 
     CreateLabel(x, y, 130, L"Can save the game");
-    CreateCheckbox(145, y+2, CAN_SAVE, L"Shift-Control-S");
-    RegisterHotKey(g_hwnd, CAN_SAVE, MOD_NOREPEAT | MOD_SHIFT | MOD_CONTROL , 'S');
+    CreateCheckbox(145, y + 2, CAN_SAVE, L"Shift-Control-S");
+    RegisterHotKey(g_hwnd, CAN_SAVE, MOD_NOREPEAT | MOD_SHIFT | MOD_CONTROL, 'S');
     CheckDlgButton(g_hwnd, CAN_SAVE, true);
     y += 20;
 
     CreateLabel(x, y, 155, L"Random Doors Practice");
-    CreateCheckbox(170, y+2, DOORS_PRACTICE);
+    CreateCheckbox(170, y + 2, DOORS_PRACTICE);
     y += 20;
 
     CreateLabel(x, y, 185, L"Disable Challenge time limit");
-    CreateCheckbox(200, y+2, INFINITE_CHALLENGE);
+    CreateCheckbox(200, y + 2, INFINITE_CHALLENGE);
     y += 20;
 
     CreateButton(x, y, 100, L"Save Position", SAVE_POS, L"Control-P");
-    CreateButton(x+100, y, 100, L"Load Position", LOAD_POS, L"Shift-Control-P");
+    CreateButton(x + 100, y, 100, L"Load Position", LOAD_POS, L"Shift-Control-P");
     RegisterHotKey(g_hwnd, LOAD_POS, MOD_NOREPEAT | MOD_SHIFT | MOD_CONTROL, 'P');
     y += 30;
-    g_currentPos = CreateLabel(x+5, y, 90, 80);
-    g_savedPos = CreateLabel(x+105, y, 90, 80);
+    g_currentPos = CreateLabel(x + 5, y, 90, 80);
+    g_savedPos = CreateLabel(x + 105, y, 90, 80);
     y += 90;
-    SetPosAndAngText({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, g_currentPos);
-    SetPosAndAngText({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, g_savedPos);
+    SetPosAndAngText({ 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f }, g_currentPos);
+    SetPosAndAngText({ 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f }, g_savedPos);
 
     // Column 2
     x = 270;
     y = 10;
 
-    CreateButton(x, y, 200, L"Switch to game", ACTIVATE_GAME);
+    g_activateGame = CreateButton(x, y, 200, L"Launch game", ACTIVATE_GAME);
     y += 30;
 
     CreateButton(x, y, 200, L"Open save folder", OPEN_SAVES);
@@ -354,14 +334,40 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     CreateButton(x, y, 200, L"Export all entities", EXPORT);
     y += 30;
 #endif
-
     // RegisterHotKey(g_hwnd, START_TIMER, MOD_NOREPEAT | MOD_CONTROL, 'T');
+}
 
 
-    g_witnessProc->StartHeartbeat(g_hwnd, HEARTBEAT);
+int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow) {
+    CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    LoadLibrary(L"Msftedit.dll");
+    WNDCLASS wndClass = {
+        CS_HREDRAW | CS_VREDRAW,
+        WndProc,
+        0,
+        0,
+        hInstance,
+        NULL,
+        NULL, // LoadCursor(nullptr, IDC_ARROW),
+        NULL,
+        WINDOW_CLASS,
+        WINDOW_CLASS,
+    };
+    RegisterClass(&wndClass);
 
+    RECT rect;
+    GetClientRect(GetDesktopWindow(), &rect);
+    g_hwnd = CreateWindow(WINDOW_CLASS, PRODUCT_NAME,
+        WS_SYSMENU | WS_MINIMIZEBOX,
+        rect.right - 550, 200, 500, 500,
+        nullptr, nullptr, hInstance, nullptr);
     ShowWindow(g_hwnd, nCmdShow);
     UpdateWindow(g_hwnd);
+    g_hInstance = hInstance;
+
+    CreateComponents();
+
+    g_witnessProc->StartHeartbeat(g_hwnd, HEARTBEAT);
 
     MSG msg;
     while (GetMessage(&msg, nullptr, 0, 0)) {
@@ -369,5 +375,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         DispatchMessage(&msg);
     }
 
+    CoUninitialize();
     return (int) msg.wParam;
 }
