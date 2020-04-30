@@ -21,12 +21,12 @@ Memory::~Memory() {
     }
 }
 
-void Memory::StartHeartbeat(HWND window, WPARAM wParam, std::chrono::milliseconds beat) {
+void Memory::StartHeartbeat(HWND window, UINT message, std::chrono::milliseconds beat) {
     if (_threadActive) return;
     _threadActive = true;
-    _thread = std::thread([sharedThis = shared_from_this(), window, wParam, beat]{
+    _thread = std::thread([sharedThis = shared_from_this(), window, message, beat]{
         while (sharedThis->_threadActive) {
-            sharedThis->Heartbeat(window, wParam);
+            sharedThis->Heartbeat(window, message);
             std::this_thread::sleep_for(beat);
         }
     });
@@ -45,10 +45,10 @@ void Memory::BringToFront() {
     }, (LPARAM)_pid);
 }
 
-void Memory::Heartbeat(HWND window, WPARAM wParam) {
+void Memory::Heartbeat(HWND window, UINT message) {
     if (!_handle && !Initialize()) {
         // Couldn't initialize, definitely not running
-        PostMessage(window, WM_COMMAND, wParam, (LPARAM)ProcStatus::NotRunning);
+        PostMessage(window, message, (WPARAM)ProcStatus::NotRunning, NULL);
         return;
     }
     assert(_handle);
@@ -59,7 +59,7 @@ void Memory::Heartbeat(HWND window, WPARAM wParam) {
         // Process has exited, clean up.
         _computedAddresses.clear();
         _handle = NULL;
-        PostMessage(window, WM_COMMAND, wParam, (LPARAM)ProcStatus::NotRunning);
+        PostMessage(window, message, (WPARAM)ProcStatus::NotRunning, NULL);
         // Wait for the process to fully close; otherwise we might accidentally re-attach to it.
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         return;
@@ -69,7 +69,7 @@ void Memory::Heartbeat(HWND window, WPARAM wParam) {
         int64_t entityManager = ReadData<int64_t>({_globals}, 1)[0];
         if (entityManager == 0) {
             // Game hasn't loaded yet, we're still sitting on the launcher
-            PostMessage(window, WM_COMMAND, wParam, (LPARAM)ProcStatus::NotRunning);
+            PostMessage(window, message, (WPARAM)ProcStatus::NotRunning, NULL);
             return;
         }
 
@@ -77,12 +77,12 @@ void Memory::Heartbeat(HWND window, WPARAM wParam) {
         if (_previousLoadCount != loadCount) {
             _previousLoadCount = loadCount;
             _computedAddresses.clear();
-            PostMessage(window, WM_COMMAND, wParam, (LPARAM)ProcStatus::Reload);
+            PostMessage(window, message, (WPARAM)ProcStatus::Reload, NULL);
             return;
         }
     MEMORY_CATCH((void)0)
 
-    PostMessage(window, WM_COMMAND, wParam, (LPARAM)ProcStatus::Running);
+    PostMessage(window, message, (WPARAM)ProcStatus::Running, NULL);
 }
 
 [[nodiscard]]

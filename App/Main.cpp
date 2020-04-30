@@ -35,9 +35,10 @@
 // - Delete all saves (?)
 // - Fix noclip position -- maybe just repeatedly TP the player to the camera pos?
 //  Naive solution did not work. Maybe an action taken (only once) as we exit noclip?
-// - Have "Switch to game" toggle to "Launch game"
 // - Basic timer
 // - Add "distance to panel" in the panel info. Might be fun to see *how far* some of the snipes are.
+// - Starting a new game isn't triggering "load game", which means offsets are stale.
+//  Once done, figure out what needs to be changed to properly reset "panel data".
 
 // Bad/Hard ideas:
 // - Avoid hanging the UI during load; call Trainer::ctor on a background thread.
@@ -113,56 +114,61 @@ void ToggleOption(int message, void (Trainer::*setter)(bool)) {
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
-    if (message == WM_DESTROY) {
-        PostQuitMessage(0);
-        if (g_trainer) {
-            g_trainer = nullptr;
-            g_witnessProc = nullptr; // Free any allocated memory
-        }
-        return 0;
-    }
-    if (message == WM_HOTKEY) {
-        // LOWORD(wParam) contains the command
-    } else if (message != WM_COMMAND) {
-        return DefWindowProc(hwnd, message, wParam, lParam);
-    }
-
-    if (LOWORD(wParam) == HEARTBEAT) {
-        switch ((ProcStatus)lParam) {
-        case ProcStatus::NotRunning:
-            // Don't discard any settings, just free the trainer.
+    switch (message) {
+        case WM_DESTROY:
             if (g_trainer) {
                 g_trainer = nullptr;
-                SetWindowText(g_activateGame, L"Launch game");
+                g_witnessProc = nullptr; // Free any allocated memory
             }
-            break;
-        case ProcStatus::Reload:
-            previousPanel = -1;
-            break;
-        case ProcStatus::Running:
-            if (!g_trainer) {
-                // Trainer started, game is running; or
-                // Trainer running, game is started
-                g_trainer = std::make_shared<Trainer>(g_witnessProc);
-                SetFloatText(g_trainer->GetNoclipSpeed(), g_noclipSpeed);
-                SetFloatText(g_trainer->GetFov(), g_fovCurrent);
-                SetFloatText(g_trainer->GetSprintSpeed(), g_sprintSpeed);
-                SetWindowText(g_activateGame, L"Switch to game");
-            }
-            g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
-            g_trainer->SetCanSave(IsDlgButtonChecked(hwnd, CAN_SAVE));
-            g_trainer->SetInfiniteChallenge(IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE));
-            g_trainer->SetRandomDoorsPractice(IsDlgButtonChecked(hwnd, DOORS_PRACTICE));
-            SetPosAndAngText(g_trainer->GetPlayerPos(), g_trainer->GetCameraAng(), g_currentPos);
+            PostQuitMessage(0);
+            return 0;
+        case WM_COMMAND:
+            break; // LOWORD(wParam) contains the command
+        case WM_CTLCOLORSTATIC:
+            // Get rid of the gross gray background. https://stackoverflow.com/a/4495814
+            SetBkColor((HDC)wParam, RGB(255, 255, 255));
+            return 0;
+        case WM_HOTKEY:
+            break; // LOWORD(wParam) contains the command
+        case HEARTBEAT:
+            switch ((ProcStatus)wParam) {
+            case ProcStatus::NotRunning:
+                // Don't discard any settings, just free the trainer.
+                if (g_trainer) {
+                    g_trainer = nullptr;
+                    SetWindowText(g_activateGame, L"Launch game");
+                }
+                break;
+            case ProcStatus::Reload:
+                SetActivePanel(-1);
+                previousPanel = -1;
+                break;
+            case ProcStatus::Running:
+                if (!g_trainer) {
+                    // Trainer started, game is running; or
+                    // Trainer running, game is started
+                    g_trainer = std::make_shared<Trainer>(g_witnessProc);
+                    SetFloatText(g_trainer->GetNoclipSpeed(), g_noclipSpeed);
+                    SetFloatText(g_trainer->GetFov(), g_fovCurrent);
+                    SetFloatText(g_trainer->GetSprintSpeed(), g_sprintSpeed);
+                    SetWindowText(g_activateGame, L"Switch to game");
+                }
+                g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
+                g_trainer->SetCanSave(IsDlgButtonChecked(hwnd, CAN_SAVE));
+                g_trainer->SetInfiniteChallenge(IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE));
+                g_trainer->SetRandomDoorsPractice(IsDlgButtonChecked(hwnd, DOORS_PRACTICE));
+                SetPosAndAngText(g_trainer->GetPlayerPos(), g_trainer->GetCameraAng(), g_currentPos);
 
-            if (g_hwnd != GetActiveWindow()) {
-                // Only replace when in the background (i.e. if someone changed their FOV in-game)
-                SetFloatText(g_trainer->GetFov(), g_fovCurrent);
+                if (g_hwnd != GetActiveWindow()) {
+                    // Only replace when in the background (i.e. if someone changed their FOV in-game)
+                    SetFloatText(g_trainer->GetFov(), g_fovCurrent);
+                }
+                SetActivePanel(g_trainer->GetActivePanel());
+                break;
             }
-            SetActivePanel(g_trainer->GetActivePanel());
-            break;
-        }
-        return 0;
+            return 0;
+        default:
+            return DefWindowProc(hwnd, message, wParam, lParam);
     }
 
     WORD command = LOWORD(wParam);

@@ -16,7 +16,7 @@ class Memory final : public std::enable_shared_from_this<Memory> {
 public:
     Memory(const std::wstring& processName);
     ~Memory();
-    void StartHeartbeat(HWND window, WPARAM wParam, std::chrono::milliseconds beat = std::chrono::milliseconds(100));
+    void StartHeartbeat(HWND window, UINT message, std::chrono::milliseconds beat = std::chrono::milliseconds(100));
     void BringToFront();
 
     Memory(const Memory& memory) = delete;
@@ -63,7 +63,7 @@ public:
     static bool __canThrow;
 
 private:
-    void Heartbeat(HWND window, WPARAM wParam);
+    void Heartbeat(HWND window, UINT message);
     bool Initialize();
     void* ComputeOffset(std::vector<__int64> offsets);
 
