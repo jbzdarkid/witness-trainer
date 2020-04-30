@@ -200,38 +200,64 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
 
 #pragma warning(push)
 #pragma warning(disable: 4312)
-HWND CreateLabel(int x, int y, int width, int height, LPCWSTR text=L"") {
+// Note that this requires Common Controls 6.0.0.0 to work -- see manifest settings.
+HWND CreateTooltip(HWND target, LPCWSTR hoverText) {
+    HWND tooltip = CreateWindow(TOOLTIPS_CLASS, NULL,
+        WS_POPUP | TTS_ALWAYSTIP,
+        CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+        target, NULL, g_hInstance, NULL);
+
+    TOOLINFO toolInfo;
+    toolInfo.cbSize = sizeof(toolInfo);
+    toolInfo.hwnd = g_hwnd;
+    toolInfo.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
+    toolInfo.uId = (UINT_PTR)target;
+    toolInfo.lpszText = const_cast<wchar_t*>(hoverText);
+    SendMessage(tooltip, TTM_ADDTOOL, 0, (LPARAM)&toolInfo);
+    return tooltip;
+}
+
+HWND CreateLabel(int x, int y, int width, int height, LPCWSTR text = L"") {
     return CreateWindow(L"STATIC", text,
         WS_TABSTOP | WS_VISIBLE | WS_CHILD | SS_LEFT,
-        x, y, width, height, g_hwnd, NULL, g_hInstance, NULL);
+        x, y, width, height,
+        g_hwnd, NULL, g_hInstance, NULL);
 }
 
 HWND CreateLabel(int x, int y, int width, LPCWSTR text) {
     return CreateLabel(x, y, width, 16, text);
 }
 
-HWND CreateButton(int x, int y, int width, LPCWSTR text, int message) {
-    return CreateWindow(L"BUTTON", text,
-        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-        x, y, width, 26, g_hwnd, (HMENU)message, g_hInstance, NULL);
+HWND CreateButton(int x, int y, int width, LPCWSTR text, int message, LPCWSTR hoverText = L"") {
+    HWND button = CreateWindow(L"BUTTON", text,
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
+        x, y, width, 26,
+        g_hwnd, (HMENU)message, g_hInstance, NULL);
+    CreateTooltip(button, hoverText);
+    return button;
 }
 
-HWND CreateCheckbox(int x, int y, int message) {
-    return CreateWindow(L"BUTTON", L"",
+HWND CreateCheckbox(int x, int y, int message, LPCWSTR hoverText = L"") {
+    HWND checkbox = CreateWindow(L"BUTTON", NULL,
         WS_VISIBLE | WS_CHILD | BS_CHECKBOX,
-        x, y, 12, 12, g_hwnd, (HMENU)message, g_hInstance, NULL);
+        x, y, 12, 12,
+        g_hwnd, (HMENU)message, g_hInstance, NULL);
+    CreateTooltip(checkbox, hoverText);
+    return checkbox;
 }
 
 HWND CreateText(int x, int y, int width, LPCWSTR defaultText = L"", int message=NULL) {
     return CreateWindow(MSFTEDIT_CLASS, defaultText,
         WS_TABSTOP | WS_VISIBLE | WS_CHILD | WS_BORDER,
-        x, y, width, 26, g_hwnd, (HMENU)message, g_hInstance, NULL);
+        x, y, width, 26,
+        g_hwnd, (HMENU)message, g_hInstance, NULL);
 }
+
 #pragma warning(pop)
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow) {
     LoadLibrary(L"Msftedit.dll");
-    WNDCLASSW wndClass = {
+    WNDCLASS wndClass = {
         CS_HREDRAW | CS_VREDRAW,
         WndProc,
         0,
@@ -243,21 +269,24 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         WINDOW_CLASS,
         WINDOW_CLASS,
     };
-    RegisterClassW(&wndClass);
+    RegisterClass(&wndClass);
 
     g_hInstance = hInstance;
 
     RECT rect;
     GetClientRect(GetDesktopWindow(), &rect);
-    g_hwnd = CreateWindow(WINDOW_CLASS, PRODUCT_NAME, WS_SYSMENU | WS_MINIMIZEBOX,
-      rect.right - 550, 200, 500, 500, nullptr, nullptr, hInstance, nullptr);
+    g_hwnd = CreateWindow(WINDOW_CLASS, PRODUCT_NAME,
+        WS_SYSMENU | WS_MINIMIZEBOX,
+        rect.right - 550, 200, 500, 500,
+        nullptr, nullptr, hInstance, nullptr);
 
     // Column 1
     int x = 10;
     int y = 10;
 
     CreateLabel(x, y, 100, L"Noclip Enabled");
-    CreateCheckbox(115, y+2, NOCLIP_ENABLED);
+    CreateCheckbox(115, y+2, NOCLIP_ENABLED, L"Control-N");
+    RegisterHotKey(g_hwnd, NOCLIP_ENABLED, MOD_NOREPEAT | MOD_CONTROL, 'N');
     y += 20;
 
     CreateLabel(x, y+4, 100, L"Noclip Speed");
@@ -273,7 +302,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     y += 30;
 
     CreateLabel(x, y, 130, L"Can save the game");
-    CreateCheckbox(145, y+2, CAN_SAVE);
+    CreateCheckbox(145, y+2, CAN_SAVE, L"Shift-Control-S");
+    RegisterHotKey(g_hwnd, CAN_SAVE, MOD_NOREPEAT | MOD_SHIFT | MOD_CONTROL , 'S');
     CheckDlgButton(g_hwnd, CAN_SAVE, true);
     y += 20;
 
@@ -285,8 +315,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     CreateCheckbox(200, y+2, INFINITE_CHALLENGE);
     y += 20;
 
-    CreateButton(x, y, 100, L"Save Position", SAVE_POS);
-    CreateButton(x+100, y, 100, L"Load Position", LOAD_POS);
+    CreateButton(x, y, 100, L"Save Position", SAVE_POS, L"Control-P");
+    CreateButton(x+100, y, 100, L"Load Position", LOAD_POS, L"Shift-Control-P");
+    RegisterHotKey(g_hwnd, LOAD_POS, MOD_NOREPEAT | MOD_SHIFT | MOD_CONTROL, 'P');
     y += 30;
     g_currentPos = CreateLabel(x+5, y, 90, 80);
     g_savedPos = CreateLabel(x+105, y, 90, 80);
@@ -324,11 +355,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     y += 30;
 #endif
 
-    RegisterHotKey(g_hwnd, NOCLIP_ENABLED, MOD_NOREPEAT | MOD_CONTROL, 'N');
-    RegisterHotKey(g_hwnd, SAVE_POS, MOD_NOREPEAT | MOD_CONTROL, 'P');
-    RegisterHotKey(g_hwnd, LOAD_POS, MOD_NOREPEAT | MOD_CONTROL | MOD_SHIFT, 'P');
-    RegisterHotKey(g_hwnd, CAN_SAVE, MOD_NOREPEAT | MOD_CONTROL, 'S');
-    RegisterHotKey(g_hwnd, START_TIMER, MOD_NOREPEAT | MOD_CONTROL, 'T');
+    // RegisterHotKey(g_hwnd, START_TIMER, MOD_NOREPEAT | MOD_CONTROL, 'T');
+
 
     g_witnessProc->StartHeartbeat(g_hwnd, HEARTBEAT);
 
