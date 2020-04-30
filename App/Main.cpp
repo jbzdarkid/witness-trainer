@@ -167,11 +167,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     else if (command == CAN_SAVE)           ToggleOption(CAN_SAVE, &Trainer::SetCanSave);
     else if (command == INFINITE_CHALLENGE) ToggleOption(INFINITE_CHALLENGE, &Trainer::SetInfiniteChallenge);
     else if (command == DOORS_PRACTICE)     ToggleOption(DOORS_PRACTICE, &Trainer::SetRandomDoorsPractice);
-
-    // All other messages need the trainer to be live in order to execute.
-    if (!g_trainer) {
+    else if (!g_trainer) {
+        // All other messages need the trainer to be live in order to execute.
         if (HIWORD(wParam) == 0) { // Initiated by the user
-            MessageBoxA(g_hwnd, "The process must be running in order to use this button", "", MB_OK);
+            MessageBox(g_hwnd, L"The process must be running in order to use this button", L"", MB_OK);
         }
         return DefWindowProc(hwnd, message, wParam, lParam);
     }
