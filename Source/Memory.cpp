@@ -7,6 +7,7 @@
 #undef Process32Next
 
 bool Memory::__canThrow = false;
+bool Memory::s_isPaused = false;
 
 Memory::Memory(const std::wstring& processName) : _processName(processName) {}
 
@@ -26,11 +27,19 @@ void Memory::StartHeartbeat(HWND window, UINT message, std::chrono::milliseconds
     _threadActive = true;
     _thread = std::thread([sharedThis = shared_from_this(), window, message, beat]{
         while (sharedThis->_threadActive) {
-            sharedThis->Heartbeat(window, message);
+            if (!s_isPaused) sharedThis->Heartbeat(window, message);
             std::this_thread::sleep_for(beat);
         }
     });
     _thread.detach();
+}
+
+void Memory::PauseHeartbeat() {
+    s_isPaused = true;
+}
+
+void Memory::ResumeHeartbeat() {
+    s_isPaused = false;
 }
 
 void Memory::BringToFront() {

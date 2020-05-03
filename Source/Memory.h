@@ -17,6 +17,8 @@ public:
     Memory(const std::wstring& processName);
     ~Memory();
     void StartHeartbeat(HWND window, UINT message, std::chrono::milliseconds beat = std::chrono::milliseconds(100));
+    static void PauseHeartbeat();
+    static void ResumeHeartbeat();
     void BringToFront();
 
     Memory(const Memory& memory) = delete;
@@ -68,6 +70,7 @@ private:
     void* ComputeOffset(std::vector<__int64> offsets);
 
     bool _threadActive = false;
+    static bool s_isPaused;
     std::thread _thread;
     std::wstring _processName;
     std::map<uintptr_t, uintptr_t> _computedAddresses;

@@ -37,7 +37,6 @@ std::wstring GetStackTrace() {
     return ss.str();
 }
 
-#define VERSION_STR L"1.0.0" // FIXME
 bool s_isShowingError = false;
 void ShowAssertDialogue() {
     if (s_isShowingError) return;
