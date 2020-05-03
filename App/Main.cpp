@@ -23,6 +23,7 @@
 #define EXPORT 0x417
 #define START_TIMER 0x418
 #define OPEN_CONSOLE 0x419
+#define TEST_ASSERT 0x420
 
 // Feature requests:
 // - show collision, somehow
@@ -182,6 +183,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     else if (command == ACTIVATE_GAME) {
         if (!g_trainer) ShellExecute(NULL, L"open", L"steam://rungameid/210970", NULL, NULL, SW_SHOWDEFAULT);
         else g_witnessProc->BringToFront();
+    } else if (command == TEST_ASSERT) {
+        std::vector<int> foo(1, '\0');
+        int bar = foo[2];
     } else if (!g_trainer) {
         // All other messages need the trainer to be live in order to execute.
         if (HIWORD(wParam) == 0) { // Initiated by the user
@@ -242,29 +246,33 @@ HWND CreateLabel(int x, int y, int width, LPCWSTR text) {
     return CreateLabel(x, y, width, 16, text);
 }
 
-HWND CreateButton(int x, int y, int width, LPCWSTR text, int message, LPCWSTR hoverText = L"") {
+HWND CreateButton(int x, int& y, int width, LPCWSTR text, int message, LPCWSTR hoverText = L"") {
     HWND button = CreateWindow(L"BUTTON", text,
         WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
         x, y, width, 26,
         g_hwnd, (HMENU)message, g_hInstance, NULL);
+    y += 30;
     CreateTooltip(button, hoverText);
     return button;
 }
 
-HWND CreateCheckbox(int x, int y, int message, LPCWSTR hoverText = L"") {
+HWND CreateCheckbox(int x, int& y, int message, LPCWSTR hoverText = L"") {
     HWND checkbox = CreateWindow(L"BUTTON", NULL,
         WS_VISIBLE | WS_CHILD | BS_CHECKBOX,
-        x, y, 12, 12,
+        x, y + 2, 12, 12,
         g_hwnd, (HMENU)message, g_hInstance, NULL);
+    y += 20;
     CreateTooltip(checkbox, hoverText);
     return checkbox;
 }
 
-HWND CreateText(int x, int y, int width, LPCWSTR defaultText = L"", int message=NULL) {
-    return CreateWindow(MSFTEDIT_CLASS, defaultText,
+HWND CreateText(int x, int& y, int width, LPCWSTR defaultText = L"", int message=NULL) {
+    HWND text = CreateWindow(MSFTEDIT_CLASS, defaultText,
         WS_TABSTOP | WS_VISIBLE | WS_CHILD | WS_BORDER,
         x, y, width, 26,
         g_hwnd, (HMENU)message, g_hInstance, NULL);
+    y += 30;
+    return text;
 }
 #pragma warning(pop)
 
@@ -274,49 +282,44 @@ void CreateComponents() {
     int y = 10;
 
     CreateLabel(x, y, 100, L"Noclip Enabled");
-    CreateCheckbox(115, y + 2, NOCLIP_ENABLED, L"Control-N");
+    CreateCheckbox(115, y, NOCLIP_ENABLED, L"Control-N");
     RegisterHotKey(g_hwnd, NOCLIP_ENABLED, MOD_NOREPEAT | MOD_CONTROL, 'N');
-    y += 20;
 
     CreateLabel(x, y + 4, 100, L"Noclip Speed");
     g_noclipSpeed = CreateText(100, y, 130, L"", NOCLIP_SPEED);
-    y += 30;
 
     CreateLabel(x, y + 4, 100, L"Sprint Speed");
     g_sprintSpeed = CreateText(100, y, 130, L"", SPRINT_SPEED);
-    y += 30;
 
     CreateLabel(x, y + 4, 100, L"Field of View");
     g_fovCurrent = CreateText(100, y, 130, L"", FOV_CURRENT);
-    y += 30;
 
     CreateLabel(x, y, 185, L"Can save the game");
-    CreateCheckbox(200, y + 2, CAN_SAVE, L"Shift-Control-S");
+    CreateCheckbox(200, y, CAN_SAVE, L"Shift-Control-S");
     RegisterHotKey(g_hwnd, CAN_SAVE, MOD_NOREPEAT | MOD_SHIFT | MOD_CONTROL, 'S');
     CheckDlgButton(g_hwnd, CAN_SAVE, true);
-    y += 20;
 
     CreateLabel(x, y, 185, L"Random Doors Practice");
-    CreateCheckbox(200, y + 2, DOORS_PRACTICE);
-    y += 20;
+    CreateCheckbox(200, y, DOORS_PRACTICE);
 
     CreateLabel(x, y, 185, L"Disable Challenge time limit");
-    CreateCheckbox(200, y + 2, INFINITE_CHALLENGE);
-    y += 20;
+    CreateCheckbox(200, y, INFINITE_CHALLENGE);
 
     CreateLabel(x, y, 185, L"Open the Console");
-    CreateCheckbox(200, y + 2, OPEN_CONSOLE, L"Tilde (~)");
+    CreateCheckbox(200, y, OPEN_CONSOLE, L"Tilde (~)");
     RegisterHotKey(g_hwnd, OPEN_CONSOLE, MOD_NOREPEAT | MOD_SHIFT, VK_OEM_3);
-    y += 20;
 
     CreateButton(x, y, 100, L"Save Position", SAVE_POS, L"Control-P");
-    CreateButton(x + 100, y, 100, L"Load Position", LOAD_POS, L"Shift-Control-P");
-    RegisterHotKey(g_hwnd, LOAD_POS, MOD_NOREPEAT | MOD_SHIFT | MOD_CONTROL, 'P');
-    y += 30;
+    RegisterHotKey(g_hwnd, LOAD_POS, MOD_NOREPEAT | MOD_CONTROL, 'P');
     g_currentPos = CreateLabel(x + 5, y, 90, 80);
-    g_savedPos = CreateLabel(x + 105, y, 90, 80);
-    y += 90;
     SetPosAndAngText({ 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f }, g_currentPos);
+
+    // Column 1a
+    x = 110;
+    y -= 30;
+    CreateButton(x, y, 100, L"Load Position", LOAD_POS, L"Shift-Control-P");
+    RegisterHotKey(g_hwnd, LOAD_POS, MOD_NOREPEAT | MOD_SHIFT | MOD_CONTROL, 'P');
+    g_savedPos = CreateLabel(x + 5, y, 90, 80);
     SetPosAndAngText({ 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f }, g_savedPos);
 
     // Column 2
@@ -324,10 +327,7 @@ void CreateComponents() {
     y = 10;
 
     g_activateGame = CreateButton(x, y, 200, L"Launch game", ACTIVATE_GAME);
-    y += 30;
-
     CreateButton(x, y, 200, L"Open save folder", OPEN_SAVES);
-    y += 30;
 
     g_activePanel = CreateLabel(x, y, 200, L"No Active Panel");
     y += 20;
@@ -339,14 +339,10 @@ void CreateComponents() {
     y += 20;
 
     CreateButton(x, y, 200, L"Show unsolved panels", SHOW_PANELS);
-    y += 30;
-
 #ifndef NDEBUG
     CreateButton(x, y, 200, L"Show nearby entities", SHOW_NEARBY);
-    y += 30;
-
     CreateButton(x, y, 200, L"Export all entities", EXPORT);
-    y += 30;
+    CreateButton(x, y, 200, L"Test assert", TEST_ASSERT);
 #endif
     // RegisterHotKey(g_hwnd, START_TIMER, MOD_NOREPEAT | MOD_CONTROL, 'T');
 }

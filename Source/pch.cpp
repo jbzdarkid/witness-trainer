@@ -2,7 +2,6 @@
 #include <csignal>
 #include <ImageHlp.h>
 #include <Psapi.h>
-#include <algorithm>
 // #include "Version.h"
 
 void DebugPrint(const std::string& text) {
@@ -20,23 +19,32 @@ std::wstring GetStackTrace() {
     HANDLE process = GetCurrentProcess();
     HANDLE thread = GetCurrentThread();
     SymInitialize(process, NULL, TRUE); // For some reason, this is required in order to make StackWalk work.
-
     CONTEXT context;
     RtlCaptureContext(&context);
-
     STACKFRAME64 stackFrame;
     stackFrame.AddrPC.Offset = context.Rip;
     stackFrame.AddrPC.Mode = AddrModeFlat;
 
     std::wstringstream ss;
+    ss << std::hex << std::showbase << std::nouppercase;
+
+    DWORD unused;
+    HMODULE modules[1];
+    EnumProcessModules(process, &modules[0], sizeof(HMODULE), &unused);
+    MODULEINFO moduleInfo;
+    GetModuleInformation(process, modules[0], &moduleInfo, sizeof(moduleInfo));
+    ss << moduleInfo.lpBaseOfDll << L' ';
+    ss << (reinterpret_cast<__int64>(moduleInfo.lpBaseOfDll) + moduleInfo.SizeOfImage) << L' ';
+
     BOOL result = FALSE;
     do {
-        ss << std::hex << std::showbase << stackFrame.AddrPC.Offset << L' ';
+        ss << stackFrame.AddrPC.Offset << L' ';
         result = StackWalk64(IMAGE_FILE_MACHINE_AMD64, process, thread, &stackFrame, &context, NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL);
     } while (result == TRUE);
     return ss.str();
 }
 
+#define VERSION_STR L"1.0.0"
 bool s_isShowingError = false;
 void ShowAssertDialogue() {
     if (s_isShowingError) return;
