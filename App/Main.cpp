@@ -22,6 +22,7 @@
 #define SHOW_NEARBY 0x416
 #define EXPORT 0x417
 #define START_TIMER 0x418
+#define OPEN_CONSOLE 0x419
 
 // Feature requests:
 // - show collision, somehow
@@ -31,7 +32,6 @@
 // - "Load last save" button on the trainer?
 // - Icon for trainer
 //  https://stackoverflow.com/questions/40933304
-// - Toggle console button
 // - Delete all saves (?)
 // - Fix noclip position -- maybe just repeatedly TP the player to the camera pos?
 //  Naive solution did not work. Maybe an action taken (only once) as we exit noclip?
@@ -39,6 +39,7 @@
 // - Add "distance to panel" in the panel info. Might be fun to see *how far* some of the snipes are.
 // - Starting a new game isn't triggering "load game", which means offsets are stale.
 //  Once done, figure out what needs to be changed to properly reset "panel data".
+// - Differentiate 'trainer started first' vs 'game started first' wrt stuff like 'should we enable infinite challenge'
 
 // Bad/Hard ideas:
 // - Avoid hanging the UI during load; call Trainer::ctor on a background thread.
@@ -157,6 +158,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 g_trainer->SetCanSave(IsDlgButtonChecked(hwnd, CAN_SAVE));
                 g_trainer->SetInfiniteChallenge(IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE));
                 g_trainer->SetRandomDoorsPractice(IsDlgButtonChecked(hwnd, DOORS_PRACTICE));
+                g_trainer->SetConsoleOpen(IsDlgButtonChecked(hwnd, OPEN_CONSOLE));
                 SetPosAndAngText(g_trainer->GetPlayerPos(), g_trainer->GetCameraAng(), g_currentPos);
 
                 if (g_hwnd != GetActiveWindow()) {
@@ -176,6 +178,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     else if (command == CAN_SAVE)           ToggleOption(CAN_SAVE, &Trainer::SetCanSave);
     else if (command == INFINITE_CHALLENGE) ToggleOption(INFINITE_CHALLENGE, &Trainer::SetInfiniteChallenge);
     else if (command == DOORS_PRACTICE)     ToggleOption(DOORS_PRACTICE, &Trainer::SetRandomDoorsPractice);
+    else if (command == OPEN_CONSOLE)     ToggleOption(OPEN_CONSOLE, &Trainer::SetConsoleOpen);
     else if (command == ACTIVATE_GAME) {
         if (!g_trainer) ShellExecute(NULL, L"open", L"steam://rungameid/210970", NULL, NULL, SW_SHOWDEFAULT);
         else g_witnessProc->BringToFront();
@@ -287,18 +290,23 @@ void CreateComponents() {
     g_fovCurrent = CreateText(100, y, 130, L"", FOV_CURRENT);
     y += 30;
 
-    CreateLabel(x, y, 130, L"Can save the game");
-    CreateCheckbox(145, y + 2, CAN_SAVE, L"Shift-Control-S");
+    CreateLabel(x, y, 185, L"Can save the game");
+    CreateCheckbox(200, y + 2, CAN_SAVE, L"Shift-Control-S");
     RegisterHotKey(g_hwnd, CAN_SAVE, MOD_NOREPEAT | MOD_SHIFT | MOD_CONTROL, 'S');
     CheckDlgButton(g_hwnd, CAN_SAVE, true);
     y += 20;
 
-    CreateLabel(x, y, 155, L"Random Doors Practice");
-    CreateCheckbox(170, y + 2, DOORS_PRACTICE);
+    CreateLabel(x, y, 185, L"Random Doors Practice");
+    CreateCheckbox(200, y + 2, DOORS_PRACTICE);
     y += 20;
 
     CreateLabel(x, y, 185, L"Disable Challenge time limit");
     CreateCheckbox(200, y + 2, INFINITE_CHALLENGE);
+    y += 20;
+
+    CreateLabel(x, y, 185, L"Open the Console");
+    CreateCheckbox(200, y + 2, OPEN_CONSOLE, L"Tilde (~)");
+    RegisterHotKey(g_hwnd, OPEN_CONSOLE, MOD_NOREPEAT | MOD_SHIFT, VK_OEM_3);
     y += 20;
 
     CreateButton(x, y, 100, L"Save Position", SAVE_POS, L"Control-P");

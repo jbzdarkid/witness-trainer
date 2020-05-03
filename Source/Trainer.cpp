@@ -93,6 +93,12 @@ Trainer::Trainer(const std::shared_ptr<Memory>& memory) : _memory(memory) {
         }
     });
 
+    _memory->AddSigScan({0x0F, 0x57, 0xC0, 0x0F, 0x2F, 0x80, 0xB4, 0x00, 0x00, 0x00, 0x0F, 0x92, 0xC0, 0xC3}, [&](__int64 offset, int index, const std::vector<byte>& data) {
+        auto console = Memory::ReadStaticInt(offset, index-4, data);
+        _consoleWindowYB = {console, 0x4C};
+        _consoleOpenTarget = {console, 0xB4};
+    });
+
     _memory->ExecuteSigScans();
 
     SetMainMenuColor(true);
@@ -334,6 +340,12 @@ bool Trainer::GetInfiniteChallenge() {
     MEMORY_CATCH(return false)
 }
 
+bool Trainer::GetConsoleOpen() {
+    MEMORY_TRY
+        return _memory->ReadData<float>(_consoleOpenTarget, 1)[0] == 1.0f;
+    MEMORY_CATCH(return false)
+}
+
 bool Trainer::GetRandomDoorsPractice() {
     MEMORY_TRY
         return _memory->ReadData<byte>({_doorOpen}, 1)[0] == 0xEB;
@@ -391,6 +403,17 @@ void Trainer::SetSprintSpeed(float speed) {
         _memory->WriteData<float>({_runSpeed}, {speed});
         _memory->WriteData<float>({_walkAcceleration}, {_memory->ReadData<float>({_walkAcceleration}, 1)[0] * multiplier});
         _memory->WriteData<float>({_walkDeceleration}, {_memory->ReadData<float>({_walkDeceleration}, 1)[0] * multiplier});
+    MEMORY_CATCH(return)
+}
+
+void Trainer::SetConsoleOpen(bool enable) {
+    MEMORY_TRY
+        if (enable) {
+            _memory->WriteData<float>(_consoleWindowYB, {0.0f});
+            _memory->WriteData<float>(_consoleOpenTarget, {1.0f});
+        } else {
+            _memory->WriteData<float>(_consoleOpenTarget, {0.0f});
+        }
     MEMORY_CATCH(return)
 }
 

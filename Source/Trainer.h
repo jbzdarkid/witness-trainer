@@ -26,6 +26,7 @@ public:
     bool CanSave();
     float GetSprintSpeed();
     bool GetInfiniteChallenge();
+    bool GetConsoleOpen();
     bool GetRandomDoorsPractice();
 
     void SetNoclip(bool enabled);
@@ -37,6 +38,7 @@ public:
     void SetCanSave(bool canSave);
     void SetSprintSpeed(float speed);
     void SetInfiniteChallenge(bool enable);
+    void SetConsoleOpen(bool enable);
     void SetMainMenuColor(bool enable);
     void SetRandomDoorsPractice(bool enable);
 
@@ -60,6 +62,8 @@ private:
     __int64 _recordPlayerUpdate = 0;
     std::vector<__int64> _activePanelOffsets;
     __int64 _mainMenuColor = 0;
+    std::vector<__int64> _consoleOpenTarget;
+    std::vector<__int64> _consoleWindowYB;
 
     std::shared_ptr<EntityData> GetPanelData(int id);
     std::shared_ptr<EntityData> GetEPData(int id);
