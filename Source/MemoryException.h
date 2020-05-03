@@ -9,14 +9,14 @@ try { \
         throw MemoryException(__func__, __LINE__, ##__VA_ARGS__); \
     } else { \
         auto exc = MemoryException(__func__, __LINE__, ##__VA_ARGS__); \
-        void DebugPrint(std::string text); \
+        void DebugPrint(const std::string& text); \
         DebugPrint(exc.ToString()); \
     }
 
 #define MEMORY_CATCH(action) \
     Memory::__canThrow = false; \
 } catch (MemoryException exc) { \
-    void DebugPrint(std::string text); \
+    void DebugPrint(const std::string& text); \
     DebugPrint(exc.ToString()); \
     action; \
 }
