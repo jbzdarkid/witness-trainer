@@ -8,17 +8,20 @@ try { \
     if (Memory::__canThrow) { \
         throw MemoryException(__func__, __LINE__, ##__VA_ARGS__); \
     } else { \
-        MemoryException::HandleException(MemoryException(__func__, __LINE__, ##__VA_ARGS__)); \
+        auto exc = MemoryException(__func__, __LINE__, ##__VA_ARGS__); \
+        void DebugPrint(std::string text); \
+        DebugPrint(exc.ToString()); \
     }
 
 #define MEMORY_CATCH(action) \
     Memory::__canThrow = false; \
 } catch (MemoryException exc) { \
-    MemoryException::HandleException(exc); \
+    void DebugPrint(std::string text); \
+    DebugPrint(exc.ToString()); \
     action; \
 }
 
-class MemoryException : public std::exception {
+class MemoryException {
 public:
     inline MemoryException(const char* func, int32_t line, const char* message) noexcept
         : MemoryException(func, line, message, {}, 0) {}
@@ -28,24 +31,24 @@ public:
         : _func(func), _line(line), _message(message), _offsets(offsets), _numItems(numItems) {}
 
     ~MemoryException() = default;
-    inline const char* what() const noexcept {
-        return _message;
-    }
 
-    static void HandleException(const MemoryException& exc) noexcept {
+    std::string ToString() noexcept {
         std::stringstream msg;
         msg << "MemoryException thrown in function ";
-        msg << exc._func;
-        msg << " on line " << exc._line << ":\n" << "\nOffsets:";
-        for (__int64 offset : exc._offsets) {
-            msg << " " << std::showbase << std::hex << offset;
+        msg << _func;
+        msg << " on line " << _line << ":\n";
+        msg << _message << "\n";
+        if (_offsets.size() > 0) {
+            msg << "\nOffsets:";
+            for (__int64 offset : _offsets) {
+                msg << " " << std::showbase << std::hex << offset;
+            }
+            msg << "\n";
         }
-        msg << "\n";
-        if (exc._numItems != 0) {
-            msg << "Num Items: " << exc._numItems << "\n";
+        if (_numItems != 0) {
+            msg << "Num Items: " << _numItems << "\n";
         }
-        void DebugPrint(std::string);
-        DebugPrint(msg.str());
+        return msg.str();
     }
 
 private:
