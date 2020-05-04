@@ -80,18 +80,36 @@ uint64_t DebugUtils::GetBaseAddress() {
 // Note: This function must work properly even in release mode, since we will need to generate callbacks for release exes.
 void DebugUtils::RegenerateCallstack(const std::wstring& callstack) {
     uint64_t baseAddress = GetBaseAddress();
-    std::stringstream ss;
-    ss << std::hex << std::showbase << std::nouppercase;
+    std::vector<uint64_t> addrs;
     std::wstring buffer;
     for (const wchar_t c : callstack) {
         if (c == L' ') {
-            ss << baseAddress + std::stoull(buffer, nullptr, 16) << '\n';
+            addrs.push_back(baseAddress + std::stoull(buffer, nullptr, 16));
             buffer.clear();
         } else {
             buffer += c;
             continue;
         }
     }
-    ss << baseAddress + std::stoull(buffer, nullptr, 16) << '\n';
-    OutputDebugStringA(ss.str().c_str());
+    addrs.push_back(baseAddress + std::stoull(buffer, nullptr, 16));
+
+    // The SYMBOL_INFO struct ends with a buffer of size 1; to allocate a larger buffer, we need to allocate an extra MAX_SYM_NAME characters.
+    auto symbolInfo = (SYMBOL_INFO*)malloc(sizeof(SYMBOL_INFO) + MAX_SYM_NAME * sizeof(wchar_t));
+    if (symbolInfo != nullptr) {
+        symbolInfo->SizeOfStruct = sizeof(SYMBOL_INFO);
+        symbolInfo->MaxNameLen = MAX_SYM_NAME;
+    }
+    HANDLE process = GetCurrentProcess();
+    SymInitialize(process, NULL, TRUE);
+    std::wstringstream ss;
+    ss << std::hex << std::showbase << std::nouppercase;
+    for (auto addr : addrs) {
+        ss << addr;
+        if (symbolInfo != nullptr && SymFromAddr(process, addr, NULL, symbolInfo)) {
+            ss << L' ' << symbolInfo->Name;
+        }
+        ss << L'\n';
+    }
+
+    OutputDebugStringW(ss.str().c_str());
 }
