@@ -25,8 +25,6 @@
 #define OPEN_CONSOLE 0x419
 #define CALLSTACK 0x420
 
-// TODO: __int64 -> uint64_t
-
 // Feature requests:
 // - show collision, somehow
 // - Change current save name: Overwrite get_campaign_string_of_current_time
