@@ -43,6 +43,7 @@ std::wstring DebugUtils::GetStackTrace() {
 }
 
 bool DebugUtils::s_isShowingError = false;
+std::wstring DebugUtils::version = L"(unknown)";
 void DebugUtils::ShowAssertDialogue() {
     if (s_isShowingError) return;
     Memory::PauseHeartbeat();

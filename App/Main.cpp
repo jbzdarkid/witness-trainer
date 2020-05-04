@@ -191,7 +191,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     else if (command == ACTIVATE_GAME) {
         if (!g_trainer) ShellExecute(NULL, L"open", L"steam://rungameid/210970", NULL, NULL, SW_SHOWDEFAULT);
         else g_witnessProc->BringToFront();
-        assert(false);
     } else if (command == CALLSTACK) {
         std::wstring callstack = GetWindowString(g_fovCurrent);
         if (!callstack.empty() && IsDebuggerPresent()) {
