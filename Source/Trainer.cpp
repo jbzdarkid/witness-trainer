@@ -185,7 +185,7 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetEPData(int id) {
         } else {
             data->name = _memory->ReadString({_globals, 0x18, id * 8, 0xC0});
         }
-    MEMORY_CATCH(void(0))
+    MEMORY_CATCH((void)0)
     return data;
 }
 
