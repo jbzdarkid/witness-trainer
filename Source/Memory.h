@@ -1,5 +1,5 @@
 #pragma once
-enum class ProcStatus {
+enum ProcStatus : WPARAM {
     NotRunning,
     Running,
     Reload // This fires when autosaving, too!
