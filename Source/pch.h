@@ -38,5 +38,4 @@
 
 #include "MemoryException.h"
 #include "Memory.h"
-
-void DebugPrint(const std::string& text);
+#include "DebugUtils.h"

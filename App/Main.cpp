@@ -23,7 +23,9 @@
 #define EXPORT 0x417
 #define START_TIMER 0x418
 #define OPEN_CONSOLE 0x419
-#define TEST_ASSERT 0x420
+#define CALLSTACK 0x420
+
+// TODO: __int64 -> uint64_t
 
 // Feature requests:
 // - show collision, somehow
@@ -54,10 +56,11 @@ HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
 HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelName, g_panelState, g_panelPicture, g_activateGame;
+auto g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
+
 std::vector<float> savedPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> savedAng = {0.0f, 0.0f};
 int previousPanel = -1;
-auto g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
 
 void SetPosAndAngText(const std::vector<float>& pos, const std::vector<float>& ang, HWND hwnd)
 {
@@ -75,11 +78,16 @@ void SetFloatText(float f, HWND hwnd) {
     SetWindowText(hwnd, text.c_str());
 }
 
-float GetWindowFloat(HWND hwnd) {
-    std::wstring text(128, L'\0');
-    int length = GetWindowText(hwnd, text.data(), static_cast<int>(text.size()));
+std::wstring GetWindowString(HWND hwnd) {
+    int length = GetWindowTextLength(hwnd);
+    std::wstring text(length, L'\0');
+    length = GetWindowText(hwnd, text.data(), static_cast<int>(text.size()));
     text.resize(length);
-    return wcstof(text.c_str(), nullptr);
+    return text;
+}
+
+float GetWindowFloat(HWND hwnd) {
+    return wcstof(GetWindowString(hwnd).c_str(), nullptr);
 }
 
 void SetActivePanel(int activePanel) {
@@ -119,7 +127,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     switch (message) {
         case WM_DESTROY:
             if (g_trainer) {
-                g_trainer = nullptr;
+                g_trainer = nullptr; // Reset any modifications
                 g_witnessProc = nullptr; // Free any allocated memory
             }
             PostQuitMessage(0);
@@ -183,9 +191,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     else if (command == ACTIVATE_GAME) {
         if (!g_trainer) ShellExecute(NULL, L"open", L"steam://rungameid/210970", NULL, NULL, SW_SHOWDEFAULT);
         else g_witnessProc->BringToFront();
-    } else if (command == TEST_ASSERT) {
-        std::vector<int> foo(1, '\0');
-        int bar = foo[2];
+        assert(false);
+    } else if (command == CALLSTACK) {
+        std::wstring callstack = GetWindowString(g_fovCurrent);
+        if (!callstack.empty() && IsDebuggerPresent()) {
+            DebugUtils::RegenerateCallstack(callstack);
+            __debugbreak();
+        }
     } else if (!g_trainer) {
         // All other messages need the trainer to be live in order to execute.
         if (HIWORD(wParam) == 0) { // Initiated by the user
@@ -264,7 +276,7 @@ HWND CreateCheckbox(int x, int& y, __int64 message, LPCWSTR hoverText = L"") {
     return checkbox;
 }
 
-HWND CreateText(int x, int& y, int width, LPCWSTR defaultText = L"", __int64 message=NULL) {
+HWND CreateText(int x, int& y, int width, LPCWSTR defaultText = L"", __int64 message = NULL) {
     HWND text = CreateWindow(MSFTEDIT_CLASS, defaultText,
         WS_TABSTOP | WS_VISIBLE | WS_CHILD | WS_BORDER,
         x, y, width, 26,
@@ -336,14 +348,16 @@ void CreateComponents() {
     y += 20;
 
     CreateButton(x, y, 200, L"Show unsolved panels", SHOW_PANELS);
+
+    // Hotkey for debug purposes, to get addresses based on a reported callstack
+    RegisterHotKey(g_hwnd, CALLSTACK, MOD_NOREPEAT | MOD_CONTROL | MOD_SHIFT | MOD_ALT, VK_OEM_PLUS);
+
 #ifdef _DEBUG
     CreateButton(x, y, 200, L"Show nearby entities", SHOW_NEARBY);
     CreateButton(x, y, 200, L"Export all entities", EXPORT);
-    CreateButton(x, y, 200, L"Test assert", TEST_ASSERT);
 #endif
     // RegisterHotKey(g_hwnd, START_TIMER, MOD_NOREPEAT | MOD_CONTROL, 'T');
 }
-
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow) {
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
@@ -373,6 +387,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     g_hInstance = hInstance;
 
     CreateComponents();
+    DebugUtils::version = VERSION_STR;
 
     g_witnessProc->StartHeartbeat(g_hwnd, HEARTBEAT);
 
