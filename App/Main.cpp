@@ -336,7 +336,7 @@ void CreateComponents() {
     y += 20;
 
     CreateButton(x, y, 200, L"Show unsolved panels", SHOW_PANELS);
-#ifndef NDEBUG
+#ifdef _DEBUG
     CreateButton(x, y, 200, L"Show nearby entities", SHOW_NEARBY);
     CreateButton(x, y, 200, L"Export all entities", EXPORT);
     CreateButton(x, y, 200, L"Test assert", TEST_ASSERT);
