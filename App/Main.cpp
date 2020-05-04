@@ -216,8 +216,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     return DefWindowProc(hwnd, message, wParam, lParam);
 }
 
-#pragma warning(push)
-#pragma warning(disable: 4312)
 // Note that this requires Common Controls 6.0.0.0 to work -- see manifest settings.
 HWND CreateTooltip(HWND target, LPCWSTR hoverText) {
     HWND tooltip = CreateWindow(TOOLTIPS_CLASS, NULL,
@@ -246,7 +244,7 @@ HWND CreateLabel(int x, int y, int width, LPCWSTR text) {
     return CreateLabel(x, y, width, 16, text);
 }
 
-HWND CreateButton(int x, int& y, int width, LPCWSTR text, int message, LPCWSTR hoverText = L"") {
+HWND CreateButton(int x, int& y, int width, LPCWSTR text, __int64 message, LPCWSTR hoverText = L"") {
     HWND button = CreateWindow(L"BUTTON", text,
         WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
         x, y, width, 26,
@@ -256,7 +254,7 @@ HWND CreateButton(int x, int& y, int width, LPCWSTR text, int message, LPCWSTR h
     return button;
 }
 
-HWND CreateCheckbox(int x, int& y, int message, LPCWSTR hoverText = L"") {
+HWND CreateCheckbox(int x, int& y, __int64 message, LPCWSTR hoverText = L"") {
     HWND checkbox = CreateWindow(L"BUTTON", NULL,
         WS_VISIBLE | WS_CHILD | BS_CHECKBOX,
         x, y + 2, 12, 12,
@@ -266,7 +264,7 @@ HWND CreateCheckbox(int x, int& y, int message, LPCWSTR hoverText = L"") {
     return checkbox;
 }
 
-HWND CreateText(int x, int& y, int width, LPCWSTR defaultText = L"", int message=NULL) {
+HWND CreateText(int x, int& y, int width, LPCWSTR defaultText = L"", __int64 message=NULL) {
     HWND text = CreateWindow(MSFTEDIT_CLASS, defaultText,
         WS_TABSTOP | WS_VISIBLE | WS_CHILD | WS_BORDER,
         x, y, width, 26,
@@ -274,7 +272,6 @@ HWND CreateText(int x, int& y, int width, LPCWSTR defaultText = L"", int message
     y += 30;
     return text;
 }
-#pragma warning(pop)
 
 void CreateComponents() {
     // Column 1
