@@ -7,23 +7,23 @@
 #include "Trainer.h"
 
 #define HEARTBEAT 0x401
-#define NOCLIP_ENABLED 0x402
-#define NOCLIP_SPEED 0x403
-#define SAVE_POS 0x404
-#define LOAD_POS 0x405
-#define FOV_CURRENT 0x408
-#define CAN_SAVE 0x409
-#define SPRINT_SPEED 0x410
-#define INFINITE_CHALLENGE 0x411
-#define DOORS_PRACTICE 0x412
-#define ACTIVATE_GAME 0x413
-#define OPEN_SAVES 0x414
-#define SHOW_PANELS 0x415
-#define SHOW_NEARBY 0x416
-#define EXPORT 0x417
-#define START_TIMER 0x418
-#define OPEN_CONSOLE 0x419
-#define CALLSTACK 0x420
+#define SAVE_POS 0x402
+#define LOAD_POS 0x403
+#define NOCLIP_SPEED 0x404
+#define SPRINT_SPEED 0x405
+#define FOV_CURRENT 0x406
+#define NOCLIP_ENABLED 0x407
+#define CAN_SAVE 0x408
+#define DOORS_PRACTICE 0x409
+#define INFINITE_CHALLENGE 0x410
+#define OPEN_CONSOLE 0x411
+#define ACTIVATE_GAME 0x412
+#define OPEN_SAVES 0x413
+#define SHOW_PANELS 0x414
+#define SHOW_NEARBY 0x415
+#define EXPORT 0x416
+#define START_TIMER 0x417
+#define CALLSTACK 0x418
 
 // Feature requests:
 // - show collision, somehow
@@ -59,6 +59,8 @@ auto g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
 std::vector<float> savedPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> savedAng = {0.0f, 0.0f};
 int previousPanel = -1;
+// If the game has been observed in the 'NotRunning' state
+bool gameWasStopped = false;
 
 void SetPosAndAngText(const std::vector<float>& pos, const std::vector<float>& ang, HWND hwnd)
 {
@@ -140,32 +142,48 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             break; // LOWORD(wParam) contains the command
         case HEARTBEAT:
             switch ((ProcStatus)wParam) {
+            case ProcStatus::Stopped:
             case ProcStatus::NotRunning:
                 // Don't discard any settings, just free the trainer.
                 if (g_trainer) {
                     g_trainer = nullptr;
                     SetWindowText(g_activateGame, L"Launch game");
                 }
+                gameWasStopped = true;
                 break;
             case ProcStatus::Reload:
+            case ProcStatus::NewGame:
                 SetActivePanel(-1);
                 previousPanel = -1;
                 break;
             case ProcStatus::Running:
-                if (!g_trainer) {
-                    // Trainer started, game is running; or
-                    // Trainer running, game is started
+                if (g_trainer || gameWasStopped) {
+                    // Process just started / already running (we were already alive), enforce our settings.
+                    g_trainer = std::make_shared<Trainer>(g_witnessProc);
+                    g_trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
+                    g_trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
+                    g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
+                    g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
+                    g_trainer->SetCanSave(IsDlgButtonChecked(hwnd, CAN_SAVE));
+                    g_trainer->SetRandomDoorsPractice(IsDlgButtonChecked(hwnd, DOORS_PRACTICE));
+                    g_trainer->SetInfiniteChallenge(IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE));
+                    g_trainer->SetConsoleOpen(IsDlgButtonChecked(hwnd, OPEN_CONSOLE));
+                    SetWindowText(g_activateGame, L"Switch to game");
+                } else {
+                    // Process was already running, and we just started. Load settings from the game.
                     g_trainer = std::make_shared<Trainer>(g_witnessProc);
                     SetFloatText(g_trainer->GetNoclipSpeed(), g_noclipSpeed);
-                    SetFloatText(g_trainer->GetFov(), g_fovCurrent);
                     SetFloatText(g_trainer->GetSprintSpeed(), g_sprintSpeed);
+                    SetFloatText(g_trainer->GetFov(), g_fovCurrent);
+                    CheckDlgButton(hwnd, NOCLIP_ENABLED, g_trainer->GetNoclip());
+                    CheckDlgButton(hwnd, CAN_SAVE, g_trainer->CanSave());
+                    CheckDlgButton(hwnd, DOORS_PRACTICE, g_trainer->GetRandomDoorsPractice());
+                    CheckDlgButton(hwnd, INFINITE_CHALLENGE, g_trainer->GetInfiniteChallenge());
+                    CheckDlgButton(hwnd, OPEN_CONSOLE, g_trainer->GetConsoleOpen());
                     SetWindowText(g_activateGame, L"Switch to game");
                 }
-                g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
-                g_trainer->SetCanSave(IsDlgButtonChecked(hwnd, CAN_SAVE));
-                g_trainer->SetInfiniteChallenge(IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE));
-                g_trainer->SetRandomDoorsPractice(IsDlgButtonChecked(hwnd, DOORS_PRACTICE));
-                g_trainer->SetConsoleOpen(IsDlgButtonChecked(hwnd, OPEN_CONSOLE));
+                gameWasStopped = false;
+                // Reload some of our settings based on game state
                 SetPosAndAngText(g_trainer->GetPlayerPos(), g_trainer->GetCameraAng(), g_currentPos);
 
                 if (g_hwnd != GetActiveWindow()) {
@@ -357,7 +375,8 @@ void CreateComponents() {
 }
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow) {
-    CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    if (FAILED(hr)) return hr;
     LoadLibrary(L"Msftedit.dll");
     WNDCLASS wndClass = {
         CS_HREDRAW | CS_VREDRAW,

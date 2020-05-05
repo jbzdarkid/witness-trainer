@@ -99,7 +99,8 @@ Trainer::Trainer(const std::shared_ptr<Memory>& memory) : _memory(memory) {
         _consoleOpenTarget = {console, 0xB4};
     });
 
-    _memory->ExecuteSigScans();
+    bool succeeded = _memory->ExecuteSigScans();
+    assert(succeeded);
 
     SetMainMenuColor(true);
 }

@@ -26,6 +26,7 @@ void Memory::StartHeartbeat(HWND window, UINT message, std::chrono::milliseconds
     if (_threadActive) return;
     _threadActive = true;
     _thread = std::thread([sharedThis = shared_from_this(), window, message, beat]{
+        SetThreadDescription(GetCurrentThread(), L"Heartbeat");
         while (sharedThis->_threadActive) {
             if (!s_isPaused) sharedThis->Heartbeat(window, message);
             std::this_thread::sleep_for(beat);
@@ -63,12 +64,13 @@ void Memory::Heartbeat(HWND window, UINT message) {
     assert(_handle);
 
     DWORD exitCode = 0;
+    #pragma warning(suppress: 6387) // Initialize promises to set _handle if it succeeds.
     GetExitCodeProcess(_handle, &exitCode);
     if (exitCode != STILL_ACTIVE) {
         // Process has exited, clean up.
         _computedAddresses.clear();
         _handle = NULL;
-        PostMessage(window, message, ProcStatus::NotRunning, NULL);
+        PostMessage(window, message, ProcStatus::Stopped, NULL);
         // Wait for the process to fully close; otherwise we might accidentally re-attach to it.
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         return;
@@ -94,7 +96,6 @@ void Memory::Heartbeat(HWND window, UINT message) {
     PostMessage(window, message, ProcStatus::Running, NULL);
 }
 
-[[nodiscard]]
 bool Memory::Initialize() {
     // First, get the handle of the process
     PROCESSENTRY32W entry;
@@ -112,22 +113,7 @@ bool Memory::Initialize() {
         return false;
     }
 
-    // Next, get the process base address
-    std::vector<HMODULE> moduleList(1024);
-    DWORD numModules = static_cast<DWORD>(moduleList.size());
-    bool suceeded = EnumProcessModulesEx(_handle, &moduleList[0], numModules, &numModules, 3);
-    if (!suceeded) return false;
-    moduleList.resize(numModules);
-
-    std::wstring name(1024, '\0');
-    for (const auto& module : moduleList) {
-        int length = GetModuleBaseNameW(_handle, module, &name[0], static_cast<DWORD>(name.size()));
-        name.resize(length);
-        if (_processName == name) {
-            _baseAddress = (uintptr_t)module;
-            break;
-        }
-    }
+    _baseAddress = DebugUtils::GetBaseAddress(_handle);
     if (_baseAddress == 0) {
         std::cerr << "Couldn't locate base address" << std::endl;
         return false;
@@ -140,10 +126,7 @@ bool Memory::Initialize() {
     AddSigScan({0x01, 0x00, 0x00, 0x66, 0xC7, 0x87}, [&](__int64 offset, int index, const std::vector<byte>& data) {
         _loadCountOffset = *(int*)&data[index-1];
     });
-    size_t numFailures = ExecuteSigScans();
-    if (numFailures > 0) return false;
-
-    return true;
+    return ExecuteSigScans();
 }
 
 __int64 Memory::ReadStaticInt(__int64 offset, int index, const std::vector<byte>& data) {
@@ -151,7 +134,7 @@ __int64 Memory::ReadStaticInt(__int64 offset, int index, const std::vector<byte>
 }
 
 void Memory::AddSigScan(const std::vector<byte>& scanBytes, const ScanFunc& scanFunc) {
-    _sigScans[scanBytes] = {scanFunc, false};
+    _sigScans[scanBytes] = {false, scanFunc};
 }
 
 int find(const std::vector<byte> &data, const std::vector<byte>& search, size_t startIndex = 0) {
@@ -169,7 +152,7 @@ int find(const std::vector<byte> &data, const std::vector<byte>& search, size_t 
     return -1;
 }
 
-size_t Memory::ExecuteSigScans() {
+bool Memory::ExecuteSigScans() {
     size_t notFound = _sigScans.size();
     std::vector<byte> buff;
     buff.resize(0x10100);
@@ -187,7 +170,7 @@ size_t Memory::ExecuteSigScans() {
         }
         if (notFound == 0) break;
     }
-    return notFound;
+    return (notFound == 0);
 }
 
 void* Memory::ComputeOffset(std::vector<__int64> offsets) {

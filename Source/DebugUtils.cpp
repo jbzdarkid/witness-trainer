@@ -33,7 +33,7 @@ std::wstring DebugUtils::GetStackTrace() {
     std::wstringstream ss;
     ss << std::hex << std::showbase << std::nouppercase;
 
-    uint64_t baseAddress = GetBaseAddress();
+    uint64_t baseAddress = GetBaseAddress(process);
     BOOL result = FALSE;
     do {
         ss << (stackFrame.AddrPC.Offset - baseAddress) << L' '; // Normalize offsets relative to the base address
@@ -67,8 +67,7 @@ void DebugUtils::ShowAssertDialogue() {
     _exit(3);
 }
 
-uint64_t DebugUtils::GetBaseAddress() {
-    HANDLE process = GetCurrentProcess();
+uint64_t DebugUtils::GetBaseAddress(HANDLE process) {
     DWORD unused;
     HMODULE modules[1];
     EnumProcessModules(process, &modules[0], sizeof(HMODULE), &unused);
@@ -79,7 +78,7 @@ uint64_t DebugUtils::GetBaseAddress() {
 
 // Note: This function must work properly even in release mode, since we will need to generate callbacks for release exes.
 void DebugUtils::RegenerateCallstack(const std::wstring& callstack) {
-    uint64_t baseAddress = GetBaseAddress();
+    uint64_t baseAddress = GetBaseAddress(GetCurrentProcess());
     std::vector<uint64_t> addrs;
     std::wstring buffer;
     for (const wchar_t c : callstack) {

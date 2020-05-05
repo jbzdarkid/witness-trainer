@@ -2,7 +2,9 @@
 enum ProcStatus : WPARAM {
     NotRunning,
     Running,
-    Reload // This fires when autosaving, too!
+    Reload,
+    NewGame,
+    Stopped
 };
 
 using byte = unsigned char;
@@ -27,7 +29,7 @@ public:
     static __int64 ReadStaticInt(__int64 offset, int index, const std::vector<byte>& data);
     using ScanFunc = std::function<void(__int64 offset, int index, const std::vector<byte>& data)>;
     void AddSigScan(const std::vector<byte>& scanBytes, const ScanFunc& scanFunc);
-    size_t ExecuteSigScans();
+    [[nodiscard]] bool ExecuteSigScans();
 
     template<class T>
     std::vector<T> ReadData(const std::vector<__int64>& offsets, size_t numItems) {
@@ -66,7 +68,7 @@ public:
 
 private:
     void Heartbeat(HWND window, UINT message);
-    bool Initialize();
+    [[nodiscard]] bool Initialize();
     void* ComputeOffset(std::vector<__int64> offsets);
 
     bool _threadActive = false;
@@ -81,8 +83,8 @@ private:
     DWORD _pid = 0;
     HANDLE _handle = nullptr;
     struct SigScan {
-        ScanFunc scanFunc;
         bool found = false;
+        ScanFunc scanFunc;
     };
     std::map<std::vector<byte>, SigScan> _sigScans;
 };

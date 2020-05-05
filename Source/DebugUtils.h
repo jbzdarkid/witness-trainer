@@ -7,9 +7,9 @@ public:
     static void RegenerateCallstack(const std::wstring& callstack);
     static void ShowAssertDialogue();
     static std::wstring version;
+    static uint64_t GetBaseAddress(HANDLE process);
 
 private:
-    static uint64_t GetBaseAddress();
     static std::wstring GetStackTrace();
     static bool s_isShowingError;
 };
