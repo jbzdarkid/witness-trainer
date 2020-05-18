@@ -1,6 +1,7 @@
 #pragma once
 enum ProcStatus : WPARAM {
     NotRunning,
+    Started,
     Running,
     Reload,
     NewGame,
@@ -29,7 +30,7 @@ public:
     static __int64 ReadStaticInt(__int64 offset, int index, const std::vector<byte>& data);
     using ScanFunc = std::function<void(__int64 offset, int index, const std::vector<byte>& data)>;
     void AddSigScan(const std::vector<byte>& scanBytes, const ScanFunc& scanFunc);
-    [[nodiscard]] bool ExecuteSigScans();
+    [[nodiscard]] size_t ExecuteSigScans();
 
     template<class T>
     std::vector<T> ReadData(const std::vector<__int64>& offsets, size_t numItems) {
@@ -82,6 +83,7 @@ private:
     int _previousLoadCount = 0;
     DWORD _pid = 0;
     HANDLE _handle = nullptr;
+    bool _processWasStopped = false;
     struct SigScan {
         bool found = false;
         ScanFunc scanFunc;

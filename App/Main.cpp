@@ -52,15 +52,13 @@
 // Globals
 HWND g_hwnd;
 HINSTANCE g_hInstance;
-std::shared_ptr<Trainer> g_trainer;
+std::unique_ptr<Trainer> g_trainer;
 HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelName, g_panelState, g_panelPicture, g_activateGame;
 auto g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
 
 std::vector<float> savedPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> savedAng = {0.0f, 0.0f};
 int previousPanel = -1;
-// If the game has been observed in the 'NotRunning' state
-bool gameWasStopped = false;
 
 void SetPosAndAngText(const std::vector<float>& pos, const std::vector<float>& ang, HWND hwnd)
 {
@@ -79,9 +77,10 @@ void SetFloatText(float f, HWND hwnd) {
 }
 
 std::wstring GetWindowString(HWND hwnd) {
-    int length = GetWindowTextLength(hwnd);
+    SetLastError(0); // GetWindowTextLength does not clear LastError.
+    int length = GetWindowTextLengthW(hwnd);
     std::wstring text(length, L'\0');
-    length = GetWindowText(hwnd, text.data(), static_cast<int>(text.size()));
+    length = GetWindowTextW(hwnd, text.data(), static_cast<int>(text.size() + 1)); // Length includes the null terminator
     text.resize(length);
     return text;
 }
@@ -149,29 +148,32 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     g_trainer = nullptr;
                     SetWindowText(g_activateGame, L"Launch game");
                 }
-                gameWasStopped = true;
                 break;
             case ProcStatus::Reload:
             case ProcStatus::NewGame:
                 SetActivePanel(-1);
                 previousPanel = -1;
                 break;
+            case ProcStatus::Started:
+                assert(!g_trainer);
+                g_trainer = Trainer::Create(g_witnessProc);
+                if (!g_trainer) break;
+                // Process just started (we were already alive), enforce our settings.
+                g_trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
+                g_trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
+                g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
+                g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
+                g_trainer->SetCanSave(IsDlgButtonChecked(hwnd, CAN_SAVE));
+                g_trainer->SetRandomDoorsPractice(IsDlgButtonChecked(hwnd, DOORS_PRACTICE));
+                g_trainer->SetInfiniteChallenge(IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE));
+                g_trainer->SetConsoleOpen(IsDlgButtonChecked(hwnd, OPEN_CONSOLE));
+                SetWindowText(g_activateGame, L"Switch to game");
+                break;
             case ProcStatus::Running:
-                if (g_trainer || gameWasStopped) {
-                    // Process just started / already running (we were already alive), enforce our settings.
-                    g_trainer = std::make_shared<Trainer>(g_witnessProc);
-                    g_trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
-                    g_trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
-                    g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
-                    g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
-                    g_trainer->SetCanSave(IsDlgButtonChecked(hwnd, CAN_SAVE));
-                    g_trainer->SetRandomDoorsPractice(IsDlgButtonChecked(hwnd, DOORS_PRACTICE));
-                    g_trainer->SetInfiniteChallenge(IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE));
-                    g_trainer->SetConsoleOpen(IsDlgButtonChecked(hwnd, OPEN_CONSOLE));
-                    SetWindowText(g_activateGame, L"Switch to game");
-                } else {
+                if (!g_trainer) {
                     // Process was already running, and we just started. Load settings from the game.
-                    g_trainer = std::make_shared<Trainer>(g_witnessProc);
+                    g_trainer = Trainer::Create(g_witnessProc);
+                    if (!g_trainer) break;
                     SetFloatText(g_trainer->GetNoclipSpeed(), g_noclipSpeed);
                     SetFloatText(g_trainer->GetSprintSpeed(), g_sprintSpeed);
                     SetFloatText(g_trainer->GetFov(), g_fovCurrent);
@@ -181,15 +183,26 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     CheckDlgButton(hwnd, INFINITE_CHALLENGE, g_trainer->GetInfiniteChallenge());
                     CheckDlgButton(hwnd, OPEN_CONSOLE, g_trainer->GetConsoleOpen());
                     SetWindowText(g_activateGame, L"Switch to game");
-                }
-                gameWasStopped = false;
-                // Reload some of our settings based on game state
-                SetPosAndAngText(g_trainer->GetPlayerPos(), g_trainer->GetCameraAng(), g_currentPos);
+                } else {
+                    // Process was already running, and so were we (this recurs every heartbeat). Enforce settings.
+                    g_trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
+                    g_trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
+                    g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
+                    g_trainer->SetCanSave(IsDlgButtonChecked(hwnd, CAN_SAVE));
+                    g_trainer->SetRandomDoorsPractice(IsDlgButtonChecked(hwnd, DOORS_PRACTICE));
+                    g_trainer->SetInfiniteChallenge(IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE));
+                    g_trainer->SetConsoleOpen(IsDlgButtonChecked(hwnd, OPEN_CONSOLE));
 
-                if (g_hwnd != GetActiveWindow()) {
-                    // Only replace when in the background (i.e. if someone changed their FOV in-game)
-                    SetFloatText(g_trainer->GetFov(), g_fovCurrent);
+                    // If we are the active window, set FOV. Otherwise, read FOV.
+                    if (g_hwnd == GetActiveWindow()) {
+                        g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
+                    } else {
+                        SetFloatText(g_trainer->GetFov(), g_fovCurrent);
+                    }
                 }
+
+                // Some settings are always sourced from the game, since they are not editable in the trainer.
+                SetPosAndAngText(g_trainer->GetPlayerPos(), g_trainer->GetCameraAng(), g_currentPos);
                 SetActivePanel(g_trainer->GetActivePanel());
                 break;
             }
@@ -204,15 +217,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     else if (command == INFINITE_CHALLENGE) ToggleOption(INFINITE_CHALLENGE, &Trainer::SetInfiniteChallenge);
     else if (command == DOORS_PRACTICE)     ToggleOption(DOORS_PRACTICE, &Trainer::SetRandomDoorsPractice);
     else if (command == OPEN_CONSOLE)       ToggleOption(OPEN_CONSOLE, &Trainer::SetConsoleOpen);
+    else if (command == CALLSTACK)          DebugUtils::RegenerateCallstack(GetWindowString(g_fovCurrent));
     else if (command == ACTIVATE_GAME) {
         if (!g_trainer) ShellExecute(NULL, L"open", L"steam://rungameid/210970", NULL, NULL, SW_SHOWDEFAULT);
         else g_witnessProc->BringToFront();
-    } else if (command == CALLSTACK) {
-        std::wstring callstack = GetWindowString(g_fovCurrent);
-        if (!callstack.empty() && IsDebuggerPresent()) {
-            DebugUtils::RegenerateCallstack(callstack);
-            __debugbreak();
-        }
+    } else if (command == OPEN_SAVES) {
+        PWSTR outPath;
+        size_t size = SHGetKnownFolderPath(FOLDERID_RoamingAppData, SHGFP_TYPE_CURRENT, NULL, &outPath);
+        ShellExecute(NULL, L"open", (outPath + std::wstring(L"\\The Witness")).c_str(), NULL, NULL, SW_SHOWDEFAULT);
     } else if (!g_trainer) {
         // All other messages need the trainer to be live in order to execute.
         if (HIWORD(wParam) == 0) { // Initiated by the user
@@ -227,11 +239,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     else if (command == SHOW_PANELS)    g_trainer->ShowMissingPanels();
     else if (command == SHOW_NEARBY)    g_trainer->ShowNearbyEntities();
     else if (command == EXPORT)         g_trainer->ExportEntities();
-    else if (command == OPEN_SAVES) {
-        PWSTR outPath;
-        size_t size = SHGetKnownFolderPath(FOLDERID_RoamingAppData, SHGFP_TYPE_CURRENT, NULL, &outPath);
-        ShellExecute(NULL, L"open", (outPath + std::wstring(L"\\The Witness")).c_str(), NULL, NULL, SW_SHOWDEFAULT);
-    } else if (command == SAVE_POS) {
+    else if (command == SAVE_POS) {
         savedPos = g_trainer->GetPlayerPos();
         savedAng = g_trainer->GetCameraAng();
         SetPosAndAngText(savedPos, savedAng, g_savedPos);
@@ -243,13 +251,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     return DefWindowProc(hwnd, message, wParam, lParam);
 }
 
-// Note that this requires Common Controls 6.0.0.0 to work -- see manifest settings.
 HWND CreateTooltip(HWND target, LPCWSTR hoverText) {
     HWND tooltip = CreateWindow(TOOLTIPS_CLASS, NULL,
         WS_POPUP | TTS_ALWAYSTIP,
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
         target, NULL, g_hInstance, NULL);
 
+    // Note that this requires Common Controls 6.0.0.0 to work -- see manifest settings.
     TOOLINFO toolInfo;
     toolInfo.cbSize = sizeof(toolInfo);
     toolInfo.hwnd = g_hwnd;
@@ -310,13 +318,13 @@ void CreateComponents() {
     RegisterHotKey(g_hwnd, NOCLIP_ENABLED, MOD_NOREPEAT | MOD_CONTROL, 'N');
 
     CreateLabel(x, y + 4, 100, L"Noclip Speed");
-    g_noclipSpeed = CreateText(100, y, 130, L"", NOCLIP_SPEED);
+    g_noclipSpeed = CreateText(100, y, 130, L"10", NOCLIP_SPEED);
 
     CreateLabel(x, y + 4, 100, L"Sprint Speed");
-    g_sprintSpeed = CreateText(100, y, 130, L"", SPRINT_SPEED);
+    g_sprintSpeed = CreateText(100, y, 130, L"2", SPRINT_SPEED);
 
     CreateLabel(x, y + 4, 100, L"Field of View");
-    g_fovCurrent = CreateText(100, y, 130, L"", FOV_CURRENT);
+    g_fovCurrent = CreateText(100, y, 130, L"50.534012", FOV_CURRENT);
 
     CreateLabel(x, y, 185, L"Can save the game");
     CreateCheckbox(200, y, CAN_SAVE, L"Shift-Control-S");

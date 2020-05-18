@@ -1,8 +1,10 @@
 #pragma once
 
 class Trainer {
+private:
+    Trainer() = default;
 public:
-    Trainer(const std::shared_ptr<Memory>& memory);
+    static std::unique_ptr<Trainer> Create(const std::shared_ptr<Memory>& memory);
     ~Trainer();
 
     int GetActivePanel();

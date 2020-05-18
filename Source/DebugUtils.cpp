@@ -78,6 +78,7 @@ uint64_t DebugUtils::GetBaseAddress(HANDLE process) {
 
 // Note: This function must work properly even in release mode, since we will need to generate callbacks for release exes.
 void DebugUtils::RegenerateCallstack(const std::wstring& callstack) {
+    if (callstack.empty()) return;
     uint64_t baseAddress = GetBaseAddress(GetCurrentProcess());
     std::vector<uint64_t> addrs;
     std::wstring buffer;
@@ -111,4 +112,5 @@ void DebugUtils::RegenerateCallstack(const std::wstring& callstack) {
     }
 
     OutputDebugStringW(ss.str().c_str());
+    if (IsDebuggerPresent()) __debugbreak();
 }

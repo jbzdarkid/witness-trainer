@@ -93,7 +93,12 @@ void Memory::Heartbeat(HWND window, UINT message) {
         }
     MEMORY_CATCH((void)0)
 
-    PostMessage(window, message, ProcStatus::Running, NULL);
+    if (_processWasStopped) {
+        PostMessage(window, message, ProcStatus::Started, NULL);
+        _processWasStopped = false;
+    } else {
+        PostMessage(window, message, ProcStatus::Running, NULL);
+    }
 }
 
 bool Memory::Initialize() {
@@ -110,6 +115,7 @@ bool Memory::Initialize() {
     }
     if (!_handle) {
         std::cerr << "Couldn't find " << _processName.c_str() << ", is it open?" << std::endl;
+        _processWasStopped = true;
         return false;
     }
 
@@ -152,8 +158,9 @@ int find(const std::vector<byte> &data, const std::vector<byte>& search, size_t 
     return -1;
 }
 
-bool Memory::ExecuteSigScans() {
-    size_t notFound = _sigScans.size();
+size_t Memory::ExecuteSigScans() {
+    size_t notFound = 0;
+    for (const auto& [_, sigScan] :_sigScans) if (!sigScan.found) notFound++;
     std::vector<byte> buff;
     buff.resize(0x10100);
     SIZE_T numBytesWritten;
@@ -168,9 +175,19 @@ bool Memory::ExecuteSigScans() {
             sigScan.found = true;
             notFound--;
         }
-        if (notFound == 0) break;
+        if (notFound == 0) return 0;
     }
-    return (notFound == 0);
+
+    DebugPrint("Failed to find " + std::to_string(notFound) + " sigscans:");
+    std::stringstream ss;
+    ss << std::showbase << std::hex << std::setfill('0') << std::setw(2);
+    for (const auto& [scanBytes, sigScan] : _sigScans) {
+        if (sigScan.found) continue;
+        ss.clear();
+        for (const auto b : scanBytes) ss << static_cast<int16_t>(b) << " ";
+        DebugPrint(ss.str());
+    }
+    return notFound;
 }
 
 void* Memory::ComputeOffset(std::vector<__int64> offsets) {
