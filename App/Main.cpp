@@ -105,11 +105,13 @@ void SetActivePanel(int activePanel) {
     SetWindowText(g_activePanel, ss.str().c_str());
 
     if (previousPanel != -1) {
-        std::shared_ptr<Trainer::EntityData> panelData = g_trainer->GetEntityData(previousPanel);
-        if (!panelData) return;
-        SetWindowTextA(g_panelName, panelData->name.c_str());
-        SetWindowTextA(g_panelState, panelData->state.c_str());
-        // TODO(Future): draw path with GDI
+        if (g_trainer) {
+            std::shared_ptr<Trainer::EntityData> panelData = g_trainer->GetEntityData(previousPanel);
+            if (!panelData) return;
+            SetWindowTextA(g_panelName, panelData->name.c_str());
+            SetWindowTextA(g_panelState, panelData->state.c_str());
+            // TODO(Future): draw path with GDI
+        }
     }
 }
 
