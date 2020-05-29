@@ -343,7 +343,7 @@ void CreateComponents() {
     RegisterHotKey(g_hwnd, OPEN_CONSOLE, MOD_NOREPEAT | MOD_SHIFT, VK_OEM_3);
 
     CreateButton(x, y, 100, L"Save Position", SAVE_POS, L"Control-P");
-    RegisterHotKey(g_hwnd, LOAD_POS, MOD_NOREPEAT | MOD_CONTROL, 'P');
+    RegisterHotKey(g_hwnd, SAVE_POS, MOD_NOREPEAT | MOD_CONTROL, 'P');
     g_currentPos = CreateLabel(x + 5, y, 90, 80);
     SetPosAndAngText({ 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f }, g_currentPos);
 

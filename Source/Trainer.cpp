@@ -368,8 +368,8 @@ void Trainer::SetNoclip(bool enabled) {
 }
 
 void Trainer::SetNoclipSpeed(float speed) {
+    if (speed <= 0.0f) return;
     MEMORY_TRY
-        assert(speed != 0.0f);
         _memory->WriteData<float>({_noclipSpeed}, {speed});
     MEMORY_CATCH(return)
 }
