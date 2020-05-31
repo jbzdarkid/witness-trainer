@@ -212,7 +212,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     }
 
     WORD command = LOWORD(wParam);
-    if (command == CAN_SAVE)           ToggleOption(CAN_SAVE, &Trainer::SetCanSave);
+    if (command == CAN_SAVE)                ToggleOption(CAN_SAVE, &Trainer::SetCanSave);
     else if (command == INFINITE_CHALLENGE) ToggleOption(INFINITE_CHALLENGE, &Trainer::SetInfiniteChallenge);
     else if (command == DOORS_PRACTICE)     ToggleOption(DOORS_PRACTICE, &Trainer::SetRandomDoorsPractice);
     else if (command == OPEN_CONSOLE)       ToggleOption(OPEN_CONSOLE, &Trainer::SetConsoleOpen);
