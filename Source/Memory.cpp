@@ -58,7 +58,7 @@ void Memory::BringToFront() {
 void Memory::Heartbeat(HWND window, UINT message) {
     if (!_handle && !Initialize()) {
         // Couldn't initialize, definitely not running
-        PostMessage(window, message, ProcStatus::NotRunning, NULL);
+        SendMessage(window, message, ProcStatus::NotRunning, NULL);
         return;
     }
     assert(_handle);
@@ -70,7 +70,7 @@ void Memory::Heartbeat(HWND window, UINT message) {
         // Process has exited, clean up.
         _computedAddresses.clear();
         _handle = NULL;
-        PostMessage(window, message, ProcStatus::Stopped, NULL);
+        SendMessage(window, message, ProcStatus::Stopped, NULL);
         // Wait for the process to fully close; otherwise we might accidentally re-attach to it.
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         return;
@@ -80,7 +80,7 @@ void Memory::Heartbeat(HWND window, UINT message) {
         int64_t entityManager = ReadData<int64_t>({_globals}, 1)[0];
         if (entityManager == 0) {
             // Game hasn't loaded yet, we're still sitting on the launcher
-            PostMessage(window, message, ProcStatus::NotRunning, NULL);
+            SendMessage(window, message, ProcStatus::NotRunning, NULL);
             return;
         }
 
@@ -88,16 +88,16 @@ void Memory::Heartbeat(HWND window, UINT message) {
         if (_previousLoadCount != loadCount) {
             _previousLoadCount = loadCount;
             _computedAddresses.clear();
-            PostMessage(window, message, ProcStatus::Reload, NULL);
+            SendMessage(window, message, ProcStatus::Reload, NULL);
             return;
         }
     MEMORY_CATCH((void)0)
 
     if (_processWasStopped) {
-        PostMessage(window, message, ProcStatus::Started, NULL);
+        SendMessage(window, message, ProcStatus::Started, NULL);
         _processWasStopped = false;
     } else {
-        PostMessage(window, message, ProcStatus::Running, NULL);
+        SendMessage(window, message, ProcStatus::Running, NULL);
     }
 }
 
