@@ -1,8 +1,6 @@
 #pragma once
 
 class Trainer {
-private:
-    Trainer() = default;
 public:
     static std::unique_ptr<Trainer> Create(const std::shared_ptr<Memory>& memory);
     ~Trainer();

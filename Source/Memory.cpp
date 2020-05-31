@@ -163,7 +163,7 @@ int find(const std::vector<byte> &data, const std::vector<byte>& search, size_t 
 
 size_t Memory::ExecuteSigScans() {
     size_t notFound = 0;
-    for (const auto& [_, sigScan] :_sigScans) if (!sigScan.found) notFound++;
+    for (const auto& [_, sigScan] : _sigScans) if (!sigScan.found) notFound++;
     std::vector<byte> buff;
     buff.resize(0x10100);
     SIZE_T numBytesWritten;
