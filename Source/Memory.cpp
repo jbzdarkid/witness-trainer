@@ -179,12 +179,12 @@ size_t Memory::ExecuteSigScans() {
     }
 
     DebugPrint("Failed to find " + std::to_string(notFound) + " sigscans:");
-    std::stringstream ss;
-    ss << std::showbase << std::hex << std::setfill('0') << std::setw(2);
     for (const auto& [scanBytes, sigScan] : _sigScans) {
         if (sigScan.found) continue;
-        ss.clear();
-        for (const auto b : scanBytes) ss << static_cast<int16_t>(b) << " ";
+        std::stringstream ss;
+        for (const auto b : scanBytes) {
+            ss << "0x" << std::setw(2) << std::setfill('0') << std::hex << std::uppercase << static_cast<int16_t>(b) << ", ";
+        }
         DebugPrint(ss.str());
     }
     return notFound;

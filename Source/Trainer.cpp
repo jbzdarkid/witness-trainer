@@ -101,14 +101,14 @@ std::unique_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         trainer->_consoleOpenTarget = {console, 0xB4};
     });
 
+    // We need to save _memory before we exit, otherwise we can't destroy properly.
+    trainer->_memory = memory;
+
     size_t numFailedScans = memory->ExecuteSigScans();
     numFailedScans -= 1; // One of the two _doorClose scans will always fail.
-    if (numFailedScans != 0) { 
-        DebugPrint("Failed " + std::to_string(numFailedScans) + " sigscans");
-        return nullptr; // Sigscans failed, we'll try again later.
-    }
+    if (trainer->_globals && trainer->_globals == 0x5B28C0) numFailedScans -= 1; // FOV scan is expected to fail on older versions.
+    if (numFailedScans != 0) return nullptr; // Sigscans failed, we'll try again later.
 
-    trainer->_memory = memory;
     trainer->SetMainMenuColor(true);
     return trainer;
 }
