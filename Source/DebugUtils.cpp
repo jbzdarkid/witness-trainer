@@ -3,7 +3,6 @@
 #include <ImageHlp.h>
 #include <Psapi.h>
 #include "DebugUtils.h"
-// #include "Version.h"
 
 void DebugPrint(const std::string& text) {
 #ifdef _DEBUG
