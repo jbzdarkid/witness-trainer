@@ -38,7 +38,7 @@
 // - Add "distance to panel" in the panel info. Might be fun to see *how far* some of the snipes are.
 // - Starting a new game isn't triggering "load game", which means offsets are stale.
 //  Once done, figure out what needs to be changed to properly reset "panel data".
-// - Save settings to some file
+// - Save settings to some file, and reload them on trainer start
 
 // Bad/Hard ideas:
 // - Avoid hanging the UI during load; call Trainer::ctor on a background thread.
