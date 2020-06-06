@@ -22,14 +22,14 @@ Memory::~Memory() {
     }
 }
 
-void Memory::StartHeartbeat(HWND window, UINT message, std::chrono::milliseconds beat) {
+void Memory::StartHeartbeat(HWND window, UINT message) {
     if (_threadActive) return;
     _threadActive = true;
-    _thread = std::thread([sharedThis = shared_from_this(), window, message, beat]{
+    _thread = std::thread([sharedThis = shared_from_this(), window, message]{
         SetThreadDescription(GetCurrentThread(), L"Heartbeat");
         while (sharedThis->_threadActive) {
             if (!__isPaused) sharedThis->Heartbeat(window, message);
-            std::this_thread::sleep_for(beat);
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     });
     _thread.detach();

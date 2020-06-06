@@ -19,9 +19,7 @@ class Memory final : public std::enable_shared_from_this<Memory> {
 public:
     Memory(const std::wstring& processName);
     ~Memory();
-    void StartHeartbeat(HWND window, UINT message, std::chrono::milliseconds beat = std::chrono::milliseconds(100));
-    static void PauseHeartbeat();
-    static void ResumeHeartbeat();
+    void StartHeartbeat(HWND window, UINT message);
     void BringToFront();
     bool IsForeground();
 
