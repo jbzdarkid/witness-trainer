@@ -50,7 +50,7 @@
 // Globals
 HWND g_hwnd;
 HINSTANCE g_hInstance;
-std::unique_ptr<Trainer> g_trainer;
+std::shared_ptr<Trainer> g_trainer;
 HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelName, g_panelState, g_panelPicture, g_activateGame;
 auto g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
 
