@@ -70,7 +70,7 @@ public:
 
 private:
     void Heartbeat(HWND window, UINT message);
-    [[nodiscard]] bool Initialize();
+    HANDLE Initialize();
     void* ComputeOffset(std::vector<__int64> offsets);
 
     // Parts of the constructor / StartHeartbeat

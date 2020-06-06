@@ -44,20 +44,22 @@ bool Memory::IsForeground() {
 }
 
 void Memory::Heartbeat(HWND window, UINT message) {
-    if (!_handle && !Initialize()) {
-        // Couldn't initialize, definitely not running
-        SendMessage(window, message, ProcStatus::NotRunning, NULL);
-        return;
+    if (!_handle) {
+        _handle = Initialize();
+        if (!_handle) {
+            // Couldn't initialize, definitely not running
+            SendMessage(window, message, ProcStatus::NotRunning, NULL);
+            return;
+        }
     }
-    assert(_handle);
 
     DWORD exitCode = 0;
-    #pragma warning(suppress: 6387) // Initialize promises to set _handle if it succeeds.
     GetExitCodeProcess(_handle, &exitCode);
     if (exitCode != STILL_ACTIVE) {
-        // Process has exited, clean up.
+        // Process has exited, clean up. We only need to reset _handle here -- its validity is linked to all other class members.
         _computedAddresses.clear();
-        _handle = NULL;
+        _handle = nullptr;
+
         SendMessage(window, message, ProcStatus::Stopped, NULL);
         // Wait for the process to fully close; otherwise we might accidentally re-attach to it.
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -89,7 +91,8 @@ void Memory::Heartbeat(HWND window, UINT message) {
     }
 }
 
-bool Memory::Initialize() {
+HANDLE Memory::Initialize() {
+    HANDLE handle = nullptr;
     // First, get the handle of the process
     PROCESSENTRY32W entry;
     entry.dwSize = sizeof(entry);
@@ -97,14 +100,14 @@ bool Memory::Initialize() {
     while (Process32NextW(snapshot, &entry)) {
         if (_processName == entry.szExeFile) {
             _pid = entry.th32ProcessID;
-            _handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, _pid);
+            handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, _pid);
             break;
         }
     }
-    if (!_handle || !_pid) {
+    if (!handle || !_pid) {
         std::cerr << "Couldn't find " << _processName.c_str() << ", is it open?" << std::endl;
         _processWasStopped = true;
-        return false;
+        return nullptr;
     }
 
     EnumWindows([](HWND hwnd, LPARAM memory){
@@ -120,13 +123,13 @@ bool Memory::Initialize() {
 
     if (_hwnd == NULL) {
         std::cerr << "Couldn't find the HWND for the game" << std::endl;
-        return false;
+        return nullptr;
     }
 
-    _baseAddress = DebugUtils::GetBaseAddress(_handle);
+    _baseAddress = DebugUtils::GetBaseAddress(handle);
     if (_baseAddress == 0) {
         std::cerr << "Couldn't locate base address" << std::endl;
-        return false;
+        return nullptr;
     }
 
     // Clear sigscans to avoid duplication (or leftover sigscans from the trainer)
@@ -140,7 +143,11 @@ bool Memory::Initialize() {
         _loadCountOffset = *(int*)&data[index-1];
     });
 
-    return ExecuteSigScans();
+    if (!ExecuteSigScans()) {
+        return nullptr;
+    }
+
+    return handle;
 }
 
 __int64 Memory::ReadStaticInt(__int64 offset, int index, const std::vector<byte>& data) {
