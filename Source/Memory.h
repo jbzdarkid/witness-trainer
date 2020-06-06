@@ -68,26 +68,30 @@ public:
 
     // Should only be modified by macros
     static bool __canThrow;
+    static bool __isPaused;
 
 private:
     void Heartbeat(HWND window, UINT message);
     [[nodiscard]] bool Initialize();
     void* ComputeOffset(std::vector<__int64> offsets);
 
-    static bool s_isPaused;
-
+    // Parts of the constructor / StartHeartbeat
+    std::wstring _processName;
     bool _threadActive = false;
     std::thread _thread;
-    std::wstring _processName;
-    std::map<uintptr_t, uintptr_t> _computedAddresses;
+
+    // Parts of Initialize / heartbeat
+    HANDLE _handle = nullptr;
+    DWORD _pid = 0;
+    HWND _hwnd = NULL;
     uintptr_t _baseAddress = 0;
     __int64 _globals = 0;
     int _loadCountOffset = 0;
     int _previousLoadCount = 0;
-    DWORD _pid = 0;
-    HWND _hwnd = NULL;
-    HANDLE _handle = nullptr;
     bool _processWasStopped = false;
+
+    // Parts of Read / Write / Sigscan
+    std::map<uintptr_t, uintptr_t> _computedAddresses;
     struct SigScan {
         bool found = false;
         ScanFunc scanFunc;

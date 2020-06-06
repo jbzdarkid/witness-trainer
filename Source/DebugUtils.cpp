@@ -41,23 +41,21 @@ std::wstring DebugUtils::GetStackTrace() {
     return ss.str();
 }
 
-bool DebugUtils::s_isShowingError = false;
 std::wstring DebugUtils::version = L"(unknown)";
 void DebugUtils::ShowAssertDialogue() {
-    if (s_isShowingError) return;
-    Memory::PauseHeartbeat();
+    // In case there's an assert firing *within* the WndProc, then we need to make sure not to keep firing, or we'll get into a loop.
+    if (Memory::__isPaused) return;
+    Memory::__isPaused = true;
     std::wstring msg = L"WitnessTrainer version " + version + L" has encountered an error.\n";
     msg += L"Click 'Yes' to ignore it and continue the program,\n";
     msg += L"or click 'No' to stop the program.\n\n";
     msg += L"In either case, please press Control C to copy this error,\n";
     msg += L"then paste it to darkid.\n";
     msg += GetStackTrace();
-    s_isShowingError = true; // In case there's an assert firing *within* the WndProc, then we need to make sure not to keep firing, or we'll get into a loop.
     int action = MessageBox(NULL, msg.c_str(), L"WitnessTrainer encountered an error.",
         MB_TASKMODAL | MB_ICONHAND | MB_YESNO | MB_SETFOREGROUND);
-    s_isShowingError = false;
     if (action == IDYES) { // User opts to ignore the exception, and continue execution
-        Memory::ResumeHeartbeat();
+        Memory::__isPaused = false;
         return;
     }
     // Else, we are aborting execution. Break into the debugger (if present), then exit.

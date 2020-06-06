@@ -11,7 +11,6 @@ public:
 
 private:
     static std::wstring GetStackTrace();
-    static bool s_isShowingError;
 };
 
 void DebugPrint(const std::string& text);
