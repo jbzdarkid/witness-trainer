@@ -74,6 +74,11 @@ void Memory::Heartbeat(HWND window, UINT message) {
             return;
         }
 
+        byte isLoading = ReadData<byte>({_globals, 0x0, _loadCountOffset - 0x4}, 1)[0];
+        if (isLoading == 0x01) {
+            return; // Game is currently loading, do not take any actions.
+        }
+
         int loadCount = ReadData<int>({_globals, 0x0, _loadCountOffset}, 1)[0];
         if (_previousLoadCount != loadCount) {
             _previousLoadCount = loadCount;

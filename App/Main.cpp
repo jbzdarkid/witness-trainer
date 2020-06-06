@@ -26,14 +26,14 @@
 #define CALLSTACK 0x418
 
 // Feature requests:
+// - Starting a new game isn't triggering "load game", which means offsets are stale. <-- annoying
+//  Once done, figure out what needs to be changed to properly reset "panel data".
 // - show collision, somehow
 // - Icon for trainer
 //  https://stackoverflow.com/questions/40933304
 // - Delete all saves (?)
 // - Basic timer
 // - Add "distance to panel" in the panel info. Might be fun to see *how far* some of the snipes are.
-// - Starting a new game isn't triggering "load game", which means offsets are stale. <-- annoying
-//  Once done, figure out what needs to be changed to properly reset "panel data".
 // - Save settings to some file, and reload them on trainer start
 // - CreateRemoteThread + VirtualAllocEx allows me to *run* code in another process. This seems... powerful!
 
