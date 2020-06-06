@@ -44,15 +44,11 @@ void Memory::ResumeHeartbeat() {
 }
 
 void Memory::BringToFront() {
-    EnumWindows([](HWND hwnd, LPARAM targetPid){
-        DWORD pid;
-        GetWindowThreadProcessId(hwnd, &pid);
-        if (pid == (DWORD)targetPid) {
-            SetForegroundWindow(hwnd);
-            return FALSE; // Stop enumerating
-        }
-        return TRUE; // Continue enumerating
-    }, (LPARAM)_pid);
+    SetForegroundWindow(_hwnd);
+}
+
+bool Memory::IsForeground() {
+    return GetForegroundWindow() == _hwnd;
 }
 
 void Memory::Heartbeat(HWND window, UINT message) {
@@ -113,9 +109,25 @@ bool Memory::Initialize() {
             break;
         }
     }
-    if (!_handle) {
+    if (!_handle || !_pid) {
         std::cerr << "Couldn't find " << _processName.c_str() << ", is it open?" << std::endl;
         _processWasStopped = true;
+        return false;
+    }
+
+    EnumWindows([](HWND hwnd, LPARAM memory){
+        DWORD pid;
+        GetWindowThreadProcessId(hwnd, &pid);
+        DWORD targetPid = reinterpret_cast<Memory*>(memory)->_pid;
+        if (pid == targetPid) {
+            reinterpret_cast<Memory*>(memory)->_hwnd = hwnd;
+            return FALSE; // Stop enumerating
+        }
+        return TRUE; // Continue enumerating
+    }, (LPARAM)this);
+
+    if (_hwnd == NULL) {
+        std::cerr << "Couldn't find the HWND for the game" << std::endl;
         return false;
     }
 
@@ -135,6 +147,7 @@ bool Memory::Initialize() {
     AddSigScan({0x01, 0x00, 0x00, 0x66, 0xC7, 0x87}, [&](__int64 offset, int index, const std::vector<byte>& data) {
         _loadCountOffset = *(int*)&data[index-1];
     });
+
     return ExecuteSigScans();
 }
 

@@ -23,6 +23,7 @@ public:
     static void PauseHeartbeat();
     static void ResumeHeartbeat();
     void BringToFront();
+    bool IsForeground();
 
     Memory(const Memory& memory) = delete;
     Memory& operator=(const Memory& other) = delete;
@@ -82,6 +83,7 @@ private:
     int _loadCountOffset = 0;
     int _previousLoadCount = 0;
     DWORD _pid = 0;
+    HWND _hwnd = NULL;
     HANDLE _handle = nullptr;
     bool _processWasStopped = false;
     struct SigScan {

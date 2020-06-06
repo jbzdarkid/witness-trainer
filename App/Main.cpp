@@ -140,7 +140,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             SetBkColor((HDC)wParam, RGB(255, 255, 255));
             return 0;
         case WM_HOTKEY:
-            break; // LOWORD(wParam) contains the command
+            // Only steal hotkeys when we (or the game) are the active window.
+            if (g_hwnd == GetForegroundWindow() || g_witnessProc->IsForeground()) break; // LOWORD(wParam) contains the command
+            return DefWindowProc(hwnd, message, wParam, lParam);
         case HEARTBEAT:
             switch ((ProcStatus)wParam) {
             case ProcStatus::Stopped:
@@ -195,8 +197,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     g_trainer->SetInfiniteChallenge(IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE));
                     g_trainer->SetConsoleOpen(IsDlgButtonChecked(hwnd, OPEN_CONSOLE));
 
-                    // If we are the active window, set FOV. Otherwise, read FOV.
-                    if (g_hwnd == GetActiveWindow()) {
+                    // If we are the foreground window, set FOV. Otherwise, read FOV.
+                    if (g_hwnd == GetForegroundWindow()) {
                         g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
                     } else {
                         SetFloatText(g_trainer->GetFov(), g_fovCurrent);
