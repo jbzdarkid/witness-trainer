@@ -2,7 +2,7 @@
 
 class Trainer {
 public:
-    static std::unique_ptr<Trainer> Create(const std::shared_ptr<Memory>& memory);
+    static std::shared_ptr<Trainer> Create(const std::shared_ptr<Memory>& memory);
     ~Trainer();
 
     int GetActivePanel();

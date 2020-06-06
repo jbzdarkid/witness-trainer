@@ -39,8 +39,6 @@
 // - Starting a new game isn't triggering "load game", which means offsets are stale. <-- annoying
 //  Once done, figure out what needs to be changed to properly reset "panel data".
 // - Save settings to some file, and reload them on trainer start
-// - Hotkeys should only apply if the game (or we) are active. Otherwise, zark off.
-//   WIP ^
 
 // Bad/Hard ideas:
 // - Avoid hanging the UI during load; call Trainer::ctor on a background thread.
@@ -60,8 +58,7 @@ std::vector<float> g_savedCameraPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> g_savedCameraAng = {0.0f, 0.0f};
 int previousPanel = -1;
 
-void SetPosAndAngText(const std::vector<float>& pos, const std::vector<float>& ang, HWND hwnd)
-{
+void SetPosAndAngText(const std::vector<float>& pos, const std::vector<float>& ang, HWND hwnd) {
     assert(pos.size() == 3);
     assert(ang.size() == 2);
     std::wstring text(65, '\0');
