@@ -30,6 +30,7 @@
 // - Change current save name: Overwrite get_campaign_string_of_current_time
 //  Nope, I mean the save name in-game.
 //  Well, the file name is relevant. I think I need current_campaign_name
+// _i("solved_string")
 // - Icon for trainer
 //  https://stackoverflow.com/questions/40933304
 // - Delete all saves (?)
@@ -38,6 +39,8 @@
 // - Starting a new game isn't triggering "load game", which means offsets are stale. <-- annoying
 //  Once done, figure out what needs to be changed to properly reset "panel data".
 // - Save settings to some file, and reload them on trainer start
+// - Order class members in Memory
+// - CreateRemoteThread is a thing I can do to just *run* code in another process. This seems... powerful!
 
 // Bad/Hard ideas:
 // - Avoid hanging the UI during load; call Trainer::ctor on a background thread.
@@ -440,6 +443,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
+
+    UnregisterHotKey(g_hwnd, NOCLIP_ENABLED);
+    UnregisterHotKey(g_hwnd, CAN_SAVE);
+    UnregisterHotKey(g_hwnd, OPEN_CONSOLE);
+    UnregisterHotKey(g_hwnd, SAVE_POS);
+    UnregisterHotKey(g_hwnd, LOAD_POS);
+    UnregisterHotKey(g_hwnd, CALLSTACK);
 
     CoUninitialize();
     return (int) msg.wParam;

@@ -52,14 +52,15 @@ public:
         std::string name(tmp.begin(), tmp.end());
         // Remove garbage past the null terminator (we read 100 chars, but the string was probably shorter)
         name.resize(strnlen_s(tmp.data(), tmp.size()));
-        assert(name.size() < tmp.size()); // Assert that there was a null terminator read. Otherwise, this is a truncated string.
+        assert(name.size() < tmp.size()); // Assert that there was a null terminator read.
+        // Otherwise, this is a truncated string, and we will need to increase the '100' above.
         return name;
     }
 
     template <class T>
     void WriteData(const std::vector<__int64>& offsets, const std::vector<T>& data) {
         assert(data.size());
-        if (!_handle) return;
+        if (!_handle) MEMORY_THROW("Game has been shut down", offsets);
         if (!WriteProcessMemory(_handle, ComputeOffset(offsets), &data[0], sizeof(T) * data.size(), nullptr)) {
             MEMORY_THROW("Failed to write data.", offsets, data.size());
         }
@@ -73,8 +74,9 @@ private:
     [[nodiscard]] bool Initialize();
     void* ComputeOffset(std::vector<__int64> offsets);
 
-    bool _threadActive = false;
     static bool s_isPaused;
+
+    bool _threadActive = false;
     std::thread _thread;
     std::wstring _processName;
     std::map<uintptr_t, uintptr_t> _computedAddresses;
