@@ -223,20 +223,23 @@ void* Memory::ComputeOffset(std::vector<__int64> offsets) {
     for (const __int64 offset : offsets) {
         cumulativeAddress += offset;
 
+        // Performance optimization. In release mode, we cache previous computed offsets.
         const auto search = _computedAddresses.find(cumulativeAddress);
-        if (search == std::end(_computedAddresses)) {
-            // If the address is not yet computed, then compute it.
-            uintptr_t computedAddress = 0;
-            if (!ReadProcessMemory(_handle, reinterpret_cast<LPVOID>(cumulativeAddress), &computedAddress, sizeof(computedAddress), NULL)) {
-                MEMORY_THROW("Couldn't compute offset.", offsets);
-            }
-            if (computedAddress == 0) {
-                MEMORY_THROW("Attempted to derefence NULL while computing offsets.", offsets);
-            }
-            _computedAddresses[cumulativeAddress] = computedAddress;
+        if (search != std::end(_computedAddresses)) {
+            cumulativeAddress = search->second;
+            continue;
         }
 
-        cumulativeAddress = _computedAddresses[cumulativeAddress];
+        // If the address is not yet computed, then compute it.
+        uintptr_t computedAddress = 0;
+        if (!ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(cumulativeAddress), &computedAddress, sizeof(computedAddress), NULL)) {
+            MEMORY_THROW("Couldn't compute offset.", offsets);
+        }
+        if (computedAddress == 0) {
+            MEMORY_THROW("Attempted to dereference NULL while computing offsets.", offsets);
+        }
+        _computedAddresses[cumulativeAddress] = computedAddress;
+        cumulativeAddress = computedAddress;
     }
     return reinterpret_cast<void*>(cumulativeAddress + final_offset);
 }
