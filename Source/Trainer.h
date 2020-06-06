@@ -39,6 +39,7 @@ public:
     void SetSprintSpeed(float speed);
     void SetInfiniteChallenge(bool enable);
     void SetConsoleOpen(bool enable);
+    void SaveCampaign();
     void SetMainMenuColor(bool enable);
     void SetRandomDoorsPractice(bool enable);
 
@@ -64,6 +65,7 @@ private:
     __int64 _mainMenuColor = 0;
     std::vector<__int64> _consoleOpenTarget;
     std::vector<__int64> _consoleWindowYB;
+    __int64 _wantCampaignSave = 0;
 
     std::shared_ptr<EntityData> GetPanelData(int id);
     std::shared_ptr<EntityData> GetEPData(int id);

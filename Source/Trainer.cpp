@@ -95,6 +95,10 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         trainer->_consoleOpenTarget = {console, 0xB4};
     });
 
+    memory->AddSigScan({0x83, 0xF8, 0x03, 0x7C, 0x41, 0x84, 0xC9, 0x74, 0x1F}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
+        trainer->_wantCampaignSave =  Memory::ReadStaticInt(offset, index + 0x2A, data) + 1; // +1 because the line ends with an extra byte
+    });
+
     // We need to save _memory before we exit, otherwise we can't destroy properly.
     trainer->_memory = memory;
 
@@ -416,6 +420,18 @@ void Trainer::SetConsoleOpen(bool enable) {
             _memory->WriteData<float>(_consoleOpenTarget, {1.0f});
         } else {
             _memory->WriteData<float>(_consoleOpenTarget, {0.0f});
+        }
+    MEMORY_CATCH(return)
+}
+
+void Trainer::SaveCampaign()
+{
+    MEMORY_TRY
+        _memory->WriteData<byte>({_wantCampaignSave}, {0x01});
+        for (int i=0; i<100; i++) {
+            ::Sleep(10); // Wait a bit for the game to run
+            byte wantCampaignSave = _memory->ReadData<byte>({_wantCampaignSave}, 1)[0];
+            if (wantCampaignSave == 0x00) break;
         }
     MEMORY_CATCH(return)
 }

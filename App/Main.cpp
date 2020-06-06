@@ -29,8 +29,7 @@
 // - show collision, somehow
 // - Change current save name: Overwrite get_campaign_string_of_current_time
 //  Nope, I mean the save name in-game.
-// - "Save the game" button on the trainer?
-// - "Load last save" button on the trainer?
+//  Well, the file name is relevant. I think I need current_campaign_name
 // - Icon for trainer
 //  https://stackoverflow.com/questions/40933304
 // - Delete all saves (?)
@@ -213,13 +212,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     }
 
     WORD command = LOWORD(wParam);
-    if (command == CAN_SAVE)                ToggleOption(CAN_SAVE, &Trainer::SetCanSave);
-    else if (command == INFINITE_CHALLENGE) ToggleOption(INFINITE_CHALLENGE, &Trainer::SetInfiniteChallenge);
+    if (command == INFINITE_CHALLENGE)      ToggleOption(INFINITE_CHALLENGE, &Trainer::SetInfiniteChallenge);
     else if (command == DOORS_PRACTICE)     ToggleOption(DOORS_PRACTICE, &Trainer::SetRandomDoorsPractice);
     else if (command == OPEN_CONSOLE)       ToggleOption(OPEN_CONSOLE, &Trainer::SetConsoleOpen);
     else if (command == CALLSTACK)          DebugUtils::RegenerateCallstack(GetWindowString(g_fovCurrent));
     else if (command == NOCLIP_ENABLED) {
-        bool enabled = IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED);
+        // Fix up the player position when exiting noclip
         if (IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED) && g_trainer) {
             // The player position is from the feet, not the eyes, so we have to adjust slightly.
             auto playerPos = g_trainer->GetCameraPos();
@@ -227,6 +225,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             g_trainer->SetPlayerPos(playerPos);
         }
         ToggleOption(NOCLIP_ENABLED, &Trainer::SetNoclip);
+    } else if (command == CAN_SAVE) {
+        // Request one last save before disabling saving
+        if (IsDlgButtonChecked(g_hwnd, CAN_SAVE) && g_trainer) {
+            g_trainer->SaveCampaign();
+        }
+        ToggleOption(CAN_SAVE, &Trainer::SetCanSave);
     } else if (command == ACTIVATE_GAME) {
         if (!g_trainer) ShellExecute(NULL, L"open", L"steam://rungameid/210970", NULL, NULL, SW_SHOWDEFAULT);
         else g_witnessProc->BringToFront();
