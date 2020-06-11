@@ -148,7 +148,10 @@ HANDLE Memory::Initialize() {
         _loadCountOffset = *(int*)&data[index-1];
     });
 
-    if (!ExecuteSigScans()) {
+    // Slightly hacky.
+    _handle = handle;
+    if (ExecuteSigScans() > 0) {
+        _handle = nullptr;
         return nullptr;
     }
 

@@ -25,6 +25,10 @@
 #define START_TIMER 0x417
 #define CALLSTACK 0x418
 
+// Bugs:
+// - Random doors is broken. Fix before shipping!
+// - Noclip -> new game -> noclip = not stand still
+
 // Feature requests:
 // - Starting a new game isn't triggering "load game", which means offsets are stale. <-- annoying
 //  Once done, figure out what needs to be changed to properly reset "panel data".
