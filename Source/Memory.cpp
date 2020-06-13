@@ -66,6 +66,9 @@ void Memory::Heartbeat(HWND window, UINT message) {
         return;
     }
 
+    // Game presumably hasn't loaded yet.
+    if (ExecuteSigScans() > 0) return;
+
     MEMORY_TRY
         int64_t entityManager = ReadData<int64_t>({_globals}, 1)[0];
         if (entityManager == 0) {
@@ -148,13 +151,6 @@ HANDLE Memory::Initialize() {
         _loadCountOffset = *(int*)&data[index-1];
     });
 
-    // Slightly hacky.
-    _handle = handle;
-    if (ExecuteSigScans() > 0) {
-        _handle = nullptr;
-        return nullptr;
-    }
-
     return handle;
 }
 
@@ -181,13 +177,15 @@ int find(const std::vector<byte> &data, const std::vector<byte>& search, size_t 
     return -1;
 }
 
+#define BUFFER_SIZE 0x10000 // 10 KB
 size_t Memory::ExecuteSigScans() {
     size_t notFound = 0;
     for (const auto& [_, sigScan] : _sigScans) if (!sigScan.found) notFound++;
     std::vector<byte> buff;
-    buff.resize(0x10100);
-    SIZE_T numBytesWritten;
-    for (uintptr_t i = 0; i < 0x300000; i += 0x10000) {
+    buff.resize(BUFFER_SIZE + 0x100); // padding in case the sigscan is past the end of the buffer
+
+    for (uintptr_t i = 0; i < 0x300000; i += BUFFER_SIZE) {
+        SIZE_T numBytesWritten;
         if (!ReadProcessMemory(_handle, reinterpret_cast<void*>(_baseAddress + i), &buff[0], buff.size(), &numBytesWritten)) continue;
         buff.resize(numBytesWritten);
         for (auto& [scanBytes, sigScan] : _sigScans) {
