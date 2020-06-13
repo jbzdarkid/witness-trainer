@@ -71,6 +71,14 @@ void Memory::Heartbeat(HWND window, UINT message) {
     }
 
     MEMORY_TRY
+        // New game causes the entity manager to re-allocate, so we need to check for it first.
+        int timeOfSave = ReadData<int>({_campaignState, 0x40}, 1)[0];
+        if (timeOfSave == 0) {
+            SendMessage(window, message, ProcStatus::NewGame, NULL);
+            _computedAddresses.clear();
+            return;
+        }
+
         int64_t entityManager = ReadData<int64_t>({_globals}, 1)[0];
         if (entityManager == 0) {
             // Game hasn't loaded yet, we're still sitting on the launcher
@@ -145,6 +153,7 @@ HANDLE Memory::Initialize() {
     _sigScans.clear();
     _globals = 0;
     _loadCountOffset = 0;
+    _campaignState = 0;
 
     AddSigScan({0x74, 0x41, 0x48, 0x85, 0xC0, 0x74, 0x04, 0x48, 0x8B, 0x48, 0x10}, [&](__int64 offset, int index, const std::vector<byte>& data) {
         _globals = Memory::ReadStaticInt(offset, index + 0x14, data);
@@ -152,6 +161,10 @@ HANDLE Memory::Initialize() {
 
     AddSigScan({0x01, 0x00, 0x00, 0x66, 0xC7, 0x87}, [&](__int64 offset, int index, const std::vector<byte>& data) {
         _loadCountOffset = *(int*)&data[index-1];
+    });
+
+    AddSigScan({0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x70, 0x10, 0x48, 0x89, 0x78, 0x18, 0x48, 0x8B, 0x3D}, [&](__int64 offset, int index, const std::vector<byte>& data) {
+        _campaignState = Memory::ReadStaticInt(offset, index + 0x27, data);
     });
 
     return handle;

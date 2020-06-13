@@ -27,7 +27,7 @@
 
 // Bugs:
 // - Random doors is broken. Fix before shipping!
-// - Noclip -> new game -> noclip = not stand still
+// - Noclip -> new game -> noclip = not stand still. Duh, new game is breaking the player entity offset.
 
 // Feature requests:
 // - Starting a new game isn't triggering "load game", which means offsets are stale. <-- annoying
