@@ -66,8 +66,9 @@ void Memory::Heartbeat(HWND window, UINT message) {
         return;
     }
 
-    // Game presumably hasn't loaded yet.
-    if (ExecuteSigScans() > 0) return;
+    if (_globals == 0) {
+        if (ExecuteSigScans() > 0) return;
+    }
 
     MEMORY_TRY
         int64_t entityManager = ReadData<int64_t>({_globals}, 1)[0];
@@ -142,6 +143,8 @@ HANDLE Memory::Initialize() {
 
     // Clear sigscans to avoid duplication (or leftover sigscans from the trainer)
     _sigScans.clear();
+    _globals = 0;
+    _loadCountOffset = 0;
 
     AddSigScan({0x74, 0x41, 0x48, 0x85, 0xC0, 0x74, 0x04, 0x48, 0x8B, 0x48, 0x10}, [&](__int64 offset, int index, const std::vector<byte>& data) {
         _globals = Memory::ReadStaticInt(offset, index + 0x14, data);
