@@ -66,6 +66,7 @@ private:
     std::vector<__int64> _consoleOpenTarget;
     std::vector<__int64> _consoleWindowYB;
     __int64 _wantCampaignSave = 0;
+    int _epNameOffset = 0;
 
     std::shared_ptr<EntityData> GetPanelData(int id);
     std::shared_ptr<EntityData> GetEPData(int id);

@@ -96,9 +96,13 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
     });
 
     memory->AddSigScan({0x83, 0xF8, 0x03, 0x7C, 0x41, 0x84, 0xC9, 0x74, 0x1F}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
-        trainer->_wantCampaignSave =  Memory::ReadStaticInt(offset, index + 0x2A, data) + 1; // +1 because the line ends with an extra byte
+        trainer->_wantCampaignSave = Memory::ReadStaticInt(offset, index + 0x2A, data) + 1; // +1 because the line ends with an extra byte
     });
 
+    memory->AddSigScan({0x74, 0x14, 0x48, 0x8B, 0x95}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
+        trainer->_epNameOffset = *(int*)&data[index + 0x05];
+    });
+    
     // We need to save _memory before we exit, otherwise we can't destroy properly.
     trainer->_memory = memory;
 
@@ -134,6 +138,9 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetEntityData(int id) {
         std::string typeName = _memory->ReadString({_globals, 0x18, id * 8, 0x08, 0x08});
         if (typeName == "Machine_Panel") return GetPanelData(id);
         if (typeName == "Pattern_Point") return GetEPData(id);
+
+        int readId = _memory->ReadData<int>({_globals, 0x18, id * 8, 0x10}, 1)[0];
+        assert(id == (readId - 1));
         DebugPrint("Don't know how to get data for entity type: " + typeName);
         assert(false);
         return nullptr;
@@ -182,15 +189,8 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetPanelData(int id) {
 
 std::shared_ptr<Trainer::EntityData> Trainer::GetEPData(int id) {
     auto data = std::make_shared<EntityData>();
-
     MEMORY_TRY
-        // This is a bit of a hack. Oh well.
-        auto tmp = _memory->ReadData<int>({_globals, 0x18, id * 8, 0xC8}, 1)[0];
-        if (tmp != 0) {
-            data->name = _memory->ReadString({_globals, 0x18, id * 8, 0xC8});
-        } else {
-            data->name = _memory->ReadString({_globals, 0x18, id * 8, 0xC0});
-        }
+        data->name = _memory->ReadData<int>({_globals, 0x18, id * 8, _epNameOffset}, 1)[0];
     MEMORY_CATCH((void)0)
     return data;
 }
