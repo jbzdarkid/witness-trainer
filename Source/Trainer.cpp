@@ -188,17 +188,18 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetPanelData(int id) {
 }
 
 std::shared_ptr<Trainer::EntityData> Trainer::GetEPData(int id) {
-    auto data = std::make_shared<EntityData>();
     MEMORY_TRY
-        data->name = _memory->ReadData<int>({_globals, 0x18, id * 8, _epNameOffset}, 1)[0];
-    MEMORY_CATCH((void)0)
-    return data;
+        auto data = std::make_shared<EntityData>();
+        data->name = _memory->ReadString({_globals, 0x18, id * 8, _epNameOffset});
+        return data;
+    MEMORY_CATCH(return nullptr)
 }
 
 void Trainer::ShowMissingPanels() {
     std::vector<std::string> missingPanels;
     for (const auto& [id, panelName] : PANELS) {
         std::shared_ptr<EntityData> data = GetEntityData(id);
+        assert(data);
         if (data && !data->solved) missingPanels.push_back(panelName);
     }
     if (missingPanels.empty()) {

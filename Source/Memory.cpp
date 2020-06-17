@@ -45,7 +45,7 @@ bool Memory::IsForeground() {
 
 void Memory::Heartbeat(HWND window, UINT message) {
     if (!_handle) {
-        _handle = Initialize();
+        Initialize(); // Initialize promises to set _handle only on success
         if (!_handle) {
             // Couldn't initialize, definitely not running
             SendMessage(window, message, ProcStatus::NotRunning, NULL);
@@ -64,10 +64,6 @@ void Memory::Heartbeat(HWND window, UINT message) {
         // Wait for the process to fully close; otherwise we might accidentally re-attach to it.
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         return;
-    }
-
-    if (_globals == 0) {
-        if (ExecuteSigScans() > 0) return;
     }
 
     MEMORY_TRY
@@ -108,7 +104,7 @@ void Memory::Heartbeat(HWND window, UINT message) {
     }
 }
 
-HANDLE Memory::Initialize() {
+void Memory::Initialize() {
     HANDLE handle = nullptr;
     // First, get the handle of the process
     PROCESSENTRY32W entry;
@@ -124,7 +120,7 @@ HANDLE Memory::Initialize() {
     if (!handle || !_pid) {
         std::cerr << "Couldn't find " << _processName.c_str() << ", is it open?" << std::endl;
         _processWasStopped = true;
-        return nullptr;
+        return;
     }
 
     EnumWindows([](HWND hwnd, LPARAM memory){
@@ -140,20 +136,17 @@ HANDLE Memory::Initialize() {
 
     if (_hwnd == NULL) {
         std::cerr << "Couldn't find the HWND for the game" << std::endl;
-        return nullptr;
+        return;
     }
 
     _baseAddress = DebugUtils::GetBaseAddress(handle);
     if (_baseAddress == 0) {
         std::cerr << "Couldn't locate base address" << std::endl;
-        return nullptr;
+        return;
     }
 
     // Clear sigscans to avoid duplication (or leftover sigscans from the trainer)
     _sigScans.clear();
-    _globals = 0;
-    _loadCountOffset = 0;
-    _campaignState = 0;
 
     AddSigScan({0x74, 0x41, 0x48, 0x85, 0xC0, 0x74, 0x04, 0x48, 0x8B, 0x48, 0x10}, [&](__int64 offset, int index, const std::vector<byte>& data) {
         _globals = Memory::ReadStaticInt(offset, index + 0x14, data);
@@ -167,7 +160,9 @@ HANDLE Memory::Initialize() {
         _campaignState = Memory::ReadStaticInt(offset, index + 0x27, data);
     });
 
-    return handle;
+    _handle = handle;
+    size_t failedScans = ExecuteSigScans();
+    assert(failedScans == 0); // ... If this starts failing, I can be more cautious here.
 }
 
 __int64 Memory::ReadStaticInt(__int64 offset, int index, const std::vector<byte>& data) {

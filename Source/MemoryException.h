@@ -28,7 +28,9 @@ public:
     inline MemoryException(const char* func, int32_t line, const char* message, const std::vector<__int64>& offsets) noexcept
         : MemoryException(func, line, message, offsets, 0) {}
     inline MemoryException(const char* func, int32_t line, const char* message, const std::vector<__int64>& offsets, size_t numItems) noexcept
-        : _func(func), _line(line), _message(message), _offsets(offsets), _numItems(numItems) {}
+        : _func(func), _line(line), _message(message), _offsets(offsets), _numItems(numItems) {
+        assert(false); // We shouldn't be throwing exceptions for control flow.
+    }
 
     ~MemoryException() = default;
 
