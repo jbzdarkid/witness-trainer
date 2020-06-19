@@ -465,6 +465,7 @@ void Trainer::SetRandomDoorsPractice(bool enable) {
 
     int hasEverBeenSolvedOffset = _solvedTargetOffset + 0x04;
     int idToPowerOffset = _solvedTargetOffset + 0x20;
+    int onTargetOffset = _solvedTargetOffset + 0x10;
 
     MEMORY_TRY
         if (enable) {
@@ -504,8 +505,9 @@ void Trainer::SetRandomDoorsPractice(bool enable) {
             _memory->WriteData<byte>({_doorClose}, {0x76, 0x08});
             // When the panel opens, if the puzzle has not been solved, reset it and power it on
             _memory->WriteData<byte>({_doorOpen}, {0x76, 0x10});
-            // When the panel powers on, always randomize it
-            _memory->WriteData<byte>({_powerOn + 0x04}, {0x90, 0x90});
+            // When the panel powers on, only randomize if it's off
+            _memory->WriteData<int>({_powerOn}, {onTargetOffset});
+            _memory->WriteData<byte>({_powerOn + 0x04}, {0x76, 0x18});
         }
     MEMORY_CATCH(return)
 }
