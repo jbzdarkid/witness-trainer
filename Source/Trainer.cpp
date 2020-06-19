@@ -472,6 +472,10 @@ void Trainer::SetRandomDoorsPractice(bool enable) {
             // When the panel is solved, power nothing.
             _memory->WriteData<int>({_globals, 0x18, 0x1983 * 8, idToPowerOffset}, {0x00000000});
             _memory->WriteData<int>({_globals, 0x18, 0x1987 * 8, idToPowerOffset}, {0x00000000});
+
+            // To make sure that the panels are randomized the first time they power on, we mark them as having already been solved.
+            _memory->WriteData<float>({_globals, 0x18, 0x1983 * 8, _solvedTargetOffset}, {1.0f});
+            _memory->WriteData<float>({_globals, 0x18, 0x1987 * 8, _solvedTargetOffset}, {1.0f});
         } else {
             // When the panel is solved, power the double doors.
             _memory->WriteData<int>({_globals, 0x18, 0x1983 * 8, idToPowerOffset}, {0x00017C68});
