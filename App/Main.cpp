@@ -155,14 +155,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 break;
             case ProcStatus::Reload:
             case ProcStatus::NewGame:
-                SetActivePanel(-1);
-                previousPanel = -1;
-                break;
             case ProcStatus::Started:
                 assert(!g_trainer);
                 g_trainer = Trainer::Create(g_witnessProc);
                 if (!g_trainer) break;
                 // Process just started (we were already alive), enforce our settings.
+                // Or, we started a new game / loaded a save, in which case some of the entity data might have been reset.
+                SetActivePanel(-1);
+                previousPanel = -1;
                 g_trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
                 g_trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
                 g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
@@ -189,13 +189,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     SetWindowText(g_activateGame, L"Switch to game");
                 } else {
                     // Process was already running, and so were we (this recurs every heartbeat). Enforce settings.
-                    g_trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
-                    g_trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
                     g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
-                    g_trainer->SetCanSave(IsDlgButtonChecked(hwnd, CAN_SAVE));
-                    g_trainer->SetRandomDoorsPractice(IsDlgButtonChecked(hwnd, DOORS_PRACTICE));
-                    g_trainer->SetInfiniteChallenge(IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE));
-                    g_trainer->SetConsoleOpen(IsDlgButtonChecked(hwnd, OPEN_CONSOLE));
 
                     // If we are the foreground window, set FOV. Otherwise, read FOV.
                     if (g_hwnd == GetForegroundWindow()) {
