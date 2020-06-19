@@ -34,7 +34,7 @@ public:
     template<class T>
     std::vector<T> ReadData(const std::vector<__int64>& offsets, size_t numItems) {
         assert(numItems);
-        if (!_handle) MEMORY_THROW("Game has been shut down", offsets, numItems);
+        if (!_handle) return std::vector<T>(numItems); // Game is tearing down, return some dummy data (and presumably nothing bad will happen)
         std::vector<T> data;
         data.resize(numItems);
         if (!ReadProcessMemory(_handle, ComputeOffset(offsets), &data[0], sizeof(T) * numItems, nullptr)) {
@@ -58,7 +58,7 @@ public:
     template <class T>
     void WriteData(const std::vector<__int64>& offsets, const std::vector<T>& data) {
         assert(data.size());
-        if (!_handle) MEMORY_THROW("Game has been shut down", offsets);
+        if (!_handle) return;
         if (!WriteProcessMemory(_handle, ComputeOffset(offsets), &data[0], sizeof(T) * data.size(), nullptr)) {
             MEMORY_THROW("Failed to write data.", offsets, data.size());
         }
