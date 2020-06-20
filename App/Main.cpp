@@ -27,7 +27,6 @@
 
 // Bugs:
 // - Random doors is broken. Fix before shipping!
-// - Noclip -> new game -> noclip = not stand still. Duh, new game is breaking the player entity offset.
 
 // Feature requests:
 // - Starting a new game isn't triggering "load game", which means offsets are stale. <-- annoying
@@ -156,10 +155,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             case ProcStatus::Reload:
             case ProcStatus::NewGame:
             case ProcStatus::Started:
-                assert(!g_trainer);
-                g_trainer = Trainer::Create(g_witnessProc);
+                if (!g_trainer) {
+                    // Process just started (we were already alive), enforce our settings.
+                    g_trainer = Trainer::Create(g_witnessProc);
+                }
                 if (!g_trainer) break;
-                // Process just started (we were already alive), enforce our settings.
                 // Or, we started a new game / loaded a save, in which case some of the entity data might have been reset.
                 SetActivePanel(-1);
                 previousPanel = -1;

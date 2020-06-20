@@ -67,18 +67,21 @@ void Memory::Heartbeat(HWND window, UINT message) {
     }
 
     MEMORY_TRY
-        // New game causes the entity manager to re-allocate, so we need to check for it first.
-        int timeOfSave = ReadData<int>({_campaignState, 0x40}, 1)[0];
-        if (timeOfSave == 0) {
-            SendMessage(window, message, ProcStatus::NewGame, NULL);
-            _computedAddresses.clear();
-            return;
-        }
-
-        int64_t entityManager = ReadData<int64_t>({_globals}, 1)[0];
+        __int64 entityManager = ReadData<__int64>({_globals}, 1)[0];
         if (entityManager == 0) {
             // Game hasn't loaded yet, we're still sitting on the launcher
             SendMessage(window, message, ProcStatus::NotRunning, NULL);
+            return;
+        }
+
+        // New game causes the entity manager to re-allocate
+        if (entityManager != _previousEntityManager) {
+            // Only issue NewGame & clear addresses if this actually was a new game, rather than our first startup.
+            if (_previousEntityManager != 0) {
+                _computedAddresses.clear();
+                SendMessage(window, message, ProcStatus::NewGame, NULL);
+            }
+            _previousEntityManager = entityManager;
             return;
         }
 

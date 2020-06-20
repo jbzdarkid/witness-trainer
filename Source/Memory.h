@@ -88,6 +88,7 @@ private:
     int _previousLoadCount = 0;
     __int64 _campaignState = 0;
     bool _processWasStopped = false;
+    __int64 _previousEntityManager = 0;
 
     // Parts of Read / Write / Sigscan
     std::map<uintptr_t, uintptr_t> _computedAddresses;
