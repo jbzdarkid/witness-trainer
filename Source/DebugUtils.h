@@ -14,6 +14,7 @@ private:
 };
 
 void DebugPrint(const std::string& text);
+void DebugPrint(const std::wstring& text);
 inline void ShowAssertDialogue() {
     DebugUtils::ShowAssertDialogue();
 }

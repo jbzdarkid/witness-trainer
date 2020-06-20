@@ -121,7 +121,7 @@ void Memory::Initialize() {
         }
     }
     if (!handle || !_pid) {
-        std::cerr << "Couldn't find " << _processName.c_str() << ", is it open?" << std::endl;
+        DebugPrint(L"Couldn't find " + _processName + L", is it open?");
         _processWasStopped = true;
         return;
     }
@@ -138,13 +138,13 @@ void Memory::Initialize() {
     }, (LPARAM)this);
 
     if (_hwnd == NULL) {
-        std::cerr << "Couldn't find the HWND for the game" << std::endl;
+        DebugPrint("Couldn't find the HWND for the game");
         return;
     }
 
     _baseAddress = DebugUtils::GetBaseAddress(handle);
     if (_baseAddress == 0) {
-        std::cerr << "Couldn't locate base address" << std::endl;
+        DebugPrint("Couldn't locate base address");
         return;
     }
 

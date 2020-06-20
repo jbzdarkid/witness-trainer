@@ -15,6 +15,17 @@ void DebugPrint(const std::string& text) {
 #endif
 }
 
+void DebugPrint(const std::wstring& text) {
+#ifdef _DEBUG
+    OutputDebugStringW(text.c_str());
+    std::wcout << text;
+    if (text[text.size()-1] != '\n') {
+        OutputDebugStringW(L"\n");
+        std::wcout << std::endl;
+    }
+#endif
+}
+
 std::wstring DebugUtils::GetStackTrace() {
     HANDLE process = GetCurrentProcess();
     HANDLE thread = GetCurrentThread();
