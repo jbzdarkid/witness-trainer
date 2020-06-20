@@ -26,7 +26,7 @@
 #define CALLSTACK 0x418
 
 // Bugs:
-// - Random doors is broken. Fix before shipping!
+// - Start trainer -> quit game -> start new game = assert
 
 // Feature requests:
 // - Starting a new game isn't triggering "load game", which means offsets are stale. <-- annoying

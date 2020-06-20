@@ -467,6 +467,7 @@ void Trainer::SetRandomDoorsPractice(bool enable) {
     int idToPowerOffset = _solvedTargetOffset + 0x20;
     int onTargetOffset = _solvedTargetOffset + 0x10;
 
+    // This block is up here because it needs to be rerun when we reload the game.
     MEMORY_TRY
         if (enable) {
             // When the panel is solved, power nothing.
