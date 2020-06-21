@@ -117,6 +117,7 @@ void Memory::Initialize() {
         if (_processName == entry.szExeFile) {
             _pid = entry.th32ProcessID;
             handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, _pid);
+            DebugPrint("th32DefaultHeapID: " + std::to_string(entry.th32DefaultHeapID));
             break;
         }
     }
@@ -126,6 +127,7 @@ void Memory::Initialize() {
         return;
     }
 
+    _hwnd = NULL;
     EnumWindows([](HWND hwnd, LPARAM memory){
         DWORD pid;
         GetWindowThreadProcessId(hwnd, &pid);
@@ -147,6 +149,7 @@ void Memory::Initialize() {
         DebugPrint("Couldn't locate base address");
         return;
     }
+    DebugPrint("_baseAddress: " + std::to_string(_baseAddress));
 
     // Clear sigscans to avoid duplication (or leftover sigscans from the trainer)
     _sigScans.clear();
