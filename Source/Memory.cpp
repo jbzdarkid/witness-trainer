@@ -239,14 +239,14 @@ void* Memory::ComputeOffset(std::vector<__int64> offsets) {
     for (const __int64 offset : offsets) {
         cumulativeAddress += offset;
 
-        // Performance optimization. In release mode, we cache previous computed offsets.
+        // If the address was already computed, continue to the next offset.
         const auto search = _computedAddresses.find(cumulativeAddress);
         if (search != std::end(_computedAddresses)) {
             cumulativeAddress = search->second;
             continue;
         }
 
-        // If the address is not yet computed, then compute it.
+        // If the address was not yet computed, read it from memory.
         uintptr_t computedAddress = 0;
         if (!ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(cumulativeAddress), &computedAddress, sizeof(computedAddress), NULL)) {
             MEMORY_THROW("Couldn't compute offset.", offsets);
