@@ -74,6 +74,24 @@ void Memory::Heartbeat(HWND window, UINT message) {
             return;
         }
 
+        // To avoid obtaining the HWND for the launcher, we wait to determine HWND until the game is loaded.
+        if (_hwnd == 0) {
+            EnumWindows([](HWND hwnd, LPARAM memory){
+                DWORD pid;
+                GetWindowThreadProcessId(hwnd, &pid);
+                DWORD targetPid = reinterpret_cast<Memory*>(memory)->_pid;
+                if (pid == targetPid) {
+                    reinterpret_cast<Memory*>(memory)->_hwnd = hwnd;
+                    return FALSE; // Stop enumerating
+                }
+                return TRUE; // Continue enumerating
+            }, (LPARAM)this);
+            if (_hwnd == 0) {
+                DebugPrint("Couldn't find the HWND for the game");
+                return;
+            }
+        }
+
         // New game causes the entity manager to re-allocate
         if (entityManager != _previousEntityManager) {
             // Only issue NewGame & clear addresses if this actually was a new game, rather than our first startup.
@@ -117,7 +135,6 @@ void Memory::Initialize() {
         if (_processName == entry.szExeFile) {
             _pid = entry.th32ProcessID;
             handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, _pid);
-            DebugPrint("th32DefaultHeapID: " + std::to_string(entry.th32DefaultHeapID));
             break;
         }
     }
@@ -126,30 +143,15 @@ void Memory::Initialize() {
         _processWasStopped = true;
         return;
     }
+    DebugPrint(L"Found " + _processName + L": PID " + std::to_wstring(_pid));
 
-    _hwnd = NULL;
-    EnumWindows([](HWND hwnd, LPARAM memory){
-        DWORD pid;
-        GetWindowThreadProcessId(hwnd, &pid);
-        DWORD targetPid = reinterpret_cast<Memory*>(memory)->_pid;
-        if (pid == targetPid) {
-            reinterpret_cast<Memory*>(memory)->_hwnd = hwnd;
-            return FALSE; // Stop enumerating
-        }
-        return TRUE; // Continue enumerating
-    }, (LPARAM)this);
-
-    if (_hwnd == NULL) {
-        DebugPrint("Couldn't find the HWND for the game");
-        return;
-    }
+    _hwnd = NULL; // Will be populated later.
 
     _baseAddress = DebugUtils::GetBaseAddress(handle);
     if (_baseAddress == 0) {
         DebugPrint("Couldn't locate base address");
         return;
     }
-    DebugPrint("_baseAddress: " + std::to_string(_baseAddress));
 
     // Clear sigscans to avoid duplication (or leftover sigscans from the trainer)
     _sigScans.clear();
