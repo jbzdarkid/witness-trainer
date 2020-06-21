@@ -25,12 +25,7 @@
 #define START_TIMER 0x417
 #define CALLSTACK 0x418
 
-// Bugs:
-// - Start trainer -> quit game -> start new game = assert
-
 // Feature requests:
-// - Starting a new game isn't triggering "load game", which means offsets are stale. <-- annoying
-//  Once done, figure out what needs to be changed to properly reset "panel data".
 // - show collision, somehow
 // - Icon for trainer
 //  https://stackoverflow.com/questions/40933304
@@ -39,15 +34,17 @@
 // - Add "distance to panel" in the panel info. Might be fun to see *how far* some of the snipes are.
 // - Save settings to some file, and reload them on trainer start
 // - CreateRemoteThread + VirtualAllocEx allows me to *run* code in another process. This seems... powerful!
+// - SuspendThread as a way to pause the game when an assert fires? Then I could investigate...
 
 // Bad/Hard ideas:
 // - Avoid hanging the UI during load; call Trainer::ctor on a background thread.
+//   Instead, I just sped up the sigscan.
 // - Show currently traced line (hard, requires changes in Memory)
-// - Improvement for 'while noclip is on', solve mode doesn't reset position (?)
+//   Would also require figuring out what needs to be changed to properly reset "panel data".
 // - _timing asl to the trainer? Just something simple would be good enough, mostly
 // - LOD hack
 // - Change current save name
-// Not possible -- the name of the save is created dynamically from the save file
+//   Not possible -- the name of the save is created dynamically from the save file
 
 // Globals
 HWND g_hwnd;

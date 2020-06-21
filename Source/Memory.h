@@ -85,10 +85,9 @@ private:
     uintptr_t _baseAddress = 0;
     __int64 _globals = 0;
     int _loadCountOffset = 0;
-    int _previousLoadCount = 0;
-    __int64 _campaignState = 0;
-    bool _processWasStopped = false;
     __int64 _previousEntityManager = 0;
+    int _previousLoadCount = 0;
+    ProcStatus _nextStatus = ProcStatus::Started;
 
     // Parts of Read / Write / Sigscan
     std::map<uintptr_t, uintptr_t> _computedAddresses;

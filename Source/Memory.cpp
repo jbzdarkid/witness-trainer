@@ -94,35 +94,35 @@ void Memory::Heartbeat(HWND window, UINT message) {
 
         // New game causes the entity manager to re-allocate
         if (entityManager != _previousEntityManager) {
-            // Only issue NewGame & clear addresses if this actually was a new game, rather than our first startup.
-            if (_previousEntityManager != 0) {
-                _computedAddresses.clear();
-                SendMessage(window, message, ProcStatus::NewGame, NULL);
-            }
             _previousEntityManager = entityManager;
+            _computedAddresses.clear();
+        }
+
+        // Loading a game causes entities to be shuffled
+        int loadCount = ReadData<int>({_globals, 0x0, _loadCountOffset}, 1)[0];
+        if (_previousLoadCount != loadCount) {
+            _previousLoadCount = loadCount;
+            _computedAddresses.clear();
+        }
+
+        int numEntities = ReadData<int>({_globals, 0x10}, 1)[0];
+        if (numEntities != 400'000) {
+            // New game is starting, do not take any actions.
+            _nextStatus = ProcStatus::NewGame;
             return;
         }
 
         byte isLoading = ReadData<byte>({_globals, 0x0, _loadCountOffset - 0x4}, 1)[0];
         if (isLoading == 0x01) {
-            return; // Game is currently loading, do not take any actions.
-        }
-
-        int loadCount = ReadData<int>({_globals, 0x0, _loadCountOffset}, 1)[0];
-        if (_previousLoadCount != loadCount) {
-            _previousLoadCount = loadCount;
-            _computedAddresses.clear();
-            SendMessage(window, message, ProcStatus::Reload, NULL);
+            // Saved game is currently loading, do not take any actions.
+            _nextStatus = ProcStatus::Reload;
             return;
         }
+
     MEMORY_CATCH((void)0)
 
-    if (_processWasStopped) {
-        SendMessage(window, message, ProcStatus::Started, NULL);
-        _processWasStopped = false;
-    } else {
-        SendMessage(window, message, ProcStatus::Running, NULL);
-    }
+    SendMessage(window, message, _nextStatus, NULL);
+    _nextStatus = ProcStatus::Running;
 }
 
 void Memory::Initialize() {
@@ -140,7 +140,7 @@ void Memory::Initialize() {
     }
     if (!handle || !_pid) {
         DebugPrint(L"Couldn't find " + _processName + L", is it open?");
-        _processWasStopped = true;
+        _nextStatus = ProcStatus::Started;
         return;
     }
     DebugPrint(L"Found " + _processName + L": PID " + std::to_wstring(_pid));
@@ -162,10 +162,6 @@ void Memory::Initialize() {
 
     AddSigScan({0x01, 0x00, 0x00, 0x66, 0xC7, 0x87}, [&](__int64 offset, int index, const std::vector<byte>& data) {
         _loadCountOffset = *(int*)&data[index-1];
-    });
-
-    AddSigScan({0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x70, 0x10, 0x48, 0x89, 0x78, 0x18, 0x48, 0x8B, 0x3D}, [&](__int64 offset, int index, const std::vector<byte>& data) {
-        _campaignState = Memory::ReadStaticInt(offset, index + 0x27, data);
     });
 
     _handle = handle;
