@@ -5,6 +5,8 @@ try { \
     Memory::__canThrow = true;
 
 #define MEMORY_THROW(...) \
+    /* We shouldn't be throwing exceptions for control flow. */ \
+    assert(false); \
     if (Memory::__canThrow) { \
         throw MemoryException(__func__, __LINE__, ##__VA_ARGS__); \
     } else { \
@@ -28,9 +30,7 @@ public:
     inline MemoryException(const char* func, int32_t line, const char* message, const std::vector<__int64>& offsets) noexcept
         : MemoryException(func, line, message, offsets, 0) {}
     inline MemoryException(const char* func, int32_t line, const char* message, const std::vector<__int64>& offsets, size_t numItems) noexcept
-        : _func(func), _line(line), _message(message), _offsets(offsets), _numItems(numItems) {
-        assert(false); // We shouldn't be throwing exceptions for control flow.
-    }
+        : _func(func), _line(line), _message(message), _offsets(offsets), _numItems(numItems) {}
 
     ~MemoryException() = default;
 
