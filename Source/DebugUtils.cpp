@@ -99,7 +99,9 @@ void DebugUtils::RegenerateCallstack(const std::wstring& callstack) {
             continue;
         }
     }
-    addrs.push_back(baseAddress + std::stoull(buffer, nullptr, 16));
+    if (buffer.size() > 0) {
+        addrs.push_back(baseAddress + std::stoull(buffer, nullptr, 16));
+    }
 
     // The SYMBOL_INFO struct ends with a buffer of size 1; to allocate a larger buffer, we need to allocate an extra MAX_SYM_NAME characters.
     auto symbolInfo = (SYMBOL_INFO*)malloc(sizeof(SYMBOL_INFO) + MAX_SYM_NAME * sizeof(wchar_t));
