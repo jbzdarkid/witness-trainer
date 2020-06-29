@@ -50,7 +50,6 @@ void Memory::Heartbeat(HWND window, UINT message) {
     DWORD exitCode = 0;
     GetExitCodeProcess(_handle, &exitCode);
     if (exitCode != STILL_ACTIVE) {
-        _isSafe = false;
         // Process has exited, clean up. We only need to reset _handle here -- its validity is linked to all other class members.
         _computedAddresses.clear();
         _handle = nullptr;
@@ -63,7 +62,6 @@ void Memory::Heartbeat(HWND window, UINT message) {
 
     __int64 entityManager = ReadData<__int64>({_globals}, 1)[0];
     if (entityManager == 0) {
-        _isSafe = false;
         // Game hasn't loaded yet, we're still sitting on the launcher
         SendMessage(window, message, ProcStatus::NotRunning, NULL);
         return;
@@ -83,13 +81,13 @@ void Memory::Heartbeat(HWND window, UINT message) {
         }, (LPARAM)this);
         if (_hwnd == 0) {
             DebugPrint("Couldn't find the HWND for the game");
+            assert(false);
             return;
         }
     }
 
     // New game causes the entity manager to re-allocate
     if (entityManager != _previousEntityManager) {
-        _isSafe = false;
         _previousEntityManager = entityManager;
         _computedAddresses.clear();
     }
@@ -97,14 +95,12 @@ void Memory::Heartbeat(HWND window, UINT message) {
     // Loading a game causes entities to be shuffled
     int loadCount = ReadData<int>({_globals, 0x0, _loadCountOffset}, 1)[0];
     if (_previousLoadCount != loadCount) {
-        _isSafe = true;
         _previousLoadCount = loadCount;
         _computedAddresses.clear();
     }
 
     int numEntities = ReadData<int>({_globals, 0x10}, 1)[0];
     if (numEntities != 400'000) {
-        _isSafe = true;
         // New game is starting, do not take any actions.
         _nextStatus = ProcStatus::NewGame;
         return;
@@ -112,13 +108,11 @@ void Memory::Heartbeat(HWND window, UINT message) {
 
     byte isLoading = ReadData<byte>({_globals, 0x0, _loadCountOffset - 0x4}, 1)[0];
     if (isLoading == 0x01) {
-        _isSafe = true;
         // Saved game is currently loading, do not take any actions.
         _nextStatus = ProcStatus::Reload;
         return;
     }
 
-    _isSafe = true;
     SendMessage(window, message, _nextStatus, NULL);
     _nextStatus = ProcStatus::Running;
 }
@@ -249,7 +243,7 @@ std::string Memory::ReadString(std::vector<__int64> offsets) {
 
 void Memory::ReadDataInternal(void* buffer, const std::vector<__int64>& offsets, size_t bufferSize) {
     assert(bufferSize > 0);
-    if (!_handle || !_isSafe) return;
+    if (!_handle) return;
     if (!ReadProcessMemory(_handle, ComputeOffset(offsets), buffer, bufferSize, nullptr)) {
         DebugPrint("Failed to read process memory.");
         assert(false);
@@ -258,7 +252,7 @@ void Memory::ReadDataInternal(void* buffer, const std::vector<__int64>& offsets,
 
 void Memory::WriteDataInternal(const void* buffer, const std::vector<__int64>& offsets, size_t bufferSize) {
     assert(bufferSize > 0);
-    if (!_handle || !_isSafe) return;
+    if (!_handle) return;
     if (!WriteProcessMemory(_handle, ComputeOffset(offsets), buffer, bufferSize, nullptr)) {
         DebugPrint("Failed to write process memory.");
         assert(false);
@@ -286,7 +280,7 @@ void* Memory::ComputeOffset(std::vector<__int64> offsets) {
 
         // If the address was not yet computed, read it from memory.
         uintptr_t computedAddress = 0;
-        if (!_handle || !_isSafe) return 0;
+        if (!_handle) return 0;
         if (!ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(cumulativeAddress), &computedAddress, sizeof(computedAddress), NULL)) {
             DebugPrint("Failed to read process memory.");
             assert(false);

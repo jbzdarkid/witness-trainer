@@ -25,6 +25,11 @@
 #define START_TIMER 0x417
 #define CALLSTACK 0x418
 
+// Bugs:
+// - There's a potential race condition where we notice we're loading in the midst of a heartbeat.
+//   Actually, there isn't, but there should be. Stop using SendMessage, switch back to PostMessage.
+//   Then, we want to detect loading, and block (I guess all other) memory reads during that time. Not sure how the hell we do that.
+
 // Feature requests:
 // - show collision, somehow
 // - Icon for trainer
