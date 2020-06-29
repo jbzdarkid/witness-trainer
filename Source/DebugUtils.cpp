@@ -58,21 +58,10 @@ void DebugUtils::ShowAssertDialogue() {
     if (Memory::__isPaused) return;
     Memory::__isPaused = true;
     std::wstring msg = L"WitnessTrainer version " + version + L" has encountered an error.\n";
-    msg += L"Click 'Yes' to ignore it and continue the program,\n";
-    msg += L"or click 'No' to stop the program.\n\n";
-    msg += L"In either case, please press Control C to copy this error,\n";
-    msg += L"then paste it to darkid.\n";
+    msg += L"Please press Control C to copy this error, and paste it to darkid.\n";
     msg += GetStackTrace();
-    int action = MessageBox(NULL, msg.c_str(), L"WitnessTrainer encountered an error.",
-        MB_TASKMODAL | MB_ICONHAND | MB_YESNO | MB_SETFOREGROUND);
-    if (action == IDYES) { // User opts to ignore the exception, and continue execution
-        Memory::__isPaused = false;
-        return;
-    }
-    // Else, we are aborting execution. Break into the debugger (if present), then exit.
-    if (IsDebuggerPresent()) __debugbreak();
-    raise(SIGABRT);
-    _exit(3);
+    MessageBox(NULL, msg.c_str(), L"WitnessTrainer encountered an error.", MB_TASKMODAL | MB_ICONHAND | MB_OK | MB_SETFOREGROUND);
+    Memory::__isPaused = false;
 }
 
 uint64_t DebugUtils::GetBaseAddress(HANDLE process) {
