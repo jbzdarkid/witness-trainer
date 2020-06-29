@@ -96,7 +96,7 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
     });
 
     memory->AddSigScan({0x83, 0xF8, 0x03, 0x7C, 0x41, 0x84, 0xC9, 0x74, 0x1F}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
-        trainer->_wantCampaignSave = Memory::ReadStaticInt(offset, index + 0x2A, data, 5)
+        trainer->_wantCampaignSave = Memory::ReadStaticInt(offset, index + 0x2A, data, 5);
     });
 
     memory->AddSigScan({0x74, 0x14, 0x48, 0x8B, 0x95}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {

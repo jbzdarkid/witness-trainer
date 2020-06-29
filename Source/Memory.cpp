@@ -169,8 +169,7 @@ void Memory::Initialize() {
 
 // These functions are much more generic than this witness-specific implementation. As such, I'm keeping them somewhat separated.
 
-// lineLength is the number of bytes from the given index to the end of the instruction. Usually, it's 4.
-__int64 Memory::ReadStaticInt(__int64 offset, int index, const std::vector<byte>& data, size_t lineLength = 0x4) {
+__int64 Memory::ReadStaticInt(__int64 offset, int index, const std::vector<byte>& data, size_t lineLength) {
     // (address of next line) + (index interpreted as 4byte int)
     return offset + index + lineLength + *(int*)&data[index];
 }
