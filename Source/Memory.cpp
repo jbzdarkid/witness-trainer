@@ -137,7 +137,7 @@ void Memory::Initialize() {
         }
     }
     if (!handle || !_pid) {
-        DebugPrint(L"Couldn't find " + _processName + L", is it open?");
+        // Game likely not opened yet. Don't spam the log.
         _nextStatus = ProcStatus::Started;
         return;
     }
@@ -163,8 +163,13 @@ void Memory::Initialize() {
     });
 
     _handle = handle;
-    size_t failedScans = ExecuteSigScans();
-    assert(failedScans == 0); // ... If this starts failing, I can be more cautious here.
+    size_t failedScans = ExecuteSigScans(); // Will DebugPrint the failed scans.
+    if (failedScans > 0) {
+        // This little song-and-dance is because we need _handle in order to execute sigscans.
+        // But, we use _handle to indicate success, so we need to reset it.
+        _handle = nullptr;
+        return;
+    }
 }
 
 // These functions are much more generic than this witness-specific implementation. As such, I'm keeping them somewhat separated.
