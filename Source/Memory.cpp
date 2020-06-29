@@ -3,12 +3,6 @@
 #include <psapi.h>
 #include <tlhelp32.h>
 
-#undef PROCESSENTRY32
-#undef Process32Next
-
-bool Memory::__canThrow = false;
-bool Memory::__isPaused = false;
-
 Memory::Memory(const std::wstring& processName) : _processName(processName) {}
 
 Memory::~Memory() {
@@ -28,8 +22,8 @@ void Memory::StartHeartbeat(HWND window, UINT message) {
     _thread = std::thread([sharedThis = shared_from_this(), window, message]{
         SetThreadDescription(GetCurrentThread(), L"Heartbeat");
         while (sharedThis->_threadActive) {
-            if (!__isPaused) sharedThis->Heartbeat(window, message);
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            sharedThis->Heartbeat(window, message);
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
     });
     _thread.detach();
@@ -56,6 +50,7 @@ void Memory::Heartbeat(HWND window, UINT message) {
     DWORD exitCode = 0;
     GetExitCodeProcess(_handle, &exitCode);
     if (exitCode != STILL_ACTIVE) {
+        _isSafe = false;
         // Process has exited, clean up. We only need to reset _handle here -- its validity is linked to all other class members.
         _computedAddresses.clear();
         _handle = nullptr;
@@ -66,61 +61,64 @@ void Memory::Heartbeat(HWND window, UINT message) {
         return;
     }
 
-    MEMORY_TRY
-        __int64 entityManager = ReadData<__int64>({_globals}, 1)[0];
-        if (entityManager == 0) {
-            // Game hasn't loaded yet, we're still sitting on the launcher
-            SendMessage(window, message, ProcStatus::NotRunning, NULL);
-            return;
-        }
+    __int64 entityManager = ReadData<__int64>({_globals}, 1)[0];
+    if (entityManager == 0) {
+        _isSafe = false;
+        // Game hasn't loaded yet, we're still sitting on the launcher
+        SendMessage(window, message, ProcStatus::NotRunning, NULL);
+        return;
+    }
 
-        // To avoid obtaining the HWND for the launcher, we wait to determine HWND until the game is loaded.
-        if (_hwnd == 0) {
-            EnumWindows([](HWND hwnd, LPARAM memory){
-                DWORD pid;
-                GetWindowThreadProcessId(hwnd, &pid);
-                DWORD targetPid = reinterpret_cast<Memory*>(memory)->_pid;
-                if (pid == targetPid) {
-                    reinterpret_cast<Memory*>(memory)->_hwnd = hwnd;
-                    return FALSE; // Stop enumerating
-                }
-                return TRUE; // Continue enumerating
-            }, (LPARAM)this);
-            if (_hwnd == 0) {
-                DebugPrint("Couldn't find the HWND for the game");
-                return;
+    // To avoid obtaining the HWND for the launcher, we wait to determine HWND until the game is loaded.
+    if (_hwnd == 0) {
+        EnumWindows([](HWND hwnd, LPARAM memory){
+            DWORD pid;
+            GetWindowThreadProcessId(hwnd, &pid);
+            DWORD targetPid = reinterpret_cast<Memory*>(memory)->_pid;
+            if (pid == targetPid) {
+                reinterpret_cast<Memory*>(memory)->_hwnd = hwnd;
+                return FALSE; // Stop enumerating
             }
-        }
-
-        // New game causes the entity manager to re-allocate
-        if (entityManager != _previousEntityManager) {
-            _previousEntityManager = entityManager;
-            _computedAddresses.clear();
-        }
-
-        // Loading a game causes entities to be shuffled
-        int loadCount = ReadData<int>({_globals, 0x0, _loadCountOffset}, 1)[0];
-        if (_previousLoadCount != loadCount) {
-            _previousLoadCount = loadCount;
-            _computedAddresses.clear();
-        }
-
-        int numEntities = ReadData<int>({_globals, 0x10}, 1)[0];
-        if (numEntities != 400'000) {
-            // New game is starting, do not take any actions.
-            _nextStatus = ProcStatus::NewGame;
+            return TRUE; // Continue enumerating
+        }, (LPARAM)this);
+        if (_hwnd == 0) {
+            DebugPrint("Couldn't find the HWND for the game");
             return;
         }
+    }
 
-        byte isLoading = ReadData<byte>({_globals, 0x0, _loadCountOffset - 0x4}, 1)[0];
-        if (isLoading == 0x01) {
-            // Saved game is currently loading, do not take any actions.
-            _nextStatus = ProcStatus::Reload;
-            return;
-        }
+    // New game causes the entity manager to re-allocate
+    if (entityManager != _previousEntityManager) {
+        _isSafe = false;
+        _previousEntityManager = entityManager;
+        _computedAddresses.clear();
+    }
 
-    MEMORY_CATCH((void)0)
+    // Loading a game causes entities to be shuffled
+    int loadCount = ReadData<int>({_globals, 0x0, _loadCountOffset}, 1)[0];
+    if (_previousLoadCount != loadCount) {
+        _isSafe = true;
+        _previousLoadCount = loadCount;
+        _computedAddresses.clear();
+    }
 
+    int numEntities = ReadData<int>({_globals, 0x10}, 1)[0];
+    if (numEntities != 400'000) {
+        _isSafe = true;
+        // New game is starting, do not take any actions.
+        _nextStatus = ProcStatus::NewGame;
+        return;
+    }
+
+    byte isLoading = ReadData<byte>({_globals, 0x0, _loadCountOffset - 0x4}, 1)[0];
+    if (isLoading == 0x01) {
+        _isSafe = true;
+        // Saved game is currently loading, do not take any actions.
+        _nextStatus = ProcStatus::Reload;
+        return;
+    }
+
+    _isSafe = true;
     SendMessage(window, message, _nextStatus, NULL);
     _nextStatus = ProcStatus::Running;
 }
@@ -169,8 +167,12 @@ void Memory::Initialize() {
     assert(failedScans == 0); // ... If this starts failing, I can be more cautious here.
 }
 
-__int64 Memory::ReadStaticInt(__int64 offset, int index, const std::vector<byte>& data) {
-    return offset + index + 0x4 + *(int*)&data[index]; // (address of next line) + (index interpreted as 4byte int)
+// These functions are much more generic than this witness-specific implementation. As such, I'm keeping them somewhat separated.
+
+// lineLength is the number of bytes from the given index to the end of the instruction. Usually, it's 4.
+__int64 Memory::ReadStaticInt(__int64 offset, int index, const std::vector<byte>& data, size_t lineLength = 0x4) {
+    // (address of next line) + (index interpreted as 4byte int)
+    return offset + index + lineLength + *(int*)&data[index];
 }
 
 void Memory::AddSigScan(const std::vector<byte>& scanBytes, const ScanFunc& scanFunc) {
@@ -226,10 +228,42 @@ size_t Memory::ExecuteSigScans() {
     return notFound;
 }
 
-void* Memory::ComputeOffset(std::vector<__int64> offsets) {
-    if (offsets.size() == 0 || offsets.front() == 0) {
-        MEMORY_THROW("Attempted to compute using null base offset", offsets);
+#define MAX_STRING 100
+// Technically this is ReadChar*, but this name makes more sense with the return type.
+std::string Memory::ReadString(std::vector<__int64> offsets) {
+    offsets.push_back(0L); // Assume we were passed a char*, this is the actual char[]
+    std::vector<char> tmp = ReadData<char>(offsets, MAX_STRING);
+    std::string name(tmp.begin(), tmp.end());
+    // Remove garbage past the null terminator (we read 100 chars, but the string was probably shorter)
+    name.resize(strnlen_s(tmp.data(), tmp.size()));
+    if (name.size() < tmp.size()) {
+        DebugPrint("Buffer did not contain a null terminator, ergo this string is longer than 100 chars. Please change MAX_STRING.");
+        assert(false);
     }
+    return name;
+}
+
+void Memory::ReadDataInternal(void* buffer, const std::vector<__int64>& offsets, size_t bufferSize) {
+    assert(bufferSize > 0);
+    if (!_handle || !_isSafe) return;
+    if (!ReadProcessMemory(_handle, ComputeOffset(offsets), buffer, bufferSize, nullptr)) {
+        DebugPrint("Failed to read process memory.");
+        assert(false);
+    }
+}
+
+void Memory::WriteDataInternal(const void* buffer, const std::vector<__int64>& offsets, size_t bufferSize) {
+    assert(bufferSize > 0);
+    if (!_handle || !_isSafe) return;
+    if (!WriteProcessMemory(_handle, ComputeOffset(offsets), buffer, bufferSize, nullptr)) {
+        DebugPrint("Failed to write process memory.");
+        assert(false);
+    }
+}
+
+void* Memory::ComputeOffset(std::vector<__int64> offsets) {
+    assert(offsets.size() > 0);
+    assert(offsets.front() != 0);
 
     // Leave off the last offset, since it will be either read/write, and may not be of type uintptr_t.
     const __int64 final_offset = offsets.back();
@@ -248,12 +282,17 @@ void* Memory::ComputeOffset(std::vector<__int64> offsets) {
 
         // If the address was not yet computed, read it from memory.
         uintptr_t computedAddress = 0;
+        if (!_handle || !_isSafe) return 0;
         if (!ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(cumulativeAddress), &computedAddress, sizeof(computedAddress), NULL)) {
-            MEMORY_THROW("Couldn't compute offset.", offsets);
+            DebugPrint("Failed to read process memory.");
+            assert(false);
+            return 0;
+        } else if (computedAddress == 0) {
+            DebugPrint("Attempted to dereference NULL!");
+            assert(false);
+            return 0;
         }
-        if (computedAddress == 0) {
-            MEMORY_THROW("Attempted to dereference NULL while computing offsets.", offsets);
-        }
+
         _computedAddresses[cumulativeAddress] = computedAddress;
         cumulativeAddress = computedAddress;
     }

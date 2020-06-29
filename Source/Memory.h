@@ -26,51 +26,31 @@ public:
     Memory(const Memory& memory) = delete;
     Memory& operator=(const Memory& other) = delete;
 
-    static __int64 ReadStaticInt(__int64 offset, int index, const std::vector<byte>& data);
+    static __int64 ReadStaticInt(__int64 offset, int index, const std::vector<byte>& data, size_t lineLength = 0x4);
     using ScanFunc = std::function<void(__int64 offset, int index, const std::vector<byte>& data)>;
     void AddSigScan(const std::vector<byte>& scanBytes, const ScanFunc& scanFunc);
     [[nodiscard]] size_t ExecuteSigScans();
 
     template<class T>
-    std::vector<T> ReadData(const std::vector<__int64>& offsets, size_t numItems) {
-        assert(numItems);
-        if (!_handle) return std::vector<T>(numItems); // Game is tearing down, return some dummy data (and presumably nothing bad will happen)
-        std::vector<T> data;
-        data.resize(numItems);
-        if (!ReadProcessMemory(_handle, ComputeOffset(offsets), &data[0], sizeof(T) * numItems, nullptr)) {
-            MEMORY_THROW("Failed to read data.", offsets, numItems);
-        }
+    inline std::vector<T> ReadData(const std::vector<__int64>& offsets, size_t numItems) {
+        std::vector<T> data(numItems, 0);
+        ReadDataInternal(&data[0], offsets, numItems * sizeof(T));
         return data;
     }
-
-    // Technically this is ReadChar*, but this name makes more sense with the return type.
-    std::string ReadString(std::vector<__int64> offsets) {
-        offsets.push_back(0L); // Assume we were passed a char*, this is the actual char[]
-        std::vector<char> tmp = ReadData<char>(offsets, 100);
-        std::string name(tmp.begin(), tmp.end());
-        // Remove garbage past the null terminator (we read 100 chars, but the string was probably shorter)
-        name.resize(strnlen_s(tmp.data(), tmp.size()));
-        assert(name.size() < tmp.size()); // Assert that there was a null terminator read.
-        // Otherwise, this is a truncated string, and we will need to increase the '100' above.
-        return name;
-    }
+    std::string ReadString(std::vector<__int64> offsets);
 
     template <class T>
-    void WriteData(const std::vector<__int64>& offsets, const std::vector<T>& data) {
-        assert(data.size());
-        if (!_handle) return;
-        if (!WriteProcessMemory(_handle, ComputeOffset(offsets), &data[0], sizeof(T) * data.size(), nullptr)) {
-            MEMORY_THROW("Failed to write data.", offsets, data.size());
-        }
+    inline void WriteData(const std::vector<__int64>& offsets, const std::vector<T>& data) {
+        WriteDataInternal(&data[0], offsets, sizeof(T) * data.size());
     }
 
-    // Should only be modified by macros
-    static bool __canThrow;
-    static bool __isPaused;
 
 private:
     void Heartbeat(HWND window, UINT message);
     void Initialize();
+
+    void ReadDataInternal(void* buffer, const std::vector<__int64>& offsets, size_t bufferSize);
+    void WriteDataInternal(const void* buffer, const std::vector<__int64>& offsets, size_t bufferSize);
     void* ComputeOffset(std::vector<__int64> offsets);
 
     // Parts of the constructor / StartHeartbeat
@@ -88,6 +68,7 @@ private:
     __int64 _previousEntityManager = 0;
     int _previousLoadCount = 0;
     ProcStatus _nextStatus = ProcStatus::Started;
+    bool _isSafe = false; // Whether or not it is safe to read memory from the process
 
     // Parts of Read / Write / Sigscan
     std::map<uintptr_t, uintptr_t> _computedAddresses;

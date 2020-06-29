@@ -75,7 +75,7 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
     });
 
     memory->AddSigScan({0xF2, 0x0F, 0x58, 0xC8, 0x66, 0x0F, 0x5A, 0xC1, 0xF2}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
-        trainer->_activePanelOffsets.push_back(Memory::ReadStaticInt(offset, index + 0x36, data) + 1); // +1 because the line ends with an extra byte
+        trainer->_activePanelOffsets.push_back(Memory::ReadStaticInt(offset, index + 0x36, data, 5));
         trainer->_activePanelOffsets.push_back(data[index + 0x5A]); // This is 0x10 in both versions I have, but who knows.
         trainer->_activePanelOffsets.push_back(*(int*) &data[index + 0x54]);
     });
@@ -96,7 +96,7 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
     });
 
     memory->AddSigScan({0x83, 0xF8, 0x03, 0x7C, 0x41, 0x84, 0xC9, 0x74, 0x1F}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
-        trainer->_wantCampaignSave = Memory::ReadStaticInt(offset, index + 0x2A, data) + 1; // +1 because the line ends with an extra byte
+        trainer->_wantCampaignSave = Memory::ReadStaticInt(offset, index + 0x2A, data, 5)
     });
 
     memory->AddSigScan({0x74, 0x14, 0x48, 0x8B, 0x95}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
@@ -128,23 +128,19 @@ Trainer::~Trainer() {
 }
 
 int Trainer::GetActivePanel() {
-    MEMORY_TRY
-        return _memory->ReadData<int>(_activePanelOffsets, 1)[0] - 1;
-    MEMORY_CATCH(return 0)
+    return _memory->ReadData<int>(_activePanelOffsets, 1)[0] - 1;
 }
 
 std::shared_ptr<Trainer::EntityData> Trainer::GetEntityData(int id) {
-    MEMORY_TRY
-        std::string typeName = _memory->ReadString({_globals, 0x18, id * 8, 0x08, 0x08});
-        if (typeName == "Machine_Panel") return GetPanelData(id);
-        if (typeName == "Pattern_Point") return GetEPData(id);
+    std::string typeName = _memory->ReadString({_globals, 0x18, id * 8, 0x08, 0x08});
+    if (typeName == "Machine_Panel") return GetPanelData(id);
+    if (typeName == "Pattern_Point") return GetEPData(id);
 
-        int readId = _memory->ReadData<int>({_globals, 0x18, id * 8, 0x10}, 1)[0];
-        assert(id == (readId - 1));
-        DebugPrint("Don't know how to get data for entity type: " + typeName);
-        assert(false);
-        return nullptr;
-    MEMORY_CATCH(return nullptr)
+    int readId = _memory->ReadData<int>({_globals, 0x18, id * 8, 0x10}, 1)[0];
+    assert(id == (readId - 1));
+    DebugPrint("Don't know how to get data for entity type: " + typeName);
+    assert(false);
+    return nullptr;
 }
 
 std::shared_ptr<Trainer::EntityData> Trainer::GetPanelData(int id) {
@@ -155,23 +151,22 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetPanelData(int id) {
     int numDotsOffset = _solvedTargetOffset + 0x11C;
     int dotPositionsOffset = _solvedTargetOffset + 0x12C;
 
-    MEMORY_TRY
-        auto data = std::make_shared<EntityData>();
-        data->name = _memory->ReadString({_globals, 0x18, id * 8, nameOffset});
-        int state = _memory->ReadData<int>({_globals, 0x18, id * 8, stateOffset}, 1)[0];
-        int hasEverBeenSolved = _memory->ReadData<int>({_globals, 0x18, id * 8, hasEverBeenSolvedOffset}, 1)[0];
-        data->solved = hasEverBeenSolved;
-        if (state == 0 && hasEverBeenSolved == 0) data->state = "Has never been solved";
-        else if (state == 0 && hasEverBeenSolved == 1) data->state = "Was previously solved";
-        else if (state == 1) data->state = "Solved";
-        else if (state == 2) data->state = "Failed";
-        else if (state == 3) data->state = "Exited";
-        else if (state == 4) data->state = "Negation pending";
-        else data->state = "Unknown";
+    auto data = std::make_shared<EntityData>();
+    data->name = _memory->ReadString({_globals, 0x18, id * 8, nameOffset});
+    int state = _memory->ReadData<int>({_globals, 0x18, id * 8, stateOffset}, 1)[0];
+    int hasEverBeenSolved = _memory->ReadData<int>({_globals, 0x18, id * 8, hasEverBeenSolvedOffset}, 1)[0];
+    data->solved = hasEverBeenSolved;
+    if (state == 0 && hasEverBeenSolved == 0) data->state = "Has never been solved";
+    else if (state == 0 && hasEverBeenSolved == 1) data->state = "Was previously solved";
+    else if (state == 1) data->state = "Solved";
+    else if (state == 2) data->state = "Failed";
+    else if (state == 3) data->state = "Exited";
+    else if (state == 4) data->state = "Negation pending";
+    else data->state = "Unknown";
 
-        int numEdges = _memory->ReadData<int>({_globals, 0x18, id * 8, tracedEdgesOffset}, 1)[0];
-        return data;
-    MEMORY_CATCH(return nullptr)
+    int numEdges = _memory->ReadData<int>({_globals, 0x18, id * 8, tracedEdgesOffset}, 1)[0];
+    return data;
+
     /* BUG: Traced edges are being re-allocated, and thus moving around. I think memory needs to own this directly, so that it can carefully invalidate a cache entry. Or, it can ComputeOffset(false) to not cache.
     if (numEdges > 0) {
         std::vector<Traced_Edge> edges = _memory->ReadData<Traced_Edge>({_globals, 0x18, id*8, tracedEdgesOffset + 0x08, 0}, numEdges);
@@ -188,11 +183,9 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetPanelData(int id) {
 }
 
 std::shared_ptr<Trainer::EntityData> Trainer::GetEPData(int id) {
-    MEMORY_TRY
-        auto data = std::make_shared<EntityData>();
-        data->name = _memory->ReadString({_globals, 0x18, id * 8, _epNameOffset});
-        return data;
-    MEMORY_CATCH(return nullptr)
+    auto data = std::make_shared<EntityData>();
+    data->name = _memory->ReadString({_globals, 0x18, id * 8, _epNameOffset});
+    return data;
 }
 
 void Trainer::ShowMissingPanels() {
@@ -224,40 +217,31 @@ void Trainer::ShowMissingPanels() {
 }
 
 void Trainer::ShowNearbyEntities() {
-    int32_t maxId;
-    MEMORY_TRY
-        maxId = _memory->ReadData<int>({_globals, 0x14}, 1)[0];
-    MEMORY_CATCH(return)
+    int32_t maxId = _memory->ReadData<int>({_globals, 0x14}, 1)[0];
 
     std::vector<std::pair<float, int32_t>> nearbyEntities(20, {99999.9f, 0});
 
     auto basePos = GetCameraPos();
     for (int32_t id = 0; id < maxId; id++) {
         if (id == 0x1E465) continue; // Skip over Entity_Human
-        MEMORY_TRY
-            int32_t entity = _memory->ReadData<int>({_globals, 0x18, id * 8}, 1)[0];
-            if (entity == 0) continue;
-            std::vector<float> pos = _memory->ReadData<float>({_globals, 0x18, id * 8, 0x24}, 3);
+        int32_t entity = _memory->ReadData<int>({_globals, 0x18, id * 8}, 1)[0];
+        if (entity == 0) continue;
+        std::vector<float> pos = _memory->ReadData<float>({_globals, 0x18, id * 8, 0x24}, 3);
 
-            float norm = std::pow(basePos[0] - pos[0], 2) + std::pow(basePos[1] - pos[1], 2) + std::pow(basePos[2] - pos[2], 2);
-            for (int i = 0; i < nearbyEntities.size(); i++) {
-                if (norm < nearbyEntities[i].first) {
-                    nearbyEntities.insert(nearbyEntities.begin() + i, {norm, id});
-                    nearbyEntities.resize(nearbyEntities.size() - 1);
-                    break;
-                }
+        float norm = std::pow(basePos[0] - pos[0], 2) + std::pow(basePos[1] - pos[1], 2) + std::pow(basePos[2] - pos[2], 2);
+        for (int i = 0; i < nearbyEntities.size(); i++) {
+            if (norm < nearbyEntities[i].first) {
+                nearbyEntities.insert(nearbyEntities.begin() + i, {norm, id});
+                nearbyEntities.resize(nearbyEntities.size() - 1);
+                break;
             }
-        MEMORY_CATCH(continue)
+        }
     }
 
     DebugPrint("Entity ID\tDistance\t     X\t     Y\t     Z\tType");
     for (const auto& [norm, entityId] : nearbyEntities) {
-        std::vector<float> pos;
-        std::string typeName;
-        MEMORY_TRY
-            pos = _memory->ReadData<float>({_globals, 0x18, entityId * 8, 0x24}, 3);
-            typeName = _memory->ReadString({_globals, 0x18, entityId * 8, 0x08, 0x08});
-        MEMORY_CATCH(continue)
+        std::vector<float> pos = _memory->ReadData<float>({_globals, 0x18, entityId * 8, 0x24}, 3);
+        std::string typeName = _memory->ReadString({_globals, 0x18, entityId * 8, 0x08, 0x08});
 
         std::stringstream message;
         message << "0x" << std::hex << std::setfill('0') << std::setw(5) << entityId << '\t';
@@ -268,196 +252,146 @@ void Trainer::ShowNearbyEntities() {
 }
 
 void Trainer::ExportEntities() {
-    int32_t maxId;
-    MEMORY_TRY
-        maxId = _memory->ReadData<int>({_globals, 0x14}, 1)[0];
-    MEMORY_CATCH(return)
+    int32_t maxId = _memory->ReadData<int>({_globals, 0x14}, 1)[0];
 
     DebugPrint("Entity ID\tType\tName\t     X\t     Y\t     Z");
     for (int32_t id = 0; id < maxId; id++) {
-        MEMORY_TRY
-            int32_t entity = _memory->ReadData<int>({_globals, 0x18, id * 8}, 1)[0];
-            if (entity == 0) continue;
-            std::string typeName = _memory->ReadString({_globals, 0x18, id * 8, 0x08, 0x08});
-            std::string entityName = _memory->ReadString({_globals, 0x18, id * 8, 0x58});
-            std::vector<float> pos = _memory->ReadData<float>({_globals, 0x18, id * 8, 0x24}, 3);
+        int32_t entity = _memory->ReadData<int>({_globals, 0x18, id * 8}, 1)[0];
+        if (entity == 0) continue;
+        std::string typeName = _memory->ReadString({_globals, 0x18, id * 8, 0x08, 0x08});
+        std::string entityName = _memory->ReadString({_globals, 0x18, id * 8, 0x58});
+        std::vector<float> pos = _memory->ReadData<float>({_globals, 0x18, id * 8, 0x24}, 3);
 
-            std::stringstream message;
-            message << "0x" << std::hex << std::setfill('0') << std::setw(5) << id << '\t';
-            message << typeName << '\t';
-            message << entityName << '\t';
-            message << pos[0] << '\t' << pos[1] << '\t' << pos[2] << '\t';
-            DebugPrint(message.str());
-        MEMORY_CATCH(continue)
+        std::stringstream message;
+        message << "0x" << std::hex << std::setfill('0') << std::setw(5) << id << '\t';
+        message << typeName << '\t';
+        message << entityName << '\t';
+        message << pos[0] << '\t' << pos[1] << '\t' << pos[2] << '\t';
+        DebugPrint(message.str());
     }
 }
 
 bool Trainer::GetNoclip() {
-    MEMORY_TRY
-        return (bool) _memory->ReadData<int>({_noclipEnabled}, 1)[0];
-    MEMORY_CATCH(return false)
+    return (bool) _memory->ReadData<int>({_noclipEnabled}, 1)[0];
 }
 
 float Trainer::GetNoclipSpeed() {
-    MEMORY_TRY
-        return _memory->ReadData<float>({_noclipSpeed}, 1)[0];
-    MEMORY_CATCH(return 0.0f)
+    return _memory->ReadData<float>({_noclipSpeed}, 1)[0];
 }
 
 std::vector<float> Trainer::GetPlayerPos() {
-    MEMORY_TRY
-        return _memory->ReadData<float>({_globals, 0x18, 0x1E465 * 8, 0x24}, 3);
-    MEMORY_CATCH(return (std::vector<float>{0.0f, 0.0f, 0.0f}))
+    return _memory->ReadData<float>({_globals, 0x18, 0x1E465 * 8, 0x24}, 3);
 }
 
 std::vector<float> Trainer::GetCameraPos() {
-    MEMORY_TRY
-        return _memory->ReadData<float>({_cameraPos}, 3);
-    MEMORY_CATCH(return (std::vector<float>{0.0f, 0.0f, 0.0f}))
+    return _memory->ReadData<float>({_cameraPos}, 3);
 }
 
 std::vector<float> Trainer::GetCameraAng() {
-    MEMORY_TRY
-        return _memory->ReadData<float>({_cameraAng}, 2);
-    MEMORY_CATCH(return (std::vector<float>{0.0f, 0.0f}))
+    return _memory->ReadData<float>({_cameraAng}, 2);
 }
 
 float Trainer::GetFov() {
     if (_fovCurrent == 0) return 0.0f; // FOV is not available on some old patches
-    MEMORY_TRY
-        return _memory->ReadData<float>({_fovCurrent}, 1)[0];
-    MEMORY_CATCH(return 0.0f)
+    return _memory->ReadData<float>({_fovCurrent}, 1)[0];
 }
 
 bool Trainer::CanSave() {
-    MEMORY_TRY
-        return _memory->ReadData<byte>({_campaignState, 0x50}, 1)[0] == 0x00;
-    MEMORY_CATCH(return true)
+    return _memory->ReadData<byte>({_campaignState, 0x50}, 1)[0] == 0x00;
 }
 
 float Trainer::GetSprintSpeed() {
-    MEMORY_TRY
-        return _memory->ReadData<float>({_runSpeed}, 1)[0];
-    MEMORY_CATCH(return 2.0)
+    return _memory->ReadData<float>({_runSpeed}, 1)[0];
 }
 
 bool Trainer::GetInfiniteChallenge() {
-    MEMORY_TRY
-        return _memory->ReadData<byte>({_recordPlayerUpdate}, 1)[0] == 0x0F;
-    MEMORY_CATCH(return false)
+    return _memory->ReadData<byte>({_recordPlayerUpdate}, 1)[0] == 0x0F;
 }
 
 bool Trainer::GetConsoleOpen() {
-    MEMORY_TRY
-        return _memory->ReadData<float>(_consoleOpenTarget, 1)[0] == 1.0f;
-    MEMORY_CATCH(return false)
+    return _memory->ReadData<float>(_consoleOpenTarget, 1)[0] == 1.0f;
 }
 
 bool Trainer::GetRandomDoorsPractice() {
-    MEMORY_TRY
-        return _memory->ReadData<byte>({_doorOpen}, 1)[0] == 0x90;
-    MEMORY_CATCH(return false)
+    return _memory->ReadData<byte>({_doorOpen}, 1)[0] == 0x90;
 }
 
 void Trainer::SetNoclip(bool enabled) {
-    MEMORY_TRY
-        _memory->WriteData<byte>({_noclipEnabled}, {(byte) enabled});
-    MEMORY_CATCH(return)
+    _memory->WriteData<byte>({_noclipEnabled}, {static_cast<byte>(enabled)});
 }
 
 void Trainer::SetNoclipSpeed(float speed) {
     if (speed <= 0.0f) return;
-    MEMORY_TRY
-        _memory->WriteData<float>({_noclipSpeed}, {speed});
-    MEMORY_CATCH(return)
+    _memory->WriteData<float>({_noclipSpeed}, {speed});
 }
 
 void Trainer::SetPlayerPos(const std::vector<float>& pos) {
-    MEMORY_TRY
-        _memory->WriteData<float>({_globals, 0x18, 0x1E465 * 8, 0x24}, pos);
-    MEMORY_CATCH(return)
+    _memory->WriteData<float>({_globals, 0x18, 0x1E465 * 8, 0x24}, pos);
 }
 
 void Trainer::SetCameraPos(const std::vector<float>& pos) {
-    MEMORY_TRY
-        _memory->WriteData<float>({_cameraPos}, pos);
-    MEMORY_CATCH(return)
+    _memory->WriteData<float>({_cameraPos}, pos);
 }
 
 void Trainer::SetCameraAng(const std::vector<float>& ang) {
-    MEMORY_TRY
-        _memory->WriteData<float>({_cameraAng}, ang);
-    MEMORY_CATCH(return)
+    _memory->WriteData<float>({_cameraAng}, ang);
 }
 
 void Trainer::SetFov(float fov) {
     if (!_fovCurrent) return;
-    MEMORY_TRY
-        _memory->WriteData<float>({_fovCurrent}, {fov});
-    MEMORY_CATCH(return)
+    _memory->WriteData<float>({_fovCurrent}, {fov});
 }
 
 void Trainer::SetCanSave(bool canSave) {
-    MEMORY_TRY
-        _memory->WriteData<byte>({_campaignState, 0x50}, {canSave ? (byte) 0x00 : (byte) 0x01});
-    MEMORY_CATCH(return)
+    _memory->WriteData<byte>({_campaignState, 0x50}, {canSave ? (byte) 0x00 : (byte) 0x01});
 }
 
 void Trainer::SetSprintSpeed(float speed) {
     if (speed == 0) return;
-    float multiplier = speed / GetSprintSpeed();
+    float sprintSpeed = GetSprintSpeed();
+    if (sprintSpeed == 0.0f) return; // sanity check, to avoid an accidental div0
+    float multiplier = speed / sprintSpeed;
     if (multiplier == 1.0f) return;
-    MEMORY_TRY
-        _memory->WriteData<float>({_runSpeed}, {speed});
-        _memory->WriteData<float>({_walkAcceleration}, {_memory->ReadData<float>({_walkAcceleration}, 1)[0] * multiplier});
-        _memory->WriteData<float>({_walkDeceleration}, {_memory->ReadData<float>({_walkDeceleration}, 1)[0] * multiplier});
-    MEMORY_CATCH(return)
+    _memory->WriteData<float>({_runSpeed}, {speed});
+    _memory->WriteData<float>({_walkAcceleration}, {_memory->ReadData<float>({_walkAcceleration}, 1)[0] * multiplier});
+    _memory->WriteData<float>({_walkDeceleration}, {_memory->ReadData<float>({_walkDeceleration}, 1)[0] * multiplier});
 }
 
 void Trainer::SetConsoleOpen(bool enable) {
-    MEMORY_TRY
-        if (enable) {
-            _memory->WriteData<float>(_consoleWindowYB, {0.0f});
-            _memory->WriteData<float>(_consoleOpenTarget, {1.0f});
-        } else {
-            _memory->WriteData<float>(_consoleOpenTarget, {0.0f});
-        }
-    MEMORY_CATCH(return)
+    if (enable) {
+        _memory->WriteData<float>(_consoleWindowYB, {0.0f});
+        _memory->WriteData<float>(_consoleOpenTarget, {1.0f});
+    } else {
+        _memory->WriteData<float>(_consoleOpenTarget, {0.0f});
+    }
 }
 
-void Trainer::SaveCampaign()
-{
-    MEMORY_TRY
-        _memory->WriteData<byte>({_wantCampaignSave}, {0x01});
-        for (int i=0; i<100; i++) {
-            ::Sleep(10); // Wait a bit for the game to run
-            byte wantCampaignSave = _memory->ReadData<byte>({_wantCampaignSave}, 1)[0];
-            if (wantCampaignSave == 0x00) break;
-        }
-    MEMORY_CATCH(return)
+void Trainer::SaveCampaign() {
+    _memory->WriteData<byte>({_wantCampaignSave}, {0x01});
+    for (int i=0; i<100; i++) {
+        ::Sleep(10); // Wait a bit for the game to run
+        byte wantCampaignSave = _memory->ReadData<byte>({_wantCampaignSave}, 1)[0];
+        if (wantCampaignSave == 0x00) break;
+    }
 }
 
 void Trainer::SetInfiniteChallenge(bool enable) {
-    MEMORY_TRY
-        if (enable) {
-            // Jump over abort_speed_run, with NOP padding
-            _memory->WriteData<byte>({_recordPlayerUpdate}, {0xEB, 0x07, 0x66, 0x90});
-        } else {
-            // (original code) Load entity_manager into rcx
-            _memory->WriteData<byte>({_recordPlayerUpdate}, {0x48, 0x8B, 0x4B, 0x18});
-        }
-    MEMORY_CATCH(return)
+    if (enable) {
+        // Jump over abort_speed_run, with NOP padding
+        _memory->WriteData<byte>({_recordPlayerUpdate}, {0xEB, 0x07, 0x66, 0x90});
+    } else {
+        // (original code) Load entity_manager into rcx
+        _memory->WriteData<byte>({_recordPlayerUpdate}, {0x48, 0x8B, 0x4B, 0x18});
+    }
 }
 
 void Trainer::SetMainMenuColor(bool enable) {
-    MEMORY_TRY
-        if (enable) { // Set the main menu to red by *not* setting the green or blue component.
-            _memory->WriteData<byte>({_mainMenuColor}, {0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00}); // 8-byte NOP
-        } else { // Restore the original setting by copy/pasting from the block below.
-            std::vector<byte> code = _memory->ReadData<byte>({_mainMenuColor + 0x12}, 8);
-            _memory->WriteData<byte>({_mainMenuColor}, code);
-        }
-    MEMORY_CATCH(return)
+    if (enable) { // Set the main menu to red by *not* setting the green or blue component.
+        _memory->WriteData<byte>({_mainMenuColor}, {0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00}); // 8-byte NOP
+    } else { // Restore the original setting by copy/pasting from the block below.
+        std::vector<byte> code = _memory->ReadData<byte>({_mainMenuColor + 0x12}, 8);
+        _memory->WriteData<byte>({_mainMenuColor}, code);
+    }
 }
 
 void Trainer::SetRandomDoorsPractice(bool enable) {
@@ -468,51 +402,47 @@ void Trainer::SetRandomDoorsPractice(bool enable) {
     int onTargetOffset = _solvedTargetOffset + 0x10;
 
     // This block is up here because it needs to be rerun when we reload the game.
-    MEMORY_TRY
-        if (enable) {
-            // When the panel is solved, power nothing.
-            _memory->WriteData<int>({_globals, 0x18, 0x1983 * 8, idToPowerOffset}, {0x00000000});
-            _memory->WriteData<int>({_globals, 0x18, 0x1987 * 8, idToPowerOffset}, {0x00000000});
+    if (enable) {
+        // When the panel is solved, power nothing.
+        _memory->WriteData<int>({_globals, 0x18, 0x1983 * 8, idToPowerOffset}, {0x00000000});
+        _memory->WriteData<int>({_globals, 0x18, 0x1987 * 8, idToPowerOffset}, {0x00000000});
 
-            // To make sure that the panels are randomized the first time they power on, we mark them as having already been solved.
-            _memory->WriteData<float>({_globals, 0x18, 0x1983 * 8, _solvedTargetOffset}, {1.0f});
-            _memory->WriteData<float>({_globals, 0x18, 0x1987 * 8, _solvedTargetOffset}, {1.0f});
-        } else {
-            // When the panel is solved, power the double doors.
-            _memory->WriteData<int>({_globals, 0x18, 0x1983 * 8, idToPowerOffset}, {0x00017C68});
-            _memory->WriteData<int>({_globals, 0x18, 0x1987 * 8, idToPowerOffset}, {0x00017C68});
-        }
-    MEMORY_CATCH(return)
+        // To make sure that the panels are randomized the first time they power on, we mark them as having already been solved.
+        _memory->WriteData<float>({_globals, 0x18, 0x1983 * 8, _solvedTargetOffset}, {1.0f});
+        _memory->WriteData<float>({_globals, 0x18, 0x1987 * 8, _solvedTargetOffset}, {1.0f});
+    } else {
+        // When the panel is solved, power the double doors.
+        _memory->WriteData<int>({_globals, 0x18, 0x1983 * 8, idToPowerOffset}, {0x00017C68});
+        _memory->WriteData<int>({_globals, 0x18, 0x1987 * 8, idToPowerOffset}, {0x00017C68});
+    }
 
     // If the injection state matches the enable request, no futher action is needed.
     if (enable == GetRandomDoorsPractice()) return;
 
-    MEMORY_TRY
-        if (enable) {
-            // When the panel closes, always turn it off
-            _memory->WriteData<byte>({_doorClose}, {0x90, 0x90});
-            // When the panel opens, always reset it, and power it on.
-            _memory->WriteData<byte>({_doorOpen}, {0x90, 0x90});
-            // When the panel powers on, only randomize if it's solved
-            _memory->WriteData<int>({_powerOn}, {_solvedTargetOffset});
-            _memory->WriteData<byte>({_powerOn + 0x04}, {0x77, 0x18});
+    if (enable) {
+        // When the panel closes, always turn it off
+        _memory->WriteData<byte>({_doorClose}, {0x90, 0x90});
+        // When the panel opens, always reset it, and power it on.
+        _memory->WriteData<byte>({_doorOpen}, {0x90, 0x90});
+        // When the panel powers on, only randomize if it's solved
+        _memory->WriteData<int>({_powerOn}, {_solvedTargetOffset});
+        _memory->WriteData<byte>({_powerOn + 0x04}, {0x77, 0x18});
 
-            // When the panel powers on, mark it as not solved
-            _memory->WriteData<byte>({_powerOn + 0x3B}, {
-                0x48, 0x63, 0x00, // movsxd rax, dword ptr [rax]
-                0x66, 0xC7, 0x87, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // mov word ptr ds:[rdi + <offset>], 0x00
-            });
-            // Note: We're writing to this register (which is a float!) as a word, since we don't have enough instruction space.
-            // This float should only ever be set to 0x3F800000 (1.0f), though -- so we can just write to the high bits.
-            _memory->WriteData<int>({_powerOn + 0x41}, {_solvedTargetOffset + 2});
-        } else {
-            // When the panel closes, if the puzzle has been solved, turn it off
-            _memory->WriteData<byte>({_doorClose}, {0x76, 0x08});
-            // When the panel opens, if the puzzle has not been solved, reset it and power it on
-            _memory->WriteData<byte>({_doorOpen}, {0x76, 0x10});
-            // When the panel powers on, only randomize if it's off
-            _memory->WriteData<int>({_powerOn}, {onTargetOffset});
-            _memory->WriteData<byte>({_powerOn + 0x04}, {0x76, 0x18});
-        }
-    MEMORY_CATCH(return)
+        // When the panel powers on, mark it as not solved
+        _memory->WriteData<byte>({_powerOn + 0x3B}, {
+            0x48, 0x63, 0x00, // movsxd rax, dword ptr [rax]
+            0x66, 0xC7, 0x87, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // mov word ptr ds:[rdi + <offset>], 0x00
+        });
+        // Note: We're writing to this register (which is a float!) as a word, since we don't have enough instruction space.
+        // This float should only ever be set to 0x3F800000 (1.0f), though -- so we can just write to the high bits.
+        _memory->WriteData<int>({_powerOn + 0x41}, {_solvedTargetOffset + 2});
+    } else {
+        // When the panel closes, if the puzzle has been solved, turn it off
+        _memory->WriteData<byte>({_doorClose}, {0x76, 0x08});
+        // When the panel opens, if the puzzle has not been solved, reset it and power it on
+        _memory->WriteData<byte>({_doorOpen}, {0x76, 0x10});
+        // When the panel powers on, only randomize if it's off
+        _memory->WriteData<int>({_powerOn}, {onTargetOffset});
+        _memory->WriteData<byte>({_powerOn + 0x04}, {0x76, 0x18});
+    }
 }

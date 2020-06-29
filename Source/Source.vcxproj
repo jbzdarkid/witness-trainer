@@ -163,7 +163,6 @@
   <ItemGroup>
     <ClInclude Include="DebugUtils.h" />
     <ClInclude Include="Memory.h" />
-    <ClInclude Include="MemoryException.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Panels.h" />
     <ClInclude Include="Trainer.h" />
