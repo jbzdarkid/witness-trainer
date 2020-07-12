@@ -29,6 +29,7 @@
 // - There's a potential race condition where we notice we're loading in the midst of a heartbeat.
 //   Actually, there isn't, but there should be. Stop using SendMessage, switch back to PostMessage.
 //   Then, we want to detect loading, and block (I guess all other) memory reads during that time. Not sure how the hell we do that.
+//   Actually, this is insane. The load can happen pretty much anywhere -- it's a general race condition. Might have to wontfix this.
 
 // Feature requests:
 // - show collision, somehow
