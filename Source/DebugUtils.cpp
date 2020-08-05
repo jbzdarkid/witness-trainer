@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <ctime>
 #include <csignal>
 #include <ImageHlp.h>
 #include <Psapi.h>
@@ -53,16 +54,15 @@ std::wstring DebugUtils::GetStackTrace() {
 }
 
 std::wstring DebugUtils::version = L"(unknown)"; // Slight hack. Will be overwritten by main during startup.
-bool showingAssert = false;
+time_t lastShownAssert = ~0ULL; // MAXINT
 void DebugUtils::ShowAssertDialogue() {
-    // In case there's an assert firing *within* the WndProc, then we need to make sure not to keep firing, or we'll pop up an infinite loop of messages.
-    if (showingAssert) return;
-    showingAssert = true;
+    // Only show an assert every 30 seconds. This prevents assert loops inside the WndProc, as well as adding a grace period after an assert fires.
+    if (time(nullptr) - lastShownAssert < 30) return;
+    lastShownAssert = time(nullptr);
     std::wstring msg = L"WitnessTrainer version " + version + L" has encountered an error.\n";
     msg += L"Please press Control C to copy this error, and paste it to darkid.\n";
     msg += GetStackTrace();
     MessageBox(NULL, msg.c_str(), L"WitnessTrainer encountered an error.", MB_TASKMODAL | MB_ICONHAND | MB_OK | MB_SETFOREGROUND);
-    showingAssert = false;
 }
 
 uint64_t DebugUtils::GetBaseAddress(HANDLE process) {

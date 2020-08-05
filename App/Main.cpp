@@ -26,13 +26,9 @@
 #define CALLSTACK 0x418
 
 // Bugs:
-// - There's a potential race condition where we notice we're loading in the midst of a heartbeat.
-//   Actually, there isn't, but there should be. Stop using SendMessage, switch back to PostMessage.
-//   Then, we want to detect loading, and block (I guess all other) memory reads during that time. Not sure how the hell we do that.
-//   Actually, this is insane. The load can happen pretty much anywhere -- it's a general race condition. Might have to wontfix this.
-// - Open saves is broken.
-// - We might start spamming asserts, now -- there needs to be a 'grace period', maybe where we don't show a dialogue?
 // - Position is flickering. Only update on change, please. Or maybe only update visually every X calls?
+// - Active panel is flickering too -- only update state string?
+// - And FOV. Of course.
 
 // Feature requests:
 // - show collision, somehow
@@ -240,8 +236,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         else g_witnessProc->BringToFront();
     } else if (command == OPEN_SAVES) {
         PWSTR outPath;
-        size_t size = SHGetKnownFolderPath(FOLDERID_RoamingAppData, SHGFP_TYPE_CURRENT, NULL, &outPath);
-        std::wstring savesFolder(outPath, size);
+        SHGetKnownFolderPath(FOLDERID_RoamingAppData, SHGFP_TYPE_CURRENT, NULL, &outPath);
+        std::wstring savesFolder = outPath;
+        CoTaskMemFree(outPath);
         savesFolder += L"\\The Witness";
         ShellExecute(NULL, L"open", savesFolder.c_str(), NULL, NULL, SW_SHOWDEFAULT);
     } else if (!g_trainer) {
