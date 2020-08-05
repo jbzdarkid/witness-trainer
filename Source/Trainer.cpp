@@ -132,6 +132,9 @@ int Trainer::GetActivePanel() {
 }
 
 std::shared_ptr<Trainer::EntityData> Trainer::GetEntityData(int id) {
+    int64_t entity = _memory->ReadData<int64_t>({_globals, 0x18, id * 8}, 1)[0];
+    if (entity == 0) return nullptr; // Entity is not defined, manager is likely being re-allocated due to load.
+
     std::string typeName = _memory->ReadString({_globals, 0x18, id * 8, 0x08, 0x08});
     if (typeName == "Machine_Panel") return GetPanelData(id);
     if (typeName == "Pattern_Point") return GetEPData(id);
