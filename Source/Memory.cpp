@@ -23,7 +23,11 @@ void Memory::StartHeartbeat(HWND window, UINT message) {
         SetThreadDescription(GetCurrentThread(), L"Heartbeat");
         while (sharedThis->_threadActive) {
             sharedThis->Heartbeat(window, message);
+#ifdef NDEBUG
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+#else // Induce more stress in debug, to catch errors more easily.
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
+#endif
         }
     });
     _thread.detach();
@@ -234,8 +238,8 @@ std::string Memory::ReadString(std::vector<__int64> offsets) {
     std::string name(tmp.begin(), tmp.end());
     // Remove garbage past the null terminator (we read 100 chars, but the string was probably shorter)
     name.resize(strnlen_s(tmp.data(), tmp.size()));
-    if (name.size() < tmp.size()) {
-        DebugPrint("Buffer did not contain a null terminator, ergo this string is longer than 100 chars. Please change MAX_STRING.");
+    if (name.size() == tmp.size()) {
+        DebugPrint("Buffer did not get shrunk, ergo this string is longer than 100 chars. Please change MAX_STRING.");
         assert(false);
     }
     return name;

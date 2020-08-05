@@ -30,6 +30,9 @@
 //   Actually, there isn't, but there should be. Stop using SendMessage, switch back to PostMessage.
 //   Then, we want to detect loading, and block (I guess all other) memory reads during that time. Not sure how the hell we do that.
 //   Actually, this is insane. The load can happen pretty much anywhere -- it's a general race condition. Might have to wontfix this.
+// - Open saves is broken.
+// - We might start spamming asserts, now -- there needs to be a 'grace period', maybe where we don't show a dialogue?
+// - Position is flickering. Only update on change, please. Or maybe only update visually every X calls?
 
 // Feature requests:
 // - show collision, somehow
