@@ -62,19 +62,29 @@ std::vector<float> g_savedCameraPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> g_savedCameraAng = {0.0f, 0.0f};
 int previousPanel = -1;
 
+#define CHECK_LAST_ARGS(...) \
+do { \
+    static auto lastArgs = std::tuple{##__VA_ARGS__}; \
+    auto newArgs = std::tuple{##__VA_ARGS__}; \
+    if (lastArgs == newArgs) return; \
+    lastArgs = newArgs; \
+} while(0)
+
 void SetPosAndAngText(const std::vector<float>& pos, const std::vector<float>& ang, HWND hwnd) {
+    CHECK_LAST_ARGS(pos, ang, hwnd);
     assert(pos.size() == 3);
     assert(ang.size() == 2);
     std::wstring text(65, '\0');
     swprintf_s(text.data(), text.size() + 1, L"X %8.3f\nY %8.3f\nZ %8.3f\n\u0398 %8.5f\n\u03A6 %8.5f", pos[0], pos[1], pos[2], ang[0], ang[1]);
-    SetWindowText(hwnd, text.c_str());
+    SetWindowTextW(hwnd, text.c_str());
 }
 
 void SetFloatText(float f, HWND hwnd) {
+    CHECK_LAST_ARGS(f, hwnd);
     std::wstring text(10, '\0');
     int size = swprintf_s(text.data(), text.size() + 1, L"%.8g", f);
     text.resize(size);
-    SetWindowText(hwnd, text.c_str());
+    SetWindowTextW(hwnd, text.c_str());
 }
 
 std::wstring GetWindowString(HWND hwnd) {
