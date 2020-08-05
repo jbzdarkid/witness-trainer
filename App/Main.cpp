@@ -25,11 +25,6 @@
 #define START_TIMER 0x417
 #define CALLSTACK 0x418
 
-// Bugs:
-// - Position is flickering. Only update on change, please. Or maybe only update visually every X calls?
-// - Active panel is flickering too -- only update state string?
-// - And FOV. Of course.
-
 // Feature requests:
 // - show collision, somehow
 // - Icon for trainer
@@ -62,29 +57,56 @@ std::vector<float> g_savedCameraPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> g_savedCameraAng = {0.0f, 0.0f};
 int previousPanel = -1;
 
-#define CHECK_LAST_ARGS(...) \
-do { \
-    static auto lastArgs = std::tuple{##__VA_ARGS__}; \
-    auto newArgs = std::tuple{##__VA_ARGS__}; \
-    if (lastArgs == newArgs) return; \
-    lastArgs = newArgs; \
-} while(0)
+#define SetWindowTextA(...) static_assert(false, "Call SetStringText instead of SetWindowTextA");
+#define SetWindowTextW(...) static_assert(false, "Call SetStringText instead of SetWindowTextW");
+#undef SetWindowText
+#define SetWindowText(...) static_assert(false, "Call SetStringText instead of SetWindowText");
 
-void SetPosAndAngText(const std::vector<float>& pos, const std::vector<float>& ang, HWND hwnd) {
-    CHECK_LAST_ARGS(pos, ang, hwnd);
+void SetStringText(HWND hwnd, const std::string& text) {
+    static std::unordered_map<HWND, std::string> hwndText;
+    auto search = hwndText.find(hwnd);
+    if (search != hwndText.end()) {
+        if (search->second == text) return;
+        search->second = text;
+    } else {
+        hwndText[hwnd] = text;
+    }
+
+#pragma push_macro("SetWindowTextA")
+#undef SetWindowTextA
+    SetWindowTextA(hwnd, text.c_str());
+#pragma pop_macro("SetWindowTextA")
+}
+
+void SetStringText(HWND hwnd, const std::wstring& text) {
+    static std::unordered_map<HWND, std::wstring> hwndText;
+    auto search = hwndText.find(hwnd);
+    if (search != hwndText.end()) {
+        if (search->second == text) return;
+        search->second = text;
+    } else {
+        hwndText[hwnd] = text;
+    }
+
+#pragma push_macro("SetWindowTextW")
+#undef SetWindowTextW
+    SetWindowTextW(hwnd, text.c_str());
+#pragma pop_macro("SetWindowTextW")
+}
+
+void SetPosAndAngText(HWND hwnd, const std::vector<float>& pos, const std::vector<float>& ang) {
     assert(pos.size() == 3);
     assert(ang.size() == 2);
     std::wstring text(65, '\0');
     swprintf_s(text.data(), text.size() + 1, L"X %8.3f\nY %8.3f\nZ %8.3f\n\u0398 %8.5f\n\u03A6 %8.5f", pos[0], pos[1], pos[2], ang[0], ang[1]);
-    SetWindowTextW(hwnd, text.c_str());
+    SetStringText(hwnd, text);
 }
 
-void SetFloatText(float f, HWND hwnd) {
-    CHECK_LAST_ARGS(f, hwnd);
+void SetFloatText(HWND hwnd, float f) {
     std::wstring text(10, '\0');
     int size = swprintf_s(text.data(), text.size() + 1, L"%.8g", f);
     text.resize(size);
-    SetWindowTextW(hwnd, text.c_str());
+    SetStringText(hwnd, text);
 }
 
 std::wstring GetWindowString(HWND hwnd) {
@@ -100,28 +122,34 @@ float GetWindowFloat(HWND hwnd) {
     return wcstof(GetWindowString(hwnd).c_str(), nullptr);
 }
 
+// We can do 3 different things in this function:
+// activePanel != -1, previousPanel != activePanel -> Started solving a panel, show information about it
+// activePanel != -1, previousPanel == activePanel -> Actively solving a panel, show information about it
+// activePanel == -1, previousPanel != -1 -> Stopped solving a panel, show information about the previous panel.
 void SetActivePanel(int activePanel) {
     if (activePanel != -1) previousPanel = activePanel;
 
-    std::wstringstream ss;
+    std::stringstream ss;
     if (activePanel != -1) {
-        ss << L"Active Panel:";
+        ss << "Active Panel:";
     } else if (previousPanel != -1) {
-        ss << L"Previous Panel:";
+        ss << "Previous Panel:";
     } else {
-        ss << L"No Active Panel";
+        ss << "No Active Panel";
     }
     if (previousPanel != -1) {
-        ss << L" 0x" << std::hex << std::setfill(L'0') << std::setw(5) << previousPanel;
+        ss << " 0x" << std::hex << std::setfill('0') << std::setw(5) << previousPanel;
     }
-    SetWindowText(g_activePanel, ss.str().c_str());
+    SetStringText(g_activePanel, ss.str());
 
-    if (previousPanel != -1) {
-        if (g_trainer) {
-            std::shared_ptr<Trainer::EntityData> panelData = g_trainer->GetEntityData(previousPanel);
-            if (!panelData) return;
-            SetWindowTextA(g_panelName, panelData->name.c_str());
-            SetWindowTextA(g_panelState, panelData->state.c_str());
+    if (g_trainer) {
+        std::shared_ptr<Trainer::EntityData> panelData = g_trainer->GetEntityData(previousPanel);
+        if (!panelData) {
+            SetStringText(g_panelName, "");
+            SetStringText(g_panelState, "");
+        } else {
+            SetStringText(g_panelName, panelData->name);
+            SetStringText(g_panelState, panelData->state);
             // TODO(Future): draw path with GDI
         }
     }
@@ -161,7 +189,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 // Don't discard any settings, just free the trainer.
                 if (g_trainer) {
                     g_trainer = nullptr;
-                    SetWindowText(g_activateGame, L"Launch game");
+                    SetStringText(g_activateGame, L"Launch game");
                 }
                 break;
             case ProcStatus::Reload:
@@ -183,22 +211,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 g_trainer->SetRandomDoorsPractice(IsDlgButtonChecked(hwnd, DOORS_PRACTICE));
                 g_trainer->SetInfiniteChallenge(IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE));
                 g_trainer->SetConsoleOpen(IsDlgButtonChecked(hwnd, OPEN_CONSOLE));
-                SetWindowText(g_activateGame, L"Switch to game");
+                SetStringText(g_activateGame, L"Switch to game");
                 break;
             case ProcStatus::Running:
                 if (!g_trainer) {
                     // Process was already running, and we just started. Load settings from the game.
                     g_trainer = Trainer::Create(g_witnessProc);
                     if (!g_trainer) break;
-                    SetFloatText(g_trainer->GetNoclipSpeed(), g_noclipSpeed);
-                    SetFloatText(g_trainer->GetSprintSpeed(), g_sprintSpeed);
-                    SetFloatText(g_trainer->GetFov(), g_fovCurrent);
+                    SetFloatText(g_noclipSpeed, g_trainer->GetNoclipSpeed());
+                    SetFloatText(g_sprintSpeed, g_trainer->GetSprintSpeed());
+                    SetFloatText(g_fovCurrent, g_trainer->GetFov());
                     CheckDlgButton(hwnd, NOCLIP_ENABLED, g_trainer->GetNoclip());
                     CheckDlgButton(hwnd, CAN_SAVE, g_trainer->CanSave());
                     CheckDlgButton(hwnd, DOORS_PRACTICE, g_trainer->GetRandomDoorsPractice());
                     CheckDlgButton(hwnd, INFINITE_CHALLENGE, g_trainer->GetInfiniteChallenge());
                     CheckDlgButton(hwnd, OPEN_CONSOLE, g_trainer->GetConsoleOpen());
-                    SetWindowText(g_activateGame, L"Switch to game");
+                    SetStringText(g_activateGame, L"Switch to game");
                 } else {
                     // Process was already running, and so were we (this recurs every heartbeat). Enforce settings.
                     g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
@@ -207,12 +235,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     if (g_hwnd == GetForegroundWindow()) {
                         g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
                     } else {
-                        SetFloatText(g_trainer->GetFov(), g_fovCurrent);
+                        SetFloatText(g_fovCurrent, g_trainer->GetFov());
                     }
                 }
 
                 // Some settings are always sourced from the game, since they are not editable in the trainer.
-                SetPosAndAngText(g_trainer->GetCameraPos(), g_trainer->GetCameraAng(), g_currentPos);
+                SetPosAndAngText(g_currentPos, g_trainer->GetCameraPos(), g_trainer->GetCameraAng());
                 SetActivePanel(g_trainer->GetActivePanel());
                 break;
             }
@@ -268,7 +296,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     else if (command == SAVE_POS) {
         g_savedCameraPos = g_trainer->GetCameraPos();
         g_savedCameraAng = g_trainer->GetCameraAng();
-        SetPosAndAngText(g_savedCameraPos, g_savedCameraAng, g_savedPos);
+        SetPosAndAngText(g_savedPos, g_savedCameraPos, g_savedCameraAng);
     } else if (command == LOAD_POS) {
         g_trainer->SetCameraPos(g_savedCameraPos);
         g_trainer->SetCameraAng(g_savedCameraAng);
@@ -277,7 +305,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         auto playerPos = g_savedCameraPos;
         playerPos[2] -= 1.69f;
         g_trainer->SetPlayerPos(playerPos);
-        SetPosAndAngText(g_savedCameraPos, g_savedCameraAng, g_currentPos);
+        SetPosAndAngText(g_currentPos, g_savedCameraPos, g_savedCameraAng);
     }
     return DefWindowProc(hwnd, message, wParam, lParam);
 }
@@ -375,7 +403,7 @@ void CreateComponents() {
     CreateButton(x, y, 100, L"Save Position", SAVE_POS, L"Control-P");
     RegisterHotKey(g_hwnd, SAVE_POS, MOD_NOREPEAT | MOD_CONTROL, 'P');
     g_currentPos = CreateLabel(x + 5, y, 90, 80);
-    SetPosAndAngText({ 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f }, g_currentPos);
+    SetPosAndAngText(g_currentPos, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f });
 
     // Column 1a
     x = 110;
@@ -383,7 +411,7 @@ void CreateComponents() {
     CreateButton(x, y, 100, L"Load Position", LOAD_POS, L"Shift-Control-P");
     RegisterHotKey(g_hwnd, LOAD_POS, MOD_NOREPEAT | MOD_SHIFT | MOD_CONTROL, 'P');
     g_savedPos = CreateLabel(x + 5, y, 90, 80);
-    SetPosAndAngText({ 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f }, g_savedPos);
+    SetPosAndAngText(g_savedPos, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f });
 
     // Column 2
     x = 270;
