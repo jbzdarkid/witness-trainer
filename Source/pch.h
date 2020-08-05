@@ -7,6 +7,8 @@
         ShowAssertDialogue(); \
     }
 
+#define _HAS_EXCEPTIONS 0
+
 // We include the debug headers early, so we can override the assert macros.
 #include <crtdbg.h>
 #undef _RPT_BASE
