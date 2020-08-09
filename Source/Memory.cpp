@@ -150,6 +150,7 @@ void Memory::Initialize() {
     }
 
     // Clear sigscans to avoid duplication (or leftover sigscans from the trainer)
+    assert(_sigScans.size() == 0);
     _sigScans.clear();
 
     AddSigScan({0x74, 0x41, 0x48, 0x85, 0xC0, 0x74, 0x04, 0x48, 0x8B, 0x48, 0x10}, [&](__int64 offset, int index, const std::vector<byte>& data) {
@@ -215,18 +216,22 @@ size_t Memory::ExecuteSigScans() {
             sigScan.found = true;
             notFound--;
         }
-        if (notFound == 0) return 0;
+        if (notFound == 0) break;
     }
 
-    DebugPrint("Failed to find " + std::to_string(notFound) + " sigscans:");
-    for (const auto& [scanBytes, sigScan] : _sigScans) {
-        if (sigScan.found) continue;
-        std::stringstream ss;
-        for (const auto b : scanBytes) {
-            ss << "0x" << std::setw(2) << std::setfill('0') << std::hex << std::uppercase << static_cast<int16_t>(b) << ", ";
+    if (notFound > 0) {
+        DebugPrint("Failed to find " + std::to_string(notFound) + " sigscans:");
+        for (const auto& [scanBytes, sigScan] : _sigScans) {
+            if (sigScan.found) continue;
+            std::stringstream ss;
+            for (const auto b : scanBytes) {
+                ss << "0x" << std::setw(2) << std::setfill('0') << std::hex << std::uppercase << static_cast<int16_t>(b) << ", ";
+            }
+            DebugPrint(ss.str());
         }
-        DebugPrint(ss.str());
     }
+
+    _sigScans.clear();
     return notFound;
 }
 
