@@ -46,7 +46,7 @@ void Memory::Heartbeat(HWND window, UINT message) {
         Initialize(); // Initialize promises to set _handle only on success
         if (!_handle) {
             // Couldn't initialize, definitely not running
-            SendMessage(window, message, ProcStatus::NotRunning, NULL);
+            PostMessage(window, message, ProcStatus::NotRunning, NULL);
             return;
         }
     }
@@ -58,7 +58,7 @@ void Memory::Heartbeat(HWND window, UINT message) {
         _computedAddresses.clear();
         _handle = nullptr;
 
-        SendMessage(window, message, ProcStatus::Stopped, NULL);
+        PostMessage(window, message, ProcStatus::Stopped, NULL);
         // Wait for the process to fully close; otherwise we might accidentally re-attach to it.
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         return;
@@ -67,7 +67,7 @@ void Memory::Heartbeat(HWND window, UINT message) {
     __int64 entityManager = ReadData<__int64>({_globals}, 1)[0];
     if (entityManager == 0) {
         // Game hasn't loaded yet, we're still sitting on the launcher
-        SendMessage(window, message, ProcStatus::NotRunning, NULL);
+        PostMessage(window, message, ProcStatus::NotRunning, NULL);
         return;
     }
 
@@ -117,7 +117,7 @@ void Memory::Heartbeat(HWND window, UINT message) {
         return;
     }
 
-    SendMessage(window, message, _nextStatus, NULL);
+    PostMessage(window, message, _nextStatus, NULL);
     _nextStatus = ProcStatus::Running;
 }
 
@@ -256,12 +256,12 @@ std::string Memory::ReadString(std::vector<__int64> offsets) {
 void Memory::ReadDataInternal(void* buffer, const std::vector<__int64>& offsets, size_t bufferSize) {
     assert(bufferSize > 0);
     if (!_handle) return;
-    void* computedOffset = ComputeOffset(offsets);
+    uintptr_t computedOffset = ComputeOffset(offsets);
     // Ensure that the buffer size does not cause a read across a page boundary.
-    if (bufferSize > 0x1000 - ((unsigned __int64)computedOffset & 0x0000FFF)) {
-        bufferSize = 0x1000 - ((unsigned __int64)computedOffset & 0x0000FFF);
+    if (bufferSize > 0x1000 - (computedOffset & 0x0000FFF)) {
+        bufferSize = 0x1000 - (computedOffset & 0x0000FFF);
     }
-    if (!ReadProcessMemory(_handle, computedOffset, buffer, bufferSize, nullptr)) {
+    if (!ReadProcessMemory(_handle, (void*)computedOffset, buffer, bufferSize, nullptr)) {
         DebugPrint("Failed to read process memory.");
         assert(false);
     }
@@ -270,13 +270,13 @@ void Memory::ReadDataInternal(void* buffer, const std::vector<__int64>& offsets,
 void Memory::WriteDataInternal(const void* buffer, const std::vector<__int64>& offsets, size_t bufferSize) {
     assert(bufferSize > 0);
     if (!_handle) return;
-    if (!WriteProcessMemory(_handle, ComputeOffset(offsets), buffer, bufferSize, nullptr)) {
+    if (!WriteProcessMemory(_handle, (void*)ComputeOffset(offsets), buffer, bufferSize, nullptr)) {
         DebugPrint("Failed to write process memory.");
         assert(false);
     }
 }
 
-void* Memory::ComputeOffset(std::vector<__int64> offsets) {
+uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets) {
     assert(offsets.size() > 0);
     assert(offsets.front() != 0);
 
@@ -311,5 +311,5 @@ void* Memory::ComputeOffset(std::vector<__int64> offsets) {
         _computedAddresses[cumulativeAddress] = computedAddress;
         cumulativeAddress = computedAddress;
     }
-    return reinterpret_cast<void*>(cumulativeAddress + final_offset);
+    return cumulativeAddress + final_offset;
 }

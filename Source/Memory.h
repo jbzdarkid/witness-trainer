@@ -52,7 +52,7 @@ private:
 
     void ReadDataInternal(void* buffer, const std::vector<__int64>& offsets, size_t bufferSize);
     void WriteDataInternal(const void* buffer, const std::vector<__int64>& offsets, size_t bufferSize);
-    void* ComputeOffset(std::vector<__int64> offsets);
+    uintptr_t ComputeOffset(std::vector<__int64> offsets);
 
     // Parts of the constructor / StartHeartbeat
     std::wstring _processName;

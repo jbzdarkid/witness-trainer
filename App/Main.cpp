@@ -25,6 +25,9 @@
 #define START_TIMER 0x417
 #define CALLSTACK 0x418
 
+// Bugs:
+// - Queue a bunch of Exports, then quit the game.
+
 // Feature requests:
 // - show collision, somehow
 // - Icon for trainer
