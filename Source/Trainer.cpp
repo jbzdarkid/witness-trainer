@@ -135,15 +135,13 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetEntityData(int id) {
     if (id == -1) return nullptr;
     int64_t entity = _memory->ReadData<int64_t>({_globals, 0x18, id * 8}, 1)[0];
     if (entity == 0) return nullptr; // Entity is not defined, manager is likely being re-allocated due to load.
+    int readId = _memory->ReadData<int>({_globals, 0x18, id * 8, 0x10}, 1)[0];
+    if (id != (readId - 1)) return nullptr; // Entity is no longer a valid object (or is not the entity we expected to read)
 
     std::string typeName = _memory->ReadString({_globals, 0x18, id * 8, 0x08, 0x08});
     if (typeName == "Machine_Panel") return GetPanelData(id);
     if (typeName == "Pattern_Point") return GetEPData(id);
-
-    int readId = _memory->ReadData<int>({_globals, 0x18, id * 8, 0x10}, 1)[0];
-    assert(id == (readId - 1));
-    DebugPrint("Don't know how to get data for entity type: " + typeName);
-    assert(false);
+    // Unknown typeName, assume memory was freed.
     return nullptr;
 }
 
