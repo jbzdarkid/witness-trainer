@@ -257,7 +257,7 @@ void Trainer::ExportEntities() {
     int32_t maxId = _memory->ReadData<int>({_globals, 0x14}, 1)[0];
 
     DebugPrint("Entity ID\tType\tName\t     X\t     Y\t     Z");
-    for (int32_t id = 0; id < maxId; id++) {
+    for (int32_t id = 1; id < maxId; id++) {
         int32_t entity = _memory->ReadData<int>({_globals, 0x18, id * 8}, 1)[0];
         if (entity == 0) continue;
         std::string typeName = _memory->ReadString({_globals, 0x18, id * 8, 0x08, 0x08});

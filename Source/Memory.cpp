@@ -238,7 +238,10 @@ size_t Memory::ExecuteSigScans() {
 #define MAX_STRING 100
 // Technically this is ReadChar*, but this name makes more sense with the return type.
 std::string Memory::ReadString(std::vector<__int64> offsets) {
-    offsets.push_back(0L); // Assume we were passed a char*, this is the actual char[]
+    __int64 charAddr = ReadData<__int64>(offsets, 1)[0];
+    if (charAddr == 0) return ""; // Handle nullptr for strings
+
+    offsets.push_back(0L); // Dereference the char* to a char[]
     std::vector<char> tmp = ReadData<char>(offsets, MAX_STRING);
     std::string name(tmp.begin(), tmp.end());
     // Remove garbage past the null terminator (we read 100 chars, but the string was probably shorter)
@@ -253,7 +256,12 @@ std::string Memory::ReadString(std::vector<__int64> offsets) {
 void Memory::ReadDataInternal(void* buffer, const std::vector<__int64>& offsets, size_t bufferSize) {
     assert(bufferSize > 0);
     if (!_handle) return;
-    if (!ReadProcessMemory(_handle, ComputeOffset(offsets), buffer, bufferSize, nullptr)) {
+    void* computedOffset = ComputeOffset(offsets);
+    // Ensure that the buffer size does not cause a read across a page boundary.
+    if (bufferSize > 0x1000 - ((unsigned __int64)computedOffset & 0x0000FFF)) {
+        bufferSize = 0x1000 - ((unsigned __int64)computedOffset & 0x0000FFF);
+    }
+    if (!ReadProcessMemory(_handle, computedOffset, buffer, bufferSize, nullptr)) {
         DebugPrint("Failed to read process memory.");
         assert(false);
     }
