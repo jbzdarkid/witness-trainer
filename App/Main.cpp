@@ -252,64 +252,72 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             return DefWindowProc(hwnd, message, wParam, lParam);
     }
 
-    WORD command = LOWORD(wParam);
-    if (command == INFINITE_CHALLENGE)      ToggleOption(INFINITE_CHALLENGE, &Trainer::SetInfiniteChallenge);
-    else if (command == DOORS_PRACTICE)     ToggleOption(DOORS_PRACTICE, &Trainer::SetRandomDoorsPractice);
-    else if (command == OPEN_CONSOLE)       ToggleOption(OPEN_CONSOLE, &Trainer::SetConsoleOpen);
-    else if (command == CALLSTACK)          DebugUtils::RegenerateCallstack(GetWindowString(g_fovCurrent));
-    else if (command == NOCLIP_ENABLED) {
-        // Fix up the player position when exiting noclip
-        if (IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED) && g_trainer) {
-            // The player position is from the feet, not the eyes, so we have to adjust slightly.
-            auto playerPos = g_trainer->GetCameraPos();
-            playerPos[2] -= 1.69f;
-            g_trainer->SetPlayerPos(playerPos);
-        }
-        ToggleOption(NOCLIP_ENABLED, &Trainer::SetNoclip);
-    } else if (command == CAN_SAVE) {
-        // Request one last save before disabling saving
-        if (IsDlgButtonChecked(g_hwnd, CAN_SAVE) && g_trainer) {
-            g_trainer->SaveCampaign();
-        }
-        ToggleOption(CAN_SAVE, &Trainer::SetCanSave);
-    } else if (command == ACTIVATE_GAME) {
-        if (!g_trainer) ShellExecute(NULL, L"open", L"steam://rungameid/210970", NULL, NULL, SW_SHOWDEFAULT);
-        else g_witnessProc->BringToFront();
-    } else if (command == OPEN_SAVES) {
-        PWSTR outPath;
-        SHGetKnownFolderPath(FOLDERID_RoamingAppData, SHGFP_TYPE_CURRENT, NULL, &outPath);
-        std::wstring savesFolder = outPath;
-        CoTaskMemFree(outPath);
-        savesFolder += L"\\The Witness";
-        ShellExecute(NULL, L"open", savesFolder.c_str(), NULL, NULL, SW_SHOWDEFAULT);
-    } else if (!g_trainer) {
-        // All other messages need the trainer to be live in order to execute.
-        if (HIWORD(wParam) == 0) { // Initiated by the user
+    // All commands should execute on a background thread, to avoid hanging the UI.
+    std::thread t([trainer = g_trainer, wParam] {
+#pragma warning (suppress: 4101)
+        void* g_trainer; // Prevent access to the global variable in this scope
+        SetThreadDescription(GetCurrentThread(), L"Command Helper");
+
+        WORD command = LOWORD(wParam);
+        if (command == INFINITE_CHALLENGE)      ToggleOption(INFINITE_CHALLENGE, &Trainer::SetInfiniteChallenge);
+        else if (command == DOORS_PRACTICE)     ToggleOption(DOORS_PRACTICE, &Trainer::SetRandomDoorsPractice);
+        else if (command == OPEN_CONSOLE)       ToggleOption(OPEN_CONSOLE, &Trainer::SetConsoleOpen);
+        else if (command == CALLSTACK)          DebugUtils::RegenerateCallstack(GetWindowString(g_fovCurrent));
+        else if (command == NOCLIP_ENABLED) {
+            // Fix up the player position when exiting noclip
+            if (IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED) && trainer) {
+                // The player position is from the feet, not the eyes, so we have to adjust slightly.
+                auto playerPos = trainer->GetCameraPos();
+                playerPos[2] -= 1.69f;
+                trainer->SetPlayerPos(playerPos);
+            }
+            ToggleOption(NOCLIP_ENABLED, &Trainer::SetNoclip);
+        } else if (command == CAN_SAVE) {
+            // Request one last save before disabling saving
+            if (IsDlgButtonChecked(g_hwnd, CAN_SAVE) && trainer) {
+                trainer->SaveCampaign();
+            }
+            ToggleOption(CAN_SAVE, &Trainer::SetCanSave);
+        } else if (command == ACTIVATE_GAME) {
+            if (!trainer) ShellExecute(NULL, L"open", L"steam://rungameid/210970", NULL, NULL, SW_SHOWDEFAULT);
+            else g_witnessProc->BringToFront();
+        } else if (command == OPEN_SAVES) {
+            PWSTR outPath;
+            SHGetKnownFolderPath(FOLDERID_RoamingAppData, SHGFP_TYPE_CURRENT, NULL, &outPath);
+            std::wstring savesFolder = outPath;
+            CoTaskMemFree(outPath);
+            savesFolder += L"\\The Witness";
+            ShellExecute(NULL, L"open", savesFolder.c_str(), NULL, NULL, SW_SHOWDEFAULT);
+        } else if (!trainer && HIWORD(wParam) == 0) { // Message was triggered by the user
             MessageBox(g_hwnd, L"The process must be running in order to use this button", L"", MB_OK);
         }
-        return DefWindowProc(hwnd, message, wParam, lParam);
-    }
 
-    if (command == NOCLIP_SPEED)        g_trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
-    else if (command == FOV_CURRENT)    g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
-    else if (command == SPRINT_SPEED)   g_trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
-    else if (command == SHOW_PANELS)    g_trainer->ShowMissingPanels();
-    else if (command == SHOW_NEARBY)    g_trainer->ShowNearbyEntities();
-    else if (command == EXPORT)         g_trainer->ExportEntities();
-    else if (command == SAVE_POS) {
-        g_savedCameraPos = g_trainer->GetCameraPos();
-        g_savedCameraAng = g_trainer->GetCameraAng();
-        SetPosAndAngText(g_savedPos, g_savedCameraPos, g_savedCameraAng);
-    } else if (command == LOAD_POS) {
-        g_trainer->SetCameraPos(g_savedCameraPos);
-        g_trainer->SetCameraAng(g_savedCameraAng);
+        // All other messages need the trainer to be live in order to execute.
+        if (!trainer) return;
 
-        // The player position is from the feet, not the eyes, so we have to adjust slightly.
-        auto playerPos = g_savedCameraPos;
-        playerPos[2] -= 1.69f;
-        g_trainer->SetPlayerPos(playerPos);
-        SetPosAndAngText(g_currentPos, g_savedCameraPos, g_savedCameraAng);
-    }
+        if (command == NOCLIP_SPEED)        trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
+        else if (command == FOV_CURRENT)    trainer->SetFov(GetWindowFloat(g_fovCurrent));
+        else if (command == SPRINT_SPEED)   trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
+        else if (command == SHOW_PANELS)    trainer->ShowMissingPanels();
+        else if (command == SHOW_NEARBY)    trainer->ShowNearbyEntities();
+        else if (command == EXPORT)         trainer->ExportEntities();
+        else if (command == SAVE_POS) {
+            g_savedCameraPos = trainer->GetCameraPos();
+            g_savedCameraAng = trainer->GetCameraAng();
+            SetPosAndAngText(g_savedPos, g_savedCameraPos, g_savedCameraAng);
+        } else if (command == LOAD_POS) {
+            trainer->SetCameraPos(g_savedCameraPos);
+            trainer->SetCameraAng(g_savedCameraAng);
+
+            // The player position is from the feet, not the eyes, so we have to adjust slightly.
+            auto playerPos = g_savedCameraPos;
+            playerPos[2] -= 1.69f;
+            trainer->SetPlayerPos(playerPos);
+            SetPosAndAngText(g_currentPos, g_savedCameraPos, g_savedCameraAng);
+        }
+    });
+    t.detach();
+
     return DefWindowProc(hwnd, message, wParam, lParam);
 }
 
