@@ -25,9 +25,6 @@
 #define START_TIMER 0x417
 #define CALLSTACK 0x418
 
-// Bugs:
-// - Queue a bunch of Exports, then quit the game.
-
 // Feature requests:
 // - show collision, somehow
 // - Icon for trainer
@@ -170,8 +167,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     switch (message) {
         case WM_DESTROY:
             if (g_trainer) {
+                auto trainer = g_trainer;
                 g_trainer = nullptr; // Reset any modifications
                 g_witnessProc = nullptr; // Free any allocated memory
+                // Wait to actually quit until all background threads have finished their work.
+                while (trainer.use_count() > 1) std::this_thread::sleep_for(std::chrono::milliseconds(1000));
             }
             PostQuitMessage(0);
             return 0;
