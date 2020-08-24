@@ -1,5 +1,6 @@
 #pragma once
 #include "ThreadSafeAddressMap.h"
+
 enum ProcStatus : WPARAM {
     NotRunning,
     Started,

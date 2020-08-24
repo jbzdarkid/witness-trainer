@@ -1,6 +1,4 @@
 #include "pch.h"
-#include <ctime>
-#include <csignal>
 #include <ImageHlp.h>
 #include <Psapi.h>
 #include "DebugUtils.h"
