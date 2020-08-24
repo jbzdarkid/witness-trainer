@@ -1,6 +1,6 @@
 #pragma once
 
-class Trainer {
+class Trainer final {
 public:
     static std::shared_ptr<Trainer> Create(const std::shared_ptr<Memory>& memory);
     ~Trainer();

@@ -1,4 +1,5 @@
 #pragma once
+#include "ThreadSafeAddressMap.h"
 enum ProcStatus : WPARAM {
     NotRunning,
     Started,
@@ -71,7 +72,8 @@ private:
     ProcStatus _nextStatus = ProcStatus::Started;
 
     // Parts of Read / Write / Sigscan
-    std::map<uintptr_t, uintptr_t> _computedAddresses;
+    ThreadSafeAddressMap _computedAddresses;
+
     struct SigScan {
         bool found = false;
         ScanFunc scanFunc;

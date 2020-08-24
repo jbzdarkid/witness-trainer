@@ -55,7 +55,7 @@ void Memory::Heartbeat(HWND window, UINT message) {
     GetExitCodeProcess(_handle, &exitCode);
     if (exitCode != STILL_ACTIVE) {
         // Process has exited, clean up. We only need to reset _handle here -- its validity is linked to all other class members.
-        _computedAddresses.clear();
+        _computedAddresses.Clear();
         _handle = nullptr;
 
         PostMessage(window, message, ProcStatus::Stopped, NULL);
@@ -93,14 +93,14 @@ void Memory::Heartbeat(HWND window, UINT message) {
     // New game causes the entity manager to re-allocate
     if (entityManager != _previousEntityManager) {
         _previousEntityManager = entityManager;
-        _computedAddresses.clear();
+        _computedAddresses.Clear();
     }
 
     // Loading a game causes entities to be shuffled
     int loadCount = ReadData<int>({_globals, 0x0, _loadCountOffset}, 1)[0];
     if (_previousLoadCount != loadCount) {
         _previousLoadCount = loadCount;
-        _computedAddresses.clear();
+        _computedAddresses.Clear();
     }
 
     int numEntities = ReadData<int>({_globals, 0x10}, 1)[0];
@@ -289,9 +289,9 @@ uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets) {
         cumulativeAddress += offset;
 
         // If the address was already computed, continue to the next offset.
-        const auto search = _computedAddresses.find(cumulativeAddress);
-        if (search != std::end(_computedAddresses)) {
-            cumulativeAddress = search->second;
+        uintptr_t foundAddress = _computedAddresses.Find(cumulativeAddress);
+        if (foundAddress != 0) {
+            cumulativeAddress = foundAddress;
             continue;
         }
 
@@ -308,7 +308,7 @@ uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets) {
             return 0;
         }
 
-        _computedAddresses[cumulativeAddress] = computedAddress;
+        _computedAddresses.Set(cumulativeAddress, computedAddress);
         cumulativeAddress = computedAddress;
     }
     return cumulativeAddress + final_offset;
