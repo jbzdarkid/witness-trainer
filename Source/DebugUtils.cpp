@@ -2,6 +2,7 @@
 #include <ImageHlp.h>
 #include <Psapi.h>
 #include "DebugUtils.h"
+#include <iostream>
 
 void DebugPrint(const std::string& text) {
 #ifdef _DEBUG
