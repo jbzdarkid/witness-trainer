@@ -66,5 +66,5 @@ HazardPointer::~HazardPointer() {
 HazardPointer& HazardPointer::operator=(HazardPointer&& other) noexcept {
     _node = other._node;
     other._node = nullptr;
-    return other;
+    return *this;
 }

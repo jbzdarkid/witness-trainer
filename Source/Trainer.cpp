@@ -102,7 +102,7 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
     memory->AddSigScan({0x74, 0x14, 0x48, 0x8B, 0x95}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
         trainer->_epNameOffset = *(int*)&data[index + 0x05];
     });
-    
+
     // We need to save _memory before we exit, otherwise we can't destroy properly.
     trainer->_memory = memory;
 
@@ -150,8 +150,6 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetPanelData(int id) {
     int tracedEdgesOffset = _solvedTargetOffset - 0x6C;
     int stateOffset = _solvedTargetOffset - 0x14;
     int hasEverBeenSolvedOffset = _solvedTargetOffset + 0x04;
-    int numDotsOffset = _solvedTargetOffset + 0x11C;
-    int dotPositionsOffset = _solvedTargetOffset + 0x12C;
 
     auto data = std::make_shared<EntityData>();
     data->name = _memory->ReadString({_globals, 0x18, id * 8, nameOffset});
@@ -166,10 +164,13 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetPanelData(int id) {
     else if (state == 4) data->state = "Negation pending";
     else data->state = "Unknown";
 
-    int numEdges = _memory->ReadData<int>({_globals, 0x18, id * 8, tracedEdgesOffset}, 1)[0];
     return data;
 
     /* BUG: Traced edges are being re-allocated, and thus moving around. I think memory needs to own this directly, so that it can carefully invalidate a cache entry. Or, it can ComputeOffset(false) to not cache.
+    int numDotsOffset = _solvedTargetOffset + 0x11C;
+    int dotPositionsOffset = _solvedTargetOffset + 0x12C;
+    int numEdges = _memory->ReadData<int>({_globals, 0x18, id * 8, tracedEdgesOffset}, 1)[0];
+
     if (numEdges > 0) {
         std::vector<Traced_Edge> edges = _memory->ReadData<Traced_Edge>({_globals, 0x18, id*8, tracedEdgesOffset + 0x08, 0}, numEdges);
         int numDots = _memory->ReadData<int>({_globals, 0x18, id*8, numDotsOffset}, 1)[0];
@@ -399,7 +400,6 @@ void Trainer::SetMainMenuColor(bool enable) {
 void Trainer::SetRandomDoorsPractice(bool enable) {
     if (_solvedTargetOffset == 0) return;
 
-    int hasEverBeenSolvedOffset = _solvedTargetOffset + 0x04;
     int idToPowerOffset = _solvedTargetOffset + 0x20;
     int onTargetOffset = _solvedTargetOffset + 0x10;
 
