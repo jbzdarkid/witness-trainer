@@ -34,6 +34,10 @@ This program is Windows-only for the forseeable future.
 - Save Position (and Load Position) [Hotkeys: Control-P and Shift-Control-P]
   * Useful to test running times between locations.
   * Also useful for practicing extreme distance snipes, where angles are important (such as the mountaintop redirect snipe)
-  * [Explain Theta/Psi]
+  * X represents your horizontal position (-X = west towards symmetry, +X = east towards mountain)
+  * Y represents your vertical position (-Y = south towards peninsula, +Y = north towards keep)
+  * Z represents your height (-Z = down, +Z = up)
+  * Theta (Θ) represents your horizontal angle (-Θ = rotating right, +Θ = rotating left)
+  * Psi (Φ) represents your vertical angle (-Φ = rotating down, +Φ = rotating up)
 - Show unsolved panels
   * Fairly self-explanatory, but very helpful for figuring out what you missed in a failed 100% run.
