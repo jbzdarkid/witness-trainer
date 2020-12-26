@@ -256,7 +256,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     std::thread t([trainer = g_trainer, wParam] {
 #pragma warning (suppress: 4101)
         void* g_trainer; // Prevent access to the global variable in this scope
-        SetThreadDescription(GetCurrentThread(), L"Command Helper");
+        SetCurrentThreadName(L"Command Helper");
 
         WORD command = LOWORD(wParam);
         if (command == INFINITE_CHALLENGE)      ToggleOption(INFINITE_CHALLENGE, &Trainer::SetInfiniteChallenge);

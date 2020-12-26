@@ -26,6 +26,17 @@ void DebugPrint(const std::wstring& text) {
 #endif
 }
 
+void SetCurrentThreadName(const wchar_t* name) {
+    HMODULE module = GetModuleHandleA("Kernel32.dll");
+    if (!module) return;
+
+    typedef HRESULT (WINAPI *TSetThreadDescription)(HANDLE, PCWSTR);
+    auto setThreadDescription = (TSetThreadDescription)GetProcAddress(module, "SetThreadDescription");
+    if (!setThreadDescription) return;
+
+    setThreadDescription(GetCurrentThread(), name);
+}
+
 std::wstring DebugUtils::GetStackTrace() {
     HANDLE process = GetCurrentProcess();
     HANDLE thread = GetCurrentThread();

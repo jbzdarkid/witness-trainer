@@ -20,7 +20,7 @@ void Memory::StartHeartbeat(HWND window, UINT message) {
     if (_threadActive) return;
     _threadActive = true;
     _thread = std::thread([sharedThis = shared_from_this(), window, message]{
-        SetThreadDescription(GetCurrentThread(), L"Heartbeat");
+        SetCurrentThreadName(L"Heartbeat");
         while (sharedThis->_threadActive) {
             sharedThis->Heartbeat(window, message);
 #ifdef NDEBUG
