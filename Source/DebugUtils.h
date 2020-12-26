@@ -13,7 +13,7 @@ private:
     static std::wstring GetStackTrace();
 };
 
-void SetCurrentThreadName(const std::wstring& name);
+void SetCurrentThreadName(const wchar_t* name);
 void DebugPrint(const std::string& text);
 void DebugPrint(const std::wstring& text);
 inline void ShowAssertDialogue() {
