@@ -16,7 +16,7 @@ public:
     void ShowMissingPanels();
     void ShowNearbyEntities();
     void ExportEntities();
-    void SnapToPanel(int panelId);
+    void SnapToPoint(const std::vector<float>& point);
 
     bool GetNoclip();
     float GetNoclipSpeed();

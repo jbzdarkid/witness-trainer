@@ -51,12 +51,13 @@
 HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
-HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelName, g_panelState, g_panelPicture, g_activateGame;
+HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelDist, g_panelName, g_panelState, g_panelPicture, g_activateGame;
 auto g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
 
 std::vector<float> g_savedCameraPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> g_savedCameraAng = {0.0f, 0.0f};
 int previousPanel = -1;
+std::vector<float> previousPanelStart;
 
 #define SetWindowTextA(...) static_assert(false, "Call SetStringText instead of SetWindowTextA");
 #define SetWindowTextW(...) static_assert(false, "Call SetStringText instead of SetWindowTextW");
@@ -148,10 +149,16 @@ void SetActivePanel(int activePanel) {
         if (!panelData) {
             SetStringText(g_panelName, "");
             SetStringText(g_panelState, "");
+            SetStringText(g_panelDist, "");
         } else {
             SetStringText(g_panelName, panelData->name);
             SetStringText(g_panelState, panelData->state);
-            // TODO(Future): draw path with GDI
+            if (panelData->tracedEdges.size() > 0) {
+                previousPanelStart = {panelData->tracedEdges[0], panelData->tracedEdges[1], panelData->tracedEdges[2]};
+            }
+            auto cameraPos = g_trainer->GetCameraPos();
+            auto distance = sqrt(pow(previousPanelStart[0] - cameraPos[0], 2) + pow(previousPanelStart[1] - cameraPos[1], 2) + pow(previousPanelStart[2] - cameraPos[2], 2));
+            SetStringText(g_panelDist, "Distance to panel: " + std::to_string(distance));
         }
     }
 }
@@ -185,7 +192,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         case WM_HOTKEY:
             // Only steal hotkeys when we (or the game) are the active window.
             if (g_hwnd == GetForegroundWindow() || g_witnessProc->IsForeground()) break; // LOWORD(wParam) contains the command
-            return DefWindowProc(hwnd, message, wParam, lParam);
+            return DefWindowProc(hwnd, message, wParam, lParam); // Note that keypresses still aren't surfaced to the active window. WM_HOTKEY eats them.
         case HEARTBEAT:
             switch ((ProcStatus)wParam) {
             case ProcStatus::Stopped:
@@ -246,6 +253,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 // Some settings are always sourced from the game, since they are not editable in the trainer.
                 SetPosAndAngText(g_currentPos, g_trainer->GetCameraPos(), g_trainer->GetCameraAng());
                 SetActivePanel(g_trainer->GetActivePanel());
+                if (IsDlgButtonChecked(hwnd, SNAP_TO_PANEL) && previousPanel != -1) {
+                    g_trainer->SnapToPoint(previousPanelStart);
+                }
                 break;
             }
             return 0;
@@ -289,6 +299,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             CoTaskMemFree(outPath);
             savesFolder += L"\\The Witness";
             ShellExecute(NULL, L"open", savesFolder.c_str(), NULL, NULL, SW_SHOWDEFAULT);
+        } else if (command == SNAP_TO_PANEL) {
+            bool enabled = IsDlgButtonChecked(g_hwnd, SNAP_TO_PANEL);
+            CheckDlgButton(g_hwnd, SNAP_TO_PANEL, !enabled);
         } else if (!trainer && HIWORD(wParam) == 0) { // Message was triggered by the user
             MessageBox(g_hwnd, L"The process must be running in order to use this button", L"", MB_OK);
         }
@@ -302,7 +315,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         else if (command == SHOW_PANELS)    trainer->ShowMissingPanels();
         else if (command == SHOW_NEARBY)    trainer->ShowNearbyEntities();
         else if (command == EXPORT)         trainer->ExportEntities();
-        else if (command == SNAP_TO_PANEL)  trainer->SnapToPanel(previousPanel);
         else if (command == SAVE_POS) {
             g_savedCameraPos = trainer->GetCameraPos();
             g_savedCameraAng = trainer->GetCameraAng();
@@ -436,14 +448,18 @@ void CreateComponents() {
     g_activePanel = CreateLabel(x, y, 200, L"No Active Panel");
     y += 20;
 
+    g_panelDist = CreateLabel(x, y, 200, L"");
+    y += 20;
+
     g_panelName = CreateLabel(x, y, 200, L"");
     y += 20;
 
     g_panelState = CreateLabel(x, y, 200, L"");
     y += 20;
 
-    CreateButton(x, y, 200, L"Snap to previous panel", SNAP_TO_PANEL, L"Alt-S");
-    RegisterHotKey(g_hwnd, SAVE_POS, MOD_NOREPEAT | MOD_ALT, 'S');
+    CreateLabel(x+20, y, 200, L"Lock view to panel");
+    CreateCheckbox(x, y, SNAP_TO_PANEL, L"Control-L");
+    RegisterHotKey(g_hwnd, SNAP_TO_PANEL, MOD_NOREPEAT | MOD_CONTROL, 'L');
 
     CreateButton(x, y, 200, L"Show unsolved panels", SHOW_PANELS);
 

@@ -164,9 +164,26 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetPanelData(int id) {
     else if (state == 4) data->state = "Negation pending";
     else data->state = "Unknown";
 
+    auto numEdges = _memory->ReadData<int>({_globals, 0x18, id * 8, tracedEdgesOffset}, 1)[0];
+    if (numEdges != 0) {
+        // Explicitly recomputing this intermediate, since the edges array might have re-allocated.
+        auto edgeDataPtr = _memory->ReadData<int>({_globals, 0x18, id * 8, tracedEdgesOffset + 8}, 1)[0];
+        if (edgeDataPtr != 0) {
+            // Each Traced_Edge object is 0x34 bits == 13 bytes
+            auto edgeData = _memory->ReadData<float>({_globals, 0x18, id * 8, tracedEdgesOffset + 8, 0x0}, 13 * numEdges);
+            data->tracedEdges.resize(numEdges * 3);
+            for (int i=0; i<numEdges; i++) {
+                // position_a is a Vector3 at 0x18 (=element 6)
+                data->tracedEdges[i*3+0] = edgeData[i*13 + 6];
+                data->tracedEdges[i*3+1] = edgeData[i*13 + 7];
+                data->tracedEdges[i*3+2] = edgeData[i*13 + 8];
+            }
+        }
+    }
+
     return data;
 
-    /* BUG: Traced edges are being re-allocated, and thus moving around. I think memory needs to own this directly, so that it can carefully invalidate a cache entry. Or, it can ComputeOffset(false) to not cache.
+    /* Note: Care must be taken to invalidate cache entries when reading this data, since AutoArray reallocates.
     int numDotsOffset = _solvedTargetOffset + 0x11C;
     int dotPositionsOffset = _solvedTargetOffset + 0x12C;
     int numEdges = _memory->ReadData<int>({_globals, 0x18, id * 8, tracedEdgesOffset}, 1)[0];
@@ -274,21 +291,15 @@ void Trainer::ExportEntities() {
     }
 }
 
-void Trainer::SnapToPanel(int panelId) {
-    if (panelId == -1) return;
-    int tracedEdgesOffset = _solvedTargetOffset - 0x68;
-    
-    auto allocatedEdges = _memory->ReadData<int>({_globals, 0x18, panelId*8, tracedEdgesOffset}, 1)[0];
-    if (allocatedEdges == 0) return;
-    auto panelPos = _memory->ReadData<float>({_globals, 0x18, panelId*8, tracedEdgesOffset + 4, 0x18}, 3);
+void Trainer::SnapToPoint(const std::vector<float>& point) {
     auto cameraPos = GetCameraPos();
 
     float Ax = cameraPos[0];
     float Ay = cameraPos[1];
     float Az = cameraPos[2];
-    float Bx = panelPos[0];
-    float By = panelPos[1];
-    float Bz = panelPos[2];
+    float Bx = point[0];
+    float By = point[1];
+    float Bz = point[2];
 
     float hypotenuse2 = sqrt((Ax - Bx) * (Ax - Bx) + (Ay - By) * (Ay - By));
     float hypotenuse3 = sqrt((Ax - Bx) * (Ax - Bx) + (Ay - By) * (Ay - By) + (Az - Bz) * (Az - Bz));

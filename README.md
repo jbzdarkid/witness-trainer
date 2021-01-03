@@ -41,3 +41,6 @@ This program is Windows-only for the forseeable future.
   * Psi (Φ) represents your vertical angle (-Φ = rotating down, +Φ = rotating up)
 - Show unsolved panels
   * Fairly self-explanatory, but very helpful for figuring out what you missed in a failed 100% run.
+- Lock to panel [Hotkey: Control-L]
+  * When you have a previous panel, this checkbox will keep your 3d view snapped into the startpoint of that panel.
+  * This is helpful for practicing snipes, or trying to develop new snipes.
