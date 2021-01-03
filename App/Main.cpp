@@ -32,7 +32,6 @@
 //  https://stackoverflow.com/questions/40933304
 // - Delete all saves (?)
 // - Basic timer
-// - Add "distance to panel" in the panel info. Might be fun to see *how far* some of the snipes are.
 // - Save settings to some file, and reload them on trainer start
 // - CreateRemoteThread + VirtualAllocEx allows me to *run* code in another process. This seems... powerful!
 // - SuspendThread as a way to pause the game when an assert fires? Then I could investigate...
@@ -58,6 +57,12 @@ std::vector<float> g_savedCameraPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> g_savedCameraAng = {0.0f, 0.0f};
 int previousPanel = -1;
 std::vector<float> previousPanelStart;
+
+constexpr int32_t MASK_SHIFT   = 0x100;
+constexpr int32_t MASK_CONTROL = 0x200;
+constexpr int32_t MASK_ALT     = 0x400;
+constexpr int32_t MASK_WIN     = 0x800;
+std::map<int32_t, __int64> hotkeyCodes;
 
 #define SetWindowTextA(...) static_assert(false, "Call SetStringText instead of SetWindowTextA");
 #define SetWindowTextW(...) static_assert(false, "Call SetStringText instead of SetWindowTextW");
@@ -189,10 +194,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             // Get rid of the gross gray background. https://stackoverflow.com/a/4495814
             SetBkColor((HDC)wParam, RGB(255, 255, 255));
             return 0;
-        case WM_HOTKEY:
-            // Only steal hotkeys when we (or the game) are the active window.
-            if (g_hwnd == GetForegroundWindow() || g_witnessProc->IsForeground()) break; // LOWORD(wParam) contains the command
-            return DefWindowProc(hwnd, message, wParam, lParam); // Note that keypresses still aren't surfaced to the active window. WM_HOTKEY eats them.
         case HEARTBEAT:
             switch ((ProcStatus)wParam) {
             case ProcStatus::Stopped:
@@ -335,6 +336,29 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     return DefWindowProc(hwnd, message, wParam, lParam);
 }
 
+LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
+    // Only steal hotkeys when we (or the game) are the active window.
+    if (nCode == HC_ACTION && (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)) {
+        if (g_hwnd == GetForegroundWindow() || g_witnessProc->IsForeground()) {
+            PKBDLLHOOKSTRUCT p = (PKBDLLHOOKSTRUCT)lParam;
+
+            int32_t fullCode = p->vkCode;
+            if (GetKeyState(VK_SHIFT) & 0x8000)   fullCode |= MASK_SHIFT;
+            if (GetKeyState(VK_CONTROL) & 0x8000) fullCode |= MASK_CONTROL;
+            if (GetKeyState(VK_MENU) & 0x8000)    fullCode |= MASK_ALT;
+            if (GetKeyState(VK_LWIN) & 0x8000)    fullCode |= MASK_WIN;
+            if (GetKeyState(VK_RWIN) & 0x8000)    fullCode |= MASK_WIN;
+
+            auto search = hotkeyCodes.find(fullCode);
+            if (search != std::end(hotkeyCodes)) {
+                PostMessage(g_hwnd, WM_COMMAND, search->second, NULL);
+                return 0;
+            }
+        }
+    }
+    return CallNextHookEx(NULL, nCode, wParam, lParam);
+}
+
 HWND CreateTooltip(HWND target, LPCWSTR hoverText) {
     HWND tooltip = CreateWindow(TOOLTIPS_CLASS, NULL,
         WS_POPUP | TTS_ALWAYSTIP,
@@ -363,23 +387,35 @@ HWND CreateLabel(int x, int y, int width, LPCWSTR text) {
     return CreateLabel(x, y, width, 16, text);
 }
 
-HWND CreateButton(int x, int& y, int width, LPCWSTR text, __int64 message, LPCWSTR hoverText = L"") {
+HWND CreateButton(int x, int& y, int width, LPCWSTR text, __int64 message) {
     HWND button = CreateWindow(L"BUTTON", text,
         WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
         x, y, width, 26,
         g_hwnd, (HMENU)message, g_hInstance, NULL);
     y += 30;
-    CreateTooltip(button, hoverText);
     return button;
 }
 
-HWND CreateCheckbox(int x, int& y, __int64 message, LPCWSTR hoverText = L"") {
+HWND CreateButton(int x, int& y, int width, LPCWSTR text, __int64 message, LPCWSTR hoverText, int32_t hotkey) {
+    auto button = CreateButton(x, y, width, text, message);
+    CreateTooltip(button, hoverText);
+    hotkeyCodes[hotkey] = message;
+    return button;
+}
+
+HWND CreateCheckbox(int x, int& y, __int64 message) {
     HWND checkbox = CreateWindow(L"BUTTON", NULL,
         WS_VISIBLE | WS_CHILD | BS_CHECKBOX,
         x, y + 2, 12, 12,
         g_hwnd, (HMENU)message, g_hInstance, NULL);
     y += 20;
+    return checkbox;
+}
+
+HWND CreateCheckbox(int x, int& y, __int64 message, LPCWSTR hoverText, int32_t hotkey) {
+    auto checkbox = CreateCheckbox(x, y, message);
     CreateTooltip(checkbox, hoverText);
+    hotkeyCodes[hotkey] = message;
     return checkbox;
 }
 
@@ -398,8 +434,7 @@ void CreateComponents() {
     int y = 10;
 
     CreateLabel(x, y, 100, L"Noclip Enabled");
-    CreateCheckbox(115, y, NOCLIP_ENABLED, L"Control-N");
-    RegisterHotKey(g_hwnd, NOCLIP_ENABLED, MOD_NOREPEAT | MOD_CONTROL, 'N');
+    CreateCheckbox(115, y, NOCLIP_ENABLED, L"Control-N", MASK_CONTROL | 'N');
 
     CreateLabel(x, y + 4, 100, L"Noclip Speed");
     g_noclipSpeed = CreateText(100, y, 130, L"10", NOCLIP_SPEED);
@@ -411,8 +446,7 @@ void CreateComponents() {
     g_fovCurrent = CreateText(100, y, 130, L"50.534012", FOV_CURRENT);
 
     CreateLabel(x, y, 185, L"Can save the game");
-    CreateCheckbox(200, y, CAN_SAVE, L"Shift-Control-S");
-    RegisterHotKey(g_hwnd, CAN_SAVE, MOD_NOREPEAT | MOD_SHIFT | MOD_CONTROL, 'S');
+    CreateCheckbox(200, y, CAN_SAVE, L"Shift-Control-S", MASK_SHIFT | MASK_CONTROL | 'S');
     CheckDlgButton(g_hwnd, CAN_SAVE, true);
 
     CreateLabel(x, y, 185, L"Random Doors Practice");
@@ -422,19 +456,16 @@ void CreateComponents() {
     CreateCheckbox(200, y, INFINITE_CHALLENGE);
 
     CreateLabel(x, y, 185, L"Open the Console");
-    CreateCheckbox(200, y, OPEN_CONSOLE, L"Tilde (~)");
-    RegisterHotKey(g_hwnd, OPEN_CONSOLE, MOD_NOREPEAT | MOD_SHIFT, VK_OEM_3);
+    CreateCheckbox(200, y, OPEN_CONSOLE, L"Tilde (~)", MOD_SHIFT | VK_OEM_3);
 
-    CreateButton(x, y, 100, L"Save Position", SAVE_POS, L"Control-P");
-    RegisterHotKey(g_hwnd, SAVE_POS, MOD_NOREPEAT | MOD_CONTROL, 'P');
+    CreateButton(x, y, 100, L"Save Position", SAVE_POS, L"Control-P", MOD_CONTROL | 'P');
     g_currentPos = CreateLabel(x + 5, y, 90, 80);
     SetPosAndAngText(g_currentPos, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f });
 
     // Column 1a
     x = 110;
     y -= 30;
-    CreateButton(x, y, 100, L"Load Position", LOAD_POS, L"Shift-Control-P");
-    RegisterHotKey(g_hwnd, LOAD_POS, MOD_NOREPEAT | MOD_SHIFT | MOD_CONTROL, 'P');
+    CreateButton(x, y, 100, L"Load Position", LOAD_POS, L"Shift-Control-P", MOD_SHIFT | MOD_CONTROL | 'P');
     g_savedPos = CreateLabel(x + 5, y, 90, 80);
     SetPosAndAngText(g_savedPos, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f });
 
@@ -458,19 +489,17 @@ void CreateComponents() {
     y += 20;
 
     CreateLabel(x+20, y, 200, L"Lock view to panel");
-    CreateCheckbox(x, y, SNAP_TO_PANEL, L"Control-L");
-    RegisterHotKey(g_hwnd, SNAP_TO_PANEL, MOD_NOREPEAT | MOD_CONTROL, 'L');
+    CreateCheckbox(x, y, SNAP_TO_PANEL, L"Control-L", MOD_CONTROL | 'L');
 
     CreateButton(x, y, 200, L"Show unsolved panels", SHOW_PANELS);
 
     // Hotkey for debug purposes, to get addresses based on a reported callstack
-    RegisterHotKey(g_hwnd, CALLSTACK, MOD_NOREPEAT | MOD_CONTROL | MOD_SHIFT | MOD_ALT, VK_OEM_PLUS);
+    hotkeyCodes[MASK_CONTROL | MASK_SHIFT | MASK_ALT | VK_OEM_PLUS] = CALLSTACK;
 
 #ifdef _DEBUG
     CreateButton(x, y, 200, L"Show nearby entities", SHOW_NEARBY);
     CreateButton(x, y, 200, L"Export all entities", EXPORT);
 #endif
-    // RegisterHotKey(g_hwnd, START_TIMER, MOD_NOREPEAT | MOD_CONTROL, 'T');
 }
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow) {
@@ -505,6 +534,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     DebugUtils::version = VERSION_STR;
 
     g_witnessProc->StartHeartbeat(g_hwnd, HEARTBEAT);
+    HHOOK hook = SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardProc, hInstance, NULL);
 
     MSG msg;
     while (GetMessage(&msg, nullptr, 0, 0)) {
@@ -512,12 +542,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         DispatchMessage(&msg);
     }
 
-    UnregisterHotKey(g_hwnd, NOCLIP_ENABLED);
-    UnregisterHotKey(g_hwnd, CAN_SAVE);
-    UnregisterHotKey(g_hwnd, OPEN_CONSOLE);
-    UnregisterHotKey(g_hwnd, SAVE_POS);
-    UnregisterHotKey(g_hwnd, LOAD_POS);
-    UnregisterHotKey(g_hwnd, CALLSTACK);
+    UnhookWindowsHookEx(hook);
 
     CoUninitialize();
     return (int) msg.wParam;
