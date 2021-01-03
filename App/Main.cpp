@@ -6,24 +6,25 @@
 
 #include "Trainer.h"
 
-#define HEARTBEAT 0x401
-#define SAVE_POS 0x402
-#define LOAD_POS 0x403
-#define NOCLIP_SPEED 0x404
-#define SPRINT_SPEED 0x405
-#define FOV_CURRENT 0x406
-#define NOCLIP_ENABLED 0x407
-#define CAN_SAVE 0x408
-#define DOORS_PRACTICE 0x409
-#define INFINITE_CHALLENGE 0x410
-#define OPEN_CONSOLE 0x411
-#define ACTIVATE_GAME 0x412
-#define OPEN_SAVES 0x413
-#define SHOW_PANELS 0x414
-#define SHOW_NEARBY 0x415
-#define EXPORT 0x416
-#define START_TIMER 0x417
-#define CALLSTACK 0x418
+#define HEARTBEAT           0x401
+#define SAVE_POS            0x402
+#define LOAD_POS            0x403
+#define NOCLIP_SPEED        0x404
+#define SPRINT_SPEED        0x405
+#define FOV_CURRENT         0x406
+#define NOCLIP_ENABLED      0x407
+#define CAN_SAVE            0x408
+#define DOORS_PRACTICE      0x409
+#define INFINITE_CHALLENGE  0x410
+#define OPEN_CONSOLE        0x411
+#define ACTIVATE_GAME       0x412
+#define OPEN_SAVES          0x413
+#define SHOW_PANELS         0x414
+#define SHOW_NEARBY         0x415
+#define EXPORT              0x416
+#define START_TIMER         0x417
+#define CALLSTACK           0x418
+#define SNAP_TO_PANEL       0x419
 
 // Feature requests:
 // - show collision, somehow
@@ -301,6 +302,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         else if (command == SHOW_PANELS)    trainer->ShowMissingPanels();
         else if (command == SHOW_NEARBY)    trainer->ShowNearbyEntities();
         else if (command == EXPORT)         trainer->ExportEntities();
+        else if (command == SNAP_TO_PANEL)  trainer->SnapToPanel(previousPanel);
         else if (command == SAVE_POS) {
             g_savedCameraPos = trainer->GetCameraPos();
             g_savedCameraAng = trainer->GetCameraAng();
@@ -439,6 +441,9 @@ void CreateComponents() {
 
     g_panelState = CreateLabel(x, y, 200, L"");
     y += 20;
+
+    CreateButton(x, y, 200, L"Snap to previous panel", SNAP_TO_PANEL, L"Alt-S");
+    RegisterHotKey(g_hwnd, SAVE_POS, MOD_NOREPEAT | MOD_ALT, 'S');
 
     CreateButton(x, y, 200, L"Show unsolved panels", SHOW_PANELS);
 

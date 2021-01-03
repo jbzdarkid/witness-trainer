@@ -16,6 +16,7 @@ public:
     void ShowMissingPanels();
     void ShowNearbyEntities();
     void ExportEntities();
+    void SnapToPanel(int panelId);
 
     bool GetNoclip();
     float GetNoclipSpeed();

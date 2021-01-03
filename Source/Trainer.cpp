@@ -274,6 +274,35 @@ void Trainer::ExportEntities() {
     }
 }
 
+void Trainer::SnapToPanel(int panelId) {
+    if (panelId == -1) return;
+    int tracedEdgesOffset = _solvedTargetOffset - 0x68;
+    
+    auto allocatedEdges = _memory->ReadData<int>({_globals, 0x18, panelId*8, tracedEdgesOffset}, 1)[0];
+    if (allocatedEdges == 0) return;
+    auto panelPos = _memory->ReadData<float>({_globals, 0x18, panelId*8, tracedEdgesOffset + 4, 0x18}, 3);
+    auto cameraPos = GetCameraPos();
+
+    float Ax = cameraPos[0];
+    float Ay = cameraPos[1];
+    float Az = cameraPos[2];
+    float Bx = panelPos[0];
+    float By = panelPos[1];
+    float Bz = panelPos[2];
+
+    float hypotenuse2 = sqrt((Ax - Bx) * (Ax - Bx) + (Ay - By) * (Ay - By));
+    float hypotenuse3 = sqrt((Ax - Bx) * (Ax - Bx) + (Ay - By) * (Ay - By) + (Az - Bz) * (Az - Bz));
+
+    std::vector<float> cameraAng{
+        asin((By - Ay) / hypotenuse2),
+        acos(hypotenuse2 / hypotenuse3),
+    };
+    if (Ax > Bx) cameraAng[0] = 3.141592654f - cameraAng[0];
+    if (Az > Bz) cameraAng[1] = -cameraAng[1];
+
+    SetCameraAng(cameraAng);
+}
+
 bool Trainer::GetNoclip() {
     return (bool) _memory->ReadData<int>({_noclipEnabled}, 1)[0];
 }

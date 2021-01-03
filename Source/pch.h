@@ -30,6 +30,7 @@
 
 #include <map>
 #include <functional>
+#include <cmath>
 #include <ctime>
 #include <csignal>
 #include <iomanip>
