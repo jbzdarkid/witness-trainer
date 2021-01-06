@@ -35,8 +35,9 @@
 // - Save settings to some file, and reload them on trainer start
 // - CreateRemoteThread + VirtualAllocEx allows me to *run* code in another process. This seems... powerful!
 // - SuspendThread as a way to pause the game when an assert fires? Then I could investigate...
-// - Hotkey key repeat
+// - Hotkeys shouldn't spam repeat (or have a flag for it)
 // - Hotkeys should eat from game (e.g. shift-ctrl-s)
+// - Add hotkeys home/end for 'rise/fall' (+/- Z) in noclip mode
 
 // Bad/Hard ideas:
 // - Avoid hanging the UI during load; call Trainer::ctor on a background thread.
