@@ -459,16 +459,16 @@ void CreateComponents() {
     CreateCheckbox(200, y, INFINITE_CHALLENGE);
 
     CreateLabel(x, y, 185, L"Open the Console");
-    CreateCheckbox(200, y, OPEN_CONSOLE, L"Tilde (~)", MOD_SHIFT | VK_OEM_3);
+    CreateCheckbox(200, y, OPEN_CONSOLE, L"Tilde (~)", MASK_SHIFT | VK_OEM_3);
 
-    CreateButton(x, y, 100, L"Save Position", SAVE_POS, L"Control-P", MOD_CONTROL | 'P');
+    CreateButton(x, y, 100, L"Save Position", SAVE_POS, L"Control-P", MASK_CONTROL | 'P');
     g_currentPos = CreateLabel(x + 5, y, 90, 80);
     SetPosAndAngText(g_currentPos, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f });
 
     // Column 1a
     x = 110;
     y -= 30;
-    CreateButton(x, y, 100, L"Load Position", LOAD_POS, L"Shift-Control-P", MOD_SHIFT | MOD_CONTROL | 'P');
+    CreateButton(x, y, 100, L"Load Position", LOAD_POS, L"Shift-Control-P", MASK_SHIFT | MASK_CONTROL | 'P');
     g_savedPos = CreateLabel(x + 5, y, 90, 80);
     SetPosAndAngText(g_savedPos, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f });
 
@@ -492,7 +492,7 @@ void CreateComponents() {
     y += 20;
 
     CreateLabel(x+20, y, 200, L"Lock view to panel");
-    CreateCheckbox(x, y, SNAP_TO_PANEL, L"Control-L", MOD_CONTROL | 'L');
+    CreateCheckbox(x, y, SNAP_TO_PANEL, L"Control-L", MASK_CONTROL | 'L');
 
     CreateButton(x, y, 200, L"Show unsolved panels", SHOW_PANELS);
 
