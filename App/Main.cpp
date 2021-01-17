@@ -60,10 +60,11 @@ std::vector<float> g_savedCameraAng = {0.0f, 0.0f};
 int previousPanel = -1;
 std::vector<float> previousPanelStart;
 
-constexpr int32_t MASK_SHIFT   = 0x100;
-constexpr int32_t MASK_CONTROL = 0x200;
-constexpr int32_t MASK_ALT     = 0x400;
-constexpr int32_t MASK_WIN     = 0x800;
+constexpr int32_t MASK_SHIFT   = 0x0100;
+constexpr int32_t MASK_CONTROL = 0x0200;
+constexpr int32_t MASK_ALT     = 0x0400;
+constexpr int32_t MASK_WIN     = 0x0800;
+constexpr int32_t MASK_REPEAT  = 0x1000;
 std::map<int32_t, __int64> hotkeyCodes;
 
 #define SetWindowTextA(...) static_assert(false, "Call SetStringText instead of SetWindowTextA");
@@ -242,7 +243,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     CheckDlgButton(hwnd, OPEN_CONSOLE, g_trainer->GetConsoleOpen());
                     SetStringText(g_activateGame, L"Switch to game");
                 } else {
-                    // Process was already running, and so were we (this recurs every heartbeat). Enforce settings.
+                    // Process was already running, and so were we (this recurs every heartbeat). Enforce settings and apply repeated actions.
                     g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
 
                     // If we are the foreground window, set FOV. Otherwise, read FOV.
@@ -251,14 +252,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     } else {
                         SetFloatText(g_fovCurrent, g_trainer->GetFov());
                     }
+
+                    if (IsDlgButtonChecked(hwnd, SNAP_TO_PANEL) && previousPanel != -1) {
+                        g_trainer->SnapToPoint(previousPanelStart);
+                    }
                 }
 
-                // Some settings are always sourced from the game, since they are not editable in the trainer.
+                // Settings which are always sourced from the game, since they are not editable in the trainer.
                 SetPosAndAngText(g_currentPos, g_trainer->GetCameraPos(), g_trainer->GetCameraAng());
                 SetActivePanel(g_trainer->GetActivePanel());
-                if (IsDlgButtonChecked(hwnd, SNAP_TO_PANEL) && previousPanel != -1) {
-                    g_trainer->SnapToPoint(previousPanelStart);
-                }
                 break;
             }
             return 0;
@@ -351,12 +353,11 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
             if (GetKeyState(VK_MENU) & 0x8000)    fullCode |= MASK_ALT;
             if (GetKeyState(VK_LWIN) & 0x8000)    fullCode |= MASK_WIN;
             if (GetKeyState(VK_RWIN) & 0x8000)    fullCode |= MASK_WIN;
+            if (lastCode == fullCode)             fullCode |= MASK_REPEAT;
 
-            if (lastCode != fullCode) {
-                auto search = hotkeyCodes.find(fullCode);
-                if (search != std::end(hotkeyCodes)) {
-                    PostMessage(g_hwnd, WM_COMMAND, search->second, NULL);
-                }
+            auto search = hotkeyCodes.find(fullCode);
+            if (search != std::end(hotkeyCodes)) {
+                PostMessage(g_hwnd, WM_COMMAND, search->second, NULL);
             }
             lastCode = fullCode;
             return 0;
