@@ -35,7 +35,6 @@
 // - Save settings to some file, and reload them on trainer start
 // - CreateRemoteThread + VirtualAllocEx allows me to *run* code in another process. This seems... powerful!
 // - SuspendThread as a way to pause the game when an assert fires? Then I could investigate...
-// - Hotkeys shouldn't spam repeat (or have a flag for it)
 // - Hotkeys should eat from game (e.g. shift-ctrl-s)
 // - Add hotkeys home/end for 'rise/fall' (+/- Z) in noclip mode
 
@@ -339,6 +338,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     return DefWindowProc(hwnd, message, wParam, lParam);
 }
 
+int32_t lastCode = 0;
 LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     // Only steal hotkeys when we (or the game) are the active window.
     if (nCode == HC_ACTION && (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)) {
@@ -352,11 +352,14 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
             if (GetKeyState(VK_LWIN) & 0x8000)    fullCode |= MASK_WIN;
             if (GetKeyState(VK_RWIN) & 0x8000)    fullCode |= MASK_WIN;
 
-            auto search = hotkeyCodes.find(fullCode);
-            if (search != std::end(hotkeyCodes)) {
-                PostMessage(g_hwnd, WM_COMMAND, search->second, NULL);
-                return 0;
+            if (lastCode != fullCode) {
+                auto search = hotkeyCodes.find(fullCode);
+                if (search != std::end(hotkeyCodes)) {
+                    PostMessage(g_hwnd, WM_COMMAND, search->second, NULL);
+                }
             }
+            lastCode = fullCode;
+            return 0;
         }
     }
     return CallNextHookEx(NULL, nCode, wParam, lParam);
