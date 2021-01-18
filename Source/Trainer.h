@@ -5,81 +5,42 @@ public:
     static std::shared_ptr<Trainer> Create(const std::shared_ptr<Memory>& memory);
     ~Trainer();
 
-    int GetActivePanel();
-    struct EntityData {
-        std::string name;
-        std::string state;
-        bool solved = false;
-        std::vector<float> tracedEdges;
-    };
-    std::shared_ptr<EntityData> GetEntityData(int id);
-    void ShowMissingPanels();
-    void ShowNearbyEntities();
-    void ExportEntities();
-    void SnapToPoint(const std::vector<float>& point);
-
-    bool GetNoclip();
-    float GetNoclipSpeed();
     std::vector<float> GetPlayerPos();
-    std::vector<float> GetCameraPos();
-    std::vector<float> GetCameraAng();
-    float GetFov();
-    bool CanSave();
-    float GetSprintSpeed();
-    bool GetInfiniteChallenge();
-    bool GetConsoleOpen();
-    bool GetRandomDoorsPractice();
-
-    void SetNoclip(bool enabled);
-    void SetNoclipSpeed(float speed);
     void SetPlayerPos(const std::vector<float>& pos);
-    void SetCameraPos(const std::vector<float>& pos);
-    void SetCameraAng(const std::vector<float>& ang);
-    void SetFov(float fov);
-    void SetCanSave(bool canSave);
-    void SetSprintSpeed(float speed);
+
+    bool GetInfiniteChallenge();
     void SetInfiniteChallenge(bool enable);
-    void SetConsoleOpen(bool enable);
-    void SaveCampaign();
-    void SetMainMenuColor(bool enable);
-    void SetRandomDoorsPractice(bool enable);
+
+    void Randomize(int32_t seed);
+    void SetSeed(int32_t seed);
 
 private:
+    int RandInt(int min, int max);
+    void AdjustRng(const std::vector<byte>& data, int offset, int index);
+
+    int32_t s_seed;
+
     std::shared_ptr<Memory> _memory;
 
-    __int64 _noclipEnabled = 0;
-    __int64 _noclipSpeed = 0;
-    __int64 _cameraPos = 0;
-    __int64 _cameraAng = 0;
-    __int64 _fovCurrent = 0;
+    // __int64 _noclipEnabled = 0;
+    // __int64 _noclipSpeed = 0;
+    // __int64 _cameraPos = 0;
+    // __int64 _cameraAng = 0;
+    // __int64 _fovCurrent = 0;
     __int64 _globals = 0;
-    __int64 _campaignState = 0;
-    __int64 _doorOpen = 0;
-    __int64 _doorClose = 0;
-    int _solvedTargetOffset = 0;
-    __int64 _powerOn = 0;
-    __int64 _walkAcceleration = 0;
-    __int64 _walkDeceleration = 0;
-    __int64 _runSpeed = 0;
+    // __int64 _campaignState = 0;
+    // __int64 _doorOpen = 0;
+    // __int64 _doorClose = 0;
+    // int _solvedTargetOffset = 0;
+    // __int64 _powerOn = 0;
+    // __int64 _walkAcceleration = 0;
+    // __int64 _walkDeceleration = 0;
+    // __int64 _runSpeed = 0;
     __int64 _recordPlayerUpdate = 0;
-    std::vector<__int64> _activePanelOffsets;
-    __int64 _mainMenuColor = 0;
-    std::vector<__int64> _consoleOpenTarget;
-    std::vector<__int64> _consoleWindowYB;
-    __int64 _wantCampaignSave = 0;
-    int _epNameOffset = 0;
-
-    std::shared_ptr<EntityData> GetPanelData(int id);
-    std::shared_ptr<EntityData> GetEPData(int id);
-    struct Traced_Edge {
-        int index_a;
-        int index_b;
-        int id_a;
-        int id_b;
-        float t;
-        float t_highest;
-        float position_a[3];
-        float position_b[3];
-        int flags;
-    };
+    // std::vector<__int64> _activePanelOffsets;
+    // __int64 _mainMenuColor = 0;
+    // std::vector<__int64> _consoleOpenTarget;
+    // std::vector<__int64> _consoleWindowYB;
+    // __int64 _wantCampaignSave = 0;
+    // int _epNameOffset = 0;
 };
