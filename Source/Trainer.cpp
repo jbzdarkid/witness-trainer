@@ -35,6 +35,10 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         trainer->_doSuccessSideEffects = static_cast<int32_t>(doSuccessSideEffects);
     });
 
+    memory->AddSigScan({0x48, 0x89, 0x74, 0x24, 0x20, 0x57, 0x48, 0x83, 0xEC, 0x20, 0x48, 0x8D, 0x15}, [trainer](int64_t offset, int index, const std::vector<byte>& data) {
+        trainer->_finishSpeedRun = offset + index + 0x1E;
+    });
+
     numFailedScans = memory->ExecuteSigScans();
     if (numFailedScans != 0) return nullptr; // Sigscans failed, we'll try again later.
 
@@ -176,13 +180,15 @@ void Trainer::SetPlayerPos(const std::vector<float>& pos) {
 }
 
 bool Trainer::GetInfiniteChallenge() {
-    return _memory->ReadData<byte>({_recordPlayerUpdate}, 1)[0] == 0x0F;
+    return _memory->ReadData<byte>({_recordPlayerUpdate}, 1)[0] == 0xEB;
 }
 
 void Trainer::SetInfiniteChallenge(bool enable) {
     if (enable) {
-        // Jump over abort_speed_run, with NOP padding
-        _memory->WriteData<byte>({_recordPlayerUpdate}, {0xEB, 0x07, 0x66, 0x90});
+        _memory->WriteData<byte>({_recordPlayerUpdate}, {
+            0xEB, 0x07, // Jump past abort_speed_run
+            0x90, 0x90  // nop nop
+        });
     } else {
         // (original code) Load entity_manager into rcx
         _memory->WriteData<byte>({_recordPlayerUpdate}, {0x48, 0x8B, 0x4B, 0x18});
@@ -194,15 +200,35 @@ bool Trainer::GetMkChallenge() {
 }
 
 void Trainer::SetMkChallenge(bool enable) {
+    // C7 83 F0 00 00 00 05 00 00 00 sets state to 5... but what triggers this?
+    // Entity_Record_Player::stop_playing is called when the timer runs out, and sets state = 6. Maybe this is what we want?
     return;
 }
 
 bool Trainer::GetChallengeReroll() {
-    return false;
+    return _memory->ReadData<byte>({_finishSpeedRun}, 1)[0] == 0x48;
 }
 
 void Trainer::SetChallengeReroll(bool enable) {
     return;
+#pragma warning(disable: 4244)
+    int64_t relative = (_doSuccessSideEffects + 9) - _finishSpeedRun;
+    assert(relative < std::numeric_limits<int32_t>::max());
+    assert(relative > std::numeric_limits<int32_t>::min());
+    if (enable) {
+        // Use RDI/EDI
+        _memory->WriteData<byte>({_finishSpeedRun}, {
+            0x48, 0x8B, 0x05, INT_TO_BYTES(_rng2),  // mov rax, [_rng2]                 ; Load the address of RNG2 into rax
+            0x8B, 0x00,                             // mov eax, [rax]                   ; Load the value of RNG2 into eax
+            0x89, 0x05, INT_TO_BYTES(relative),     // mov [doSuccessSideEffects], eax  ; Save the value into the challenge startup
+            0x33, 0xFF,                             // xor edi, edi                     ; Original code, also cleans up the register we were using.
+            0x90, 0x90, 0x90                        // nop nop nop
+        });
+    } else {
+        _memory->WriteData<byte>({_finishSpeedRun}, {
+            0xEB, 0x0F // Jump until the xor
+        });
+    }
 }
 
 void Trainer::SetSeed(uint32_t seed) {
