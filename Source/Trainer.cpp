@@ -53,6 +53,20 @@ void Trainer::AdjustRng(const std::vector<byte>& data, int64_t offset, int index
 }
 
 bool Trainer::Init() {
+    // Prevent challenge panels from turning off on failure. Otherwise, rerolling a panel could cause an RNG change.
+    for (int32_t panel : _challengePanels) {
+        int32_t powerOffOnFail = 0;
+        if (_globals == 0x5B28C0) { // Version differences.
+            powerOffOnFail = 0x2C0;
+        } else if (_globals == 0x62D0A0) {
+            powerOffOnFail = 0x2B8;
+        } else {
+            assert(false);
+            break;
+        }
+        _memory->WriteData<int32_t>({_globals, 0x18, panel * 8, powerOffOnFail}, {0});
+    }
+
     _rng = _memory->ReadData<int64_t>({_globals + 0x10}, 1)[0];
     _rng2 = _memory->ReadData<int64_t>({_globals + 0x30}, 1)[0];
     // Already injected
@@ -126,7 +140,7 @@ bool Trainer::Init() {
 
     {
         int32_t relativeRng2 = (_globals + 0x30) - (_doSuccessSideEffects + 0x6); // +6 is for the length of the line
-        int32_t seed = static_cast<int32_t>(time(nullptr)); // Seed from the time in milliseconds
+        uint32_t seed = static_cast<uint32_t>(time(nullptr)); // Seed from the time in milliseconds
 
         // Note: Little endian
         #define INT_TO_BYTES(val) \
@@ -140,15 +154,10 @@ bool Trainer::Init() {
         _memory->WriteData<byte>({_doSuccessSideEffects}, {
             0x8B, 0x0D, INT_TO_BYTES(relativeRng2),     // mov ecx, [_rng2]
             0x67, 0xC7, 0x01, INT_TO_BYTES(seed),       // mov dword ptr ds:[ecx], seed
-            0x48, 0x83, 0xF8, 0x02,                     // cmp rax, 0x2         ; Shortened version of replaced code. This checks if the record player was short-solved.
+            0x48, 0x83, 0xF8, 0x02,                     // cmp rax, 0x2 ; Shortened version of the original code. This checks if the record player was short-solved.
             0x90, 0x90, 0x90                            // nop nop nop
         });
         RandomizeSeed(); // Reroll the seed because time() isn't very random.
-
-        // Prevent challenge panels from turning off on failure. Otherwise, rerolling a panel could cause an RNG change.
-        for (int32_t panel : _challengePanels) {
-            _memory->WriteData<int32_t>({_globals, 0x18, panel * 8, 0x2C0}, {0});
-        }
     }
 
     // Succeeded, set RNG2 to prevent unnecessary future injections.
