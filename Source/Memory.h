@@ -29,7 +29,7 @@ public:
     Memory& operator=(const Memory& other) = delete;
 
     // lineLength is the number of bytes from the given index to the end of the instruction. Usually, it's 4.
-    static __int64 ReadStaticInt(__int64 offset, int index, const std::vector<byte>& data, size_t lineLength = 4);
+    static int64_t ReadStaticInt(__int64 offset, int index, const std::vector<byte>& data, size_t lineLength = 4);
     using ScanFunc = std::function<void(__int64 offset, int index, const std::vector<byte>& data)>;
     void AddSigScan(const std::vector<byte>& scanBytes, const ScanFunc& scanFunc);
     [[nodiscard]] size_t ExecuteSigScans();
