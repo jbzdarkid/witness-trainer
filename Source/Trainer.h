@@ -17,8 +17,8 @@ public:
     bool GetChallengeReroll();
     void SetChallengeReroll(bool enable);
 
-    void SetSeed(int32_t seed);
-    int32_t GetSeed();
+    void SetSeed(uint32_t seed);
+    uint32_t GetSeed();
     void RandomizeSeed();
 
 private:

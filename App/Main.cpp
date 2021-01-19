@@ -14,12 +14,12 @@
 #define SET_SEED            0x406
 #define RANDOM_SEED         0x407
 #define SHOW_SEED           0x408
+#define TELE_TO_CHALLENGE   0x409
 
 // Globals
 HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
-// HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelDist, g_panelName, g_panelState, g_panelPicture, g_activateGame;
 HWND g_activateGame, g_seed;
 auto g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
 
@@ -90,6 +90,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 // Or, we started a new game / loaded a save, in which case some of the entity data might have been reset.
                 g_trainer->SetInfiniteChallenge(IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE));
                 g_trainer->SetMkChallenge(IsDlgButtonChecked(hwnd, MK_CHALLENGE));
+                g_trainer->SetChallengeReroll(IsDlgButtonChecked(hwnd, CHALLENGE_REROLL));
+                PostMessage(g_hwnd, WM_COMMAND, SET_SEED, 0); // Set seed from Randomizer -> Game
                 SetStringText(g_activateGame, L"Switch to game");
                 break;
             case ProcStatus::Running:
@@ -98,7 +100,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     g_trainer = Trainer::Create(g_witnessProc);
                     if (!g_trainer) break;
                     CheckDlgButton(hwnd, INFINITE_CHALLENGE, g_trainer->GetInfiniteChallenge());
-                    CheckDlgButton(hwnd, INFINITE_CHALLENGE, g_trainer->GetMkChallenge());
+                    CheckDlgButton(hwnd, MK_CHALLENGE, g_trainer->GetMkChallenge());
+                    CheckDlgButton(hwnd, CHALLENGE_REROLL, g_trainer->GetChallengeReroll());
+                    PostMessage(g_hwnd, WM_COMMAND, SHOW_SEED, 0); // Load seed from Game -> Randomizer
                     SetStringText(g_activateGame, L"Switch to game");
                 } else {
                     // Process was already running, and so were we (this recurs every heartbeat). Enforce settings and apply repeated actions.
@@ -112,7 +116,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     }
 
     WORD command = LOWORD(wParam);
-    if (command == INFINITE_CHALLENGE) {
+    if (command == ACTIVATE_GAME) {
+        if (!g_trainer) ShellExecute(NULL, L"open", L"steam://rungameid/210970", NULL, NULL, SW_SHOWDEFAULT);
+        else g_witnessProc->BringToFront();
+    } else if (command == INFINITE_CHALLENGE) {
         bool enabled = !IsDlgButtonChecked(g_hwnd, INFINITE_CHALLENGE);
         CheckDlgButton(g_hwnd, INFINITE_CHALLENGE, enabled);
         if (enabled) CheckDlgButton(g_hwnd, MK_CHALLENGE, false);
@@ -134,15 +141,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     if (!g_trainer) return DefWindowProc(hwnd, message, wParam, lParam);
 
     if (command == SET_SEED) {
-        int32_t seed = std::stoi(GetWindowString(g_seed)); // Load seed from UI
+        uint32_t seed = wcstoul(GetWindowString(g_seed).c_str(), nullptr, 10); // Load seed from UI
         SetStringText(g_seed, std::to_wstring(seed).c_str()); // Restore parsed value
         g_trainer->SetSeed(seed);
     } else if (command == RANDOM_SEED) {
         g_trainer->RandomizeSeed();
-        SetStringText(g_seed, L"(hidden)");
-    } else if (command == SHOW_SEED) {
-        int32_t seed = g_trainer->GetSeed();
+        SetStringText(g_seed, L"(click to show)");
+    } else if (command == SHOW_SEED && (wParam & 0x1000000)) {
+        uint32_t seed = g_trainer->GetSeed();
         SetStringText(g_seed, std::to_wstring(seed).c_str());
+    } else if (command == TELE_TO_CHALLENGE) {
+        g_trainer->SetPlayerPos({-39.0f, -31.4f, -11.7f});
     }
 
     return DefWindowProc(hwnd, message, wParam, lParam);
@@ -208,8 +217,12 @@ void CreateComponents() {
     int x = 10;
     int y = 10;
 
+    g_activateGame = CreateButton(x, y, 200, L"Launch game", ACTIVATE_GAME);
+
+    CreateButton(x, y, 200, L"Teleport to Challenge", TELE_TO_CHALLENGE);
+
     CreateLabel(x, y + 5, 100, L"Seed:");
-    g_seed = CreateText(x + 40, y, 100, L"(hidden)", SHOW_SEED);
+    g_seed = CreateText(x + 40, y, 160, L"(hidden)", SHOW_SEED);
     // PostMessage(g_seed, EM_SETEVENTMASK, 0, ENM_KEYEVENTS);
     
     CreateButton(x, y, 200, L"Set seed", SET_SEED);
@@ -247,7 +260,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     GetClientRect(GetDesktopWindow(), &rect);
     g_hwnd = CreateWindow(WINDOW_CLASS, PRODUCT_NAME,
         WS_SYSMENU | WS_MINIMIZEBOX,
-        rect.right - 550, 200, 500, 500,
+        rect.right - 550, 200, 240, 300,
         nullptr, nullptr, hInstance, nullptr);
     ShowWindow(g_hwnd, nCmdShow);
     UpdateWindow(g_hwnd);

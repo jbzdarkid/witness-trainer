@@ -40,13 +40,16 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
 
     if (!trainer->Init()) return nullptr; // Initialization failed
 
+
+    // TODO: Also change the main menu color to blue!
+
     return trainer;
 }
 
 // Modify an instruction to use RNG2 instead of main RNG
 void Trainer::AdjustRng(const std::vector<byte>& data, int64_t offset, int index) {
-    int64_t currentRngPtr = Memory::ReadStaticInt(offset, index, data);
-    _memory->WriteData<int64_t>({offset}, {currentRngPtr + 0x20});
+    int32_t currentRngPtr = *(int32_t*)&data[index]; // Not a ReadStaticInt because it's a relative ptr.
+    _memory->WriteData<int32_t>({offset + index}, {currentRngPtr + 0x20});
 }
 
 bool Trainer::Init() {
@@ -103,19 +106,19 @@ bool Trainer::Init() {
 
     // These disable the random locations on timer panels, which would otherwise increment the RNG.
     // I'm writing 31 C0 (xor eax, eax), then 3 NOPs, which just acts as if the RNG returned 0.
-    // TODO: I could be more clever here, and return a checksum? Not sure...
+    // TODO: I could be more clever here, and show a checksum? Not sure...
 
     // do_lotus_minutes
     _memory->AddSigScan({0x0F, 0xBE, 0x6C, 0x08, 0xFF, 0x45}, [&](int64_t offset, int index, const std::vector<byte>& data) {
-        _memory->WriteData<byte>({index + 0x410}, {0x31, 0xC0, 0x90, 0x90, 0x90});
+        _memory->WriteData<byte>({offset + index + 0x410}, {0x31, 0xC0, 0x90, 0x90, 0x90});
     });
     // do_lotus_tenths
     _memory->AddSigScan({0x00, 0x04, 0x00, 0x00, 0x41, 0x8D, 0x50, 0x09}, [&](int64_t offset, int index, const std::vector<byte>& data) {
-        _memory->WriteData<byte>({index + 0xA2}, {0x31, 0xC0, 0x90, 0x90, 0x90});
+        _memory->WriteData<byte>({offset + index + 0xA2}, {0x31, 0xC0, 0x90, 0x90, 0x90});
     });
     // do_lotus_eighths
     _memory->AddSigScan({0x75, 0xF5, 0x0F, 0xBE, 0x44, 0x08, 0xFF}, [&](int64_t offset, int index, const std::vector<byte>& data) {
-        _memory->WriteData<byte>({index + 0x1AE}, {0x31, 0xC0, 0x90, 0x90, 0x90});
+        _memory->WriteData<byte>({offset + index + 0x1AE}, {0x31, 0xC0, 0x90, 0x90, 0x90});
     });
 
     size_t numFailedScans = _memory->ExecuteSigScans();
@@ -193,17 +196,17 @@ void Trainer::SetChallengeReroll(bool enable) {
     return;
 }
 
-void Trainer::SetSeed(int32_t seed) {
-    _memory->WriteData<int32_t>({_doSuccessSideEffects + 9}, {seed});
+void Trainer::SetSeed(uint32_t seed) {
+    _memory->WriteData<uint32_t>({_doSuccessSideEffects + 9}, {seed});
 }
 
-int32_t Trainer::GetSeed() {
-    return _memory->ReadData<int32_t>({_doSuccessSideEffects + 9}, 1)[0];
+uint32_t Trainer::GetSeed() {
+    return _memory->ReadData<uint32_t>({_doSuccessSideEffects + 9}, 1)[0];
 }
 
 // Generate a new random number using an LCG. Constants from https://arxiv.org/pdf/2001.05304.pdf
 void Trainer::RandomizeSeed() {
-    int32_t seed = GetSeed();
+    uint32_t seed = GetSeed();
     seed = 0x8664f205 * seed + 5;
     SetSeed(seed);
 }
