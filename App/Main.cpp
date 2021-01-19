@@ -126,6 +126,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         bool enabled = !IsDlgButtonChecked(g_hwnd, CHALLENGE_REROLL);
         CheckDlgButton(g_hwnd, CHALLENGE_REROLL, enabled);
         if (g_trainer) g_trainer->SetChallengeReroll(enabled);
+    } else if (!g_trainer && HIWORD(wParam) == 0) { // Message was triggered by the user
+        MessageBox(g_hwnd, L"The Witness must be running in order to use this button", L"", MB_OK);
     }
 
     // All other messages need the trainer to be live in order to execute.
