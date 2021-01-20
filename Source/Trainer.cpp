@@ -216,12 +216,13 @@ void Trainer::SetChallengeReroll(bool enable) {
             0x48, 0x8B, 0x3D, INT_TO_BYTES(relativeRng2),   // mov rdi, [rng2]                  ; Load the address of RNG2 into rdi
             0x8B, 0x3F,                                     // mov edi, [rdi]                   ; Load the value of RNG2 into edi
             0x89, 0x3D, INT_TO_BYTES(relativeSideEffects),  // mov [doSuccessSideEffects], edi  ; Save the new RNG into the challenge startup routine
-            0x33, 0xFF,                                     // xor edi, edi                     ; Original code, also cleans up the register we were using.
-            0x90, 0x90, 0x90                                // nop nop nop
+            0x48, 0x8B, 0x40, 0x08,                         // mov rax, [rax+8]                 ; Original code
+            0x31, 0xD2,                                     // xor edx, edx                     ; Original code
+            0x90                                            // nop
         });
     } else {
         _memory->WriteData<byte>({_finishSpeedRun}, {
-            0xEB, 0x0D // Jump until the xor
+            0xEB, 0x0D // Jump until the original code
         });
     }
 }
