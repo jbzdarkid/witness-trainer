@@ -34,6 +34,8 @@ public:
     void AddSigScan(const std::vector<byte>& scanBytes, const ScanFunc& scanFunc);
     [[nodiscard]] size_t ExecuteSigScans();
 
+    void Unprotect(int64_t relative);
+
     template<class T>
     inline std::vector<T> ReadData(const std::vector<__int64>& offsets, size_t numItems) {
         std::vector<T> data(numItems, 0);

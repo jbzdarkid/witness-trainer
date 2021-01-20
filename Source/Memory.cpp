@@ -235,6 +235,13 @@ size_t Memory::ExecuteSigScans() {
     return notFound;
 }
 
+void Memory::Unprotect(int64_t relative) {
+    void* address = (void*)(_baseAddress + relative);
+    DWORD unused;
+    // Change the first byte of the region to RWX, which should change the entire region. Disregard old protection settings.
+    ::VirtualProtectEx(_handle, address, 1, PAGE_EXECUTE_READWRITE, &unused);
+}
+
 #define MAX_STRING 100
 // Technically this is ReadChar*, but this name makes more sense with the return type.
 std::string Memory::ReadString(std::vector<__int64> offsets) {

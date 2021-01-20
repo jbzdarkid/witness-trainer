@@ -7,12 +7,11 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
 
     memory->AddSigScan({0x74, 0x41, 0x48, 0x85, 0xC0, 0x74, 0x04, 0x48, 0x8B, 0x48, 0x10}, [trainer](int64_t offset, int index, const std::vector<byte>& data) {
         int64_t globals = Memory::ReadStaticInt(offset, index + 0x14, data);
-        assert(globals < std::numeric_limits<int32_t>::max());
-        trainer->_globals = static_cast<int32_t>(globals);
+        trainer->_globals = LongToInt(globals);
     });
 
     memory->AddSigScan({0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00, 0xE9, 0xB3}, [trainer](int64_t offset, int index, const std::vector<byte>& data) {
-        trainer->_recordPlayerUpdate = offset + index - 0x0C;
+        trainer->_recordPlayerUpdate = LongToInt(offset + index - 0x0C);
     });
 
     // We need to save _memory before we exit, otherwise we can't destroy properly.
@@ -31,12 +30,11 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         } else {
             assert(false);
         }
-        assert(doSuccessSideEffects < std::numeric_limits<int32_t>::max());
-        trainer->_doSuccessSideEffects = static_cast<int32_t>(doSuccessSideEffects);
+        trainer->_doSuccessSideEffects = LongToInt(doSuccessSideEffects);
     });
 
     memory->AddSigScan({0x48, 0x89, 0x74, 0x24, 0x20, 0x57, 0x48, 0x83, 0xEC, 0x20, 0x48, 0x8D, 0x15}, [trainer](int64_t offset, int index, const std::vector<byte>& data) {
-        trainer->_finishSpeedRun = offset + index + 0x1E;
+        trainer->_finishSpeedRun = LongToInt(offset + index + 0x1E);
     });
 
     numFailedScans = memory->ExecuteSigScans();
@@ -71,10 +69,13 @@ bool Trainer::Init() {
         _memory->WriteData<int32_t>({_globals, 0x18, panel * 8, powerOffOnFail}, {0});
     }
 
-    _rng = _memory->ReadData<int64_t>({_globals + 0x10}, 1)[0];
+    int64_t rng = _memory->ReadData<int64_t>({_globals + 0x10}, 1)[0];
     _rng2 = _memory->ReadData<int64_t>({_globals + 0x30}, 1)[0];
-    // Already injected
-    if (_rng2 == _rng + 4) return true;
+    if (_rng2 == rng + 4) return true; // Already injected
+
+    _rng2 = rng + 4;
+    _memory->WriteData<int64_t>({_globals + 0x30}, {_rng2});
+
 
     // shuffle_integers
     _memory->AddSigScan({0x48, 0x89, 0x5C, 0x24, 0x10, 0x56, 0x48, 0x83, 0xEC, 0x20, 0x48, 0x63, 0xDA, 0x48, 0x8B, 0xF1, 0x83, 0xFB, 0x01}, [&](int64_t offset, int index, const std::vector<byte>& data) {
@@ -164,10 +165,6 @@ bool Trainer::Init() {
         RandomizeSeed(); // Reroll the seed because time() isn't very random.
     }
 
-    // Succeeded, set RNG2 to prevent unnecessary future injections.
-    _rng2 = _rng + 4;
-    _memory->WriteData<int64_t>({_globals + 0x30}, {_rng2});
-
     return true;
 }
 
@@ -210,23 +207,21 @@ bool Trainer::GetChallengeReroll() {
 }
 
 void Trainer::SetChallengeReroll(bool enable) {
-    return;
-#pragma warning(disable: 4244)
-    int64_t relative = (_doSuccessSideEffects + 9) - _finishSpeedRun;
-    assert(relative < std::numeric_limits<int32_t>::max());
-    assert(relative > std::numeric_limits<int32_t>::min());
+    int32_t relativeSideEffects = (_doSuccessSideEffects + 9) - (_finishSpeedRun + 15); // +15 is for the length of the first 3 lines
+    int32_t relativeRng2 = (_globals + 0x30) - (_finishSpeedRun + 7); // +7 is for the length of the line
+
     if (enable) {
-        // Use RDI/EDI
+        _memory->Unprotect(_doSuccessSideEffects + 9); // In order to change the RNG, we the game to be able to write into its own memory.
         _memory->WriteData<byte>({_finishSpeedRun}, {
-            0x48, 0x8B, 0x05, INT_TO_BYTES(_rng2),  // mov rax, [_rng2]                 ; Load the address of RNG2 into rax
-            0x8B, 0x00,                             // mov eax, [rax]                   ; Load the value of RNG2 into eax
-            0x89, 0x05, INT_TO_BYTES(relative),     // mov [doSuccessSideEffects], eax  ; Save the value into the challenge startup
-            0x33, 0xFF,                             // xor edi, edi                     ; Original code, also cleans up the register we were using.
-            0x90, 0x90, 0x90                        // nop nop nop
+            0x48, 0x8B, 0x3D, INT_TO_BYTES(relativeRng2),   // mov rdi, [rng2]                  ; Load the address of RNG2 into rdi
+            0x8B, 0x3F,                                     // mov edi, [rdi]                   ; Load the value of RNG2 into edi
+            0x89, 0x3D, INT_TO_BYTES(relativeSideEffects),  // mov [doSuccessSideEffects], edi  ; Save the new RNG into the challenge startup routine
+            0x33, 0xFF,                                     // xor edi, edi                     ; Original code, also cleans up the register we were using.
+            0x90, 0x90, 0x90                                // nop nop nop
         });
     } else {
         _memory->WriteData<byte>({_finishSpeedRun}, {
-            0xEB, 0x0F // Jump until the xor
+            0xEB, 0x0D // Jump until the xor
         });
     }
 }

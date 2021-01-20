@@ -22,15 +22,20 @@ public:
     void RandomizeSeed();
 
 private:
+    static inline int32_t LongToInt(int64_t orig) {
+        assert(orig < std::numeric_limits<int32_t>::max());
+        assert(orig > std::numeric_limits<int32_t>::min());
+        return static_cast<int32_t>(orig);
+    }
+
     void AdjustRng(const std::vector<byte>& data, int64_t offset, int index);
 
     std::shared_ptr<Memory> _memory;
 
     int32_t _globals = 0;
-    int64_t _recordPlayerUpdate = 0;
+    int32_t _recordPlayerUpdate = 0;
     int32_t _doSuccessSideEffects = 0;
-    int64_t _finishSpeedRun = 0;
-    int64_t _rng = 0;
+    int32_t _finishSpeedRun = 0;
     int64_t _rng2 = 0;
 
     std::vector<int32_t> _challengePanels = {
