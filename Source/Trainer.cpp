@@ -207,6 +207,8 @@ bool Trainer::GetChallengeReroll() {
 }
 
 void Trainer::SetChallengeReroll(bool enable) {
+    // Instead of this maddness, just look at solved_t for 0x04CB3 (the challenge timer panel).
+    // Then, handle all of this in Main.cpp.
     int32_t relativeSideEffects = (_doSuccessSideEffects + 9) - (_finishSpeedRun + 15); // +15 is for the length of the first 3 lines
     int32_t relativeRng2 = (_globals + 0x30) - (_finishSpeedRun + 7); // +7 is for the length of the line
 
