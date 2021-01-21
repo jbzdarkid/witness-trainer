@@ -6,6 +6,9 @@
 
 #include "Trainer.h"
 
+// TODO: Maybe have a counter for consecutive solves? That would require me to know if you failed, though. Which I can do, it's just the record player iCounter.
+// TODO: Show current time (or time on completion?) Would be good for races when people aren't running a timer.
+
 #define HEARTBEAT           0x401
 #define ACTIVATE_GAME       0x402
 #define INFINITE_CHALLENGE  0x403
@@ -15,6 +18,7 @@
 #define RANDOM_SEED         0x407
 #define SHOW_SEED           0x408
 #define TELE_TO_CHALLENGE   0x409
+#define SEED_HIDDEN         L"(hidden)"
 
 // Globals
 HWND g_hwnd;
@@ -22,6 +26,7 @@ HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
 HWND g_activateGame, g_seed;
 auto g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
+bool g_challengeSolved = true;
 
 void SetStringText(HWND hwnd, const std::string& text) {
     static std::unordered_map<HWND, std::string> hwndText;
@@ -90,8 +95,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 // Or, we started a new game / loaded a save, in which case some of the entity data might have been reset.
                 g_trainer->SetInfiniteChallenge(IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE));
                 g_trainer->SetMkChallenge(IsDlgButtonChecked(hwnd, MK_CHALLENGE));
-                g_trainer->SetChallengeReroll(IsDlgButtonChecked(hwnd, CHALLENGE_REROLL));
-                PostMessage(g_hwnd, WM_COMMAND, SET_SEED, 0); // Set seed from Randomizer -> Game
+                PostMessage(hwnd, WM_COMMAND, SET_SEED, 0); // Set seed from Randomizer -> Game
                 SetStringText(g_activateGame, L"Switch to game");
                 break;
             case ProcStatus::Running:
@@ -101,11 +105,24 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     if (!g_trainer) break;
                     CheckDlgButton(hwnd, INFINITE_CHALLENGE, g_trainer->GetInfiniteChallenge());
                     CheckDlgButton(hwnd, MK_CHALLENGE, g_trainer->GetMkChallenge());
-                    CheckDlgButton(hwnd, CHALLENGE_REROLL, g_trainer->GetChallengeReroll());
-                    PostMessage(g_hwnd, WM_COMMAND, SHOW_SEED, 0); // Load seed from Game -> Randomizer
+                    PostMessage(hwnd, WM_COMMAND, SHOW_SEED, 0); // Load seed from Game -> Randomizer
                     SetStringText(g_activateGame, L"Switch to game");
                 } else {
                     // Process was already running, and so were we (this recurs every heartbeat). Enforce settings and apply repeated actions.
+                    if (g_trainer->IsChallengeSolved()) {
+                        if (!g_challengeSolved) { // Finished a run
+                            g_challengeSolved = true;
+                            if (IsDlgButtonChecked(hwnd, CHALLENGE_REROLL)) {
+                                PostMessage(hwnd, WM_COMMAND, RANDOM_SEED, 0);
+                                if (GetWindowString(g_seed) != SEED_HIDDEN) {
+                                    PostMessage(hwnd, WM_COMMAND, SHOW_SEED, 0);
+                                }
+                            }
+                        }
+                    } else {
+                        // Started a new run
+                        g_challengeSolved = false;
+                    }
                 }
 
                 break;
@@ -132,7 +149,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     } else if (command == CHALLENGE_REROLL) {
         bool enabled = !IsDlgButtonChecked(g_hwnd, CHALLENGE_REROLL);
         CheckDlgButton(g_hwnd, CHALLENGE_REROLL, enabled);
-        if (g_trainer) g_trainer->SetChallengeReroll(enabled);
     } else if (!g_trainer && HIWORD(wParam) == 0) { // Message was triggered by the user
         MessageBox(g_hwnd, L"The Witness must be running in order to use this button", L"", MB_OK);
     }
@@ -222,7 +238,7 @@ void CreateComponents() {
     CreateButton(x, y, 200, L"Teleport to Challenge", TELE_TO_CHALLENGE);
 
     CreateLabel(x, y + 5, 100, L"Seed:");
-    g_seed = CreateText(x + 40, y, 160, L"(hidden)", SHOW_SEED);
+    g_seed = CreateText(x + 40, y, 160, SEED_HIDDEN, SHOW_SEED);
     // PostMessage(g_seed, EM_SETEVENTMASK, 0, ENM_KEYEVENTS);
     
     CreateButton(x, y, 200, L"Set seed", SET_SEED);

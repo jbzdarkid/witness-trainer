@@ -14,8 +14,7 @@ public:
     bool GetMkChallenge();
     void SetMkChallenge(bool enable);
 
-    bool GetChallengeReroll();
-    void SetChallengeReroll(bool enable);
+    bool IsChallengeSolved();
 
     void SetSeed(uint32_t seed);
     uint32_t GetSeed();
@@ -35,7 +34,6 @@ private:
     int32_t _globals = 0;
     int32_t _recordPlayerUpdate = 0;
     int32_t _doSuccessSideEffects = 0;
-    int32_t _finishSpeedRun = 0;
     int64_t _rng2 = 0;
 
     std::vector<int32_t> _challengePanels = {

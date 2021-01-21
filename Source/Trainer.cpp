@@ -25,16 +25,11 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         int64_t doSuccessSideEffects = 0;
         if (trainer->_globals == 0x5B28C0) { // Version differences.
             doSuccessSideEffects = offset + index + 0x3E;
-        } else if (trainer->_globals == 0x62D0A0) {
-            doSuccessSideEffects = offset + index + 0x42;
         } else {
-            assert(false);
+            assert(trainer->_globals == 0x62D0A0);
+            doSuccessSideEffects = offset + index + 0x42;
         }
         trainer->_doSuccessSideEffects = LongToInt(doSuccessSideEffects);
-    });
-
-    memory->AddSigScan({0x48, 0x89, 0x74, 0x24, 0x20, 0x57, 0x48, 0x83, 0xEC, 0x20, 0x48, 0x8D, 0x15}, [trainer](int64_t offset, int index, const std::vector<byte>& data) {
-        trainer->_finishSpeedRun = LongToInt(offset + index + 0x1E);
     });
 
     numFailedScans = memory->ExecuteSigScans();
@@ -60,11 +55,9 @@ bool Trainer::Init() {
         int32_t powerOffOnFail = 0;
         if (_globals == 0x5B28C0) { // Version differences.
             powerOffOnFail = 0x2C0;
-        } else if (_globals == 0x62D0A0) {
-            powerOffOnFail = 0x2B8;
         } else {
-            assert(false);
-            break;
+            assert(_globals == 0x62D0A0);
+            powerOffOnFail = 0x2B8;
         }
         _memory->WriteData<int32_t>({_globals, 0x18, panel * 8, powerOffOnFail}, {0});
     }
@@ -202,31 +195,18 @@ void Trainer::SetMkChallenge(bool enable) {
     return;
 }
 
-bool Trainer::GetChallengeReroll() {
-    return _memory->ReadData<byte>({_finishSpeedRun}, 1)[0] == 0x48;
-}
-
-void Trainer::SetChallengeReroll(bool enable) {
-    // Instead of this maddness, just look at solved_t for 0x04CB3 (the challenge timer panel).
-    // Then, handle all of this in Main.cpp.
-    int32_t relativeSideEffects = (_doSuccessSideEffects + 9) - (_finishSpeedRun + 15); // +15 is for the length of the first 3 lines
-    int32_t relativeRng2 = (_globals + 0x30) - (_finishSpeedRun + 7); // +7 is for the length of the line
-
-    if (enable) {
-        _memory->Unprotect(_doSuccessSideEffects + 9); // In order to change the RNG, we the game to be able to write into its own memory.
-        _memory->WriteData<byte>({_finishSpeedRun}, {
-            0x48, 0x8B, 0x3D, INT_TO_BYTES(relativeRng2),   // mov rdi, [rng2]                  ; Load the address of RNG2 into rdi
-            0x8B, 0x3F,                                     // mov edi, [rdi]                   ; Load the value of RNG2 into edi
-            0x89, 0x3D, INT_TO_BYTES(relativeSideEffects),  // mov [doSuccessSideEffects], edi  ; Save the new RNG into the challenge startup routine
-            0x48, 0x8B, 0x40, 0x08,                         // mov rax, [rax+8]                 ; Original code
-            0x31, 0xD2,                                     // xor edx, edx                     ; Original code
-            0x90                                            // nop
-        });
+bool Trainer::IsChallengeSolved() {
+    int32_t solvedTarget = 0;
+    if (_globals == 0x5B28C0) { // Version differences.
+        solvedTarget = 0x29C;
     } else {
-        _memory->WriteData<byte>({_finishSpeedRun}, {
-            0xEB, 0x0D // Jump until the original code
-        });
+        assert(_globals == 0x62D0A0);
+        solvedTarget = 0x294;
     }
+
+    // Inspect the solved_t_target property of the challenge timer panel.
+    // If it is solved, the challenge was beaten; else it was not.
+    return _memory->ReadData<int32_t>({_globals, 0x18, 0x04CB3 * 8, solvedTarget}, 1)[0] == 1;
 }
 
 void Trainer::SetSeed(uint32_t seed) {
