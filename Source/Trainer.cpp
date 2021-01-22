@@ -38,12 +38,22 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         memory->WriteData<int32_t>({offset + index + 6}, {0}); // Do not clear elapsed time when completing the challenge
     });
 
+    memory->AddSigScan({0x41, 0xB8, 0x61, 0x00, 0x00, 0x00, 0x48, 0x8B, 0xD3}, [trainer, memory](__int64 offset, int index, const std::vector<byte>& data) {
+        if (trainer->_globals == 0x5B28C0) { // Version differences.
+            index -= 0x42;
+        } else {
+            assert(trainer->_globals == 0x62D0A0);
+            index -= 0x45;
+        }
+
+        // Set the main menu to red by *not* setting the green or blue component.
+        memory->WriteData<byte>({offset + index}, {0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00}); // 8-byte NOP
+    });
+
     numFailedScans = memory->ExecuteSigScans();
     if (numFailedScans != 0) return nullptr; // Sigscans failed, we'll try again later.
 
     if (!trainer->Init()) return nullptr; // Initialization failed
-
-    // TODO: Also change the main menu color to blue!
 
     return trainer;
 }
@@ -66,7 +76,6 @@ bool Trainer::Init() {
 
     _rng2 = rng + 4;
     _memory->WriteData<int64_t>({_globals + 0x30}, {_rng2});
-
 
     // shuffle_integers
     _memory->AddSigScan({0x48, 0x89, 0x5C, 0x24, 0x10, 0x56, 0x48, 0x83, 0xEC, 0x20, 0x48, 0x63, 0xDA, 0x48, 0x8B, 0xF1, 0x83, 0xFB, 0x01}, [&](int64_t offset, int index, const std::vector<byte>& data) {
@@ -116,8 +125,7 @@ bool Trainer::Init() {
 
     // These disable the random locations on timer panels, which would otherwise increment the RNG.
     // I'm writing 31 C0 (xor eax, eax), then 3 NOPs, which just acts as if the RNG returned 0.
-    // TODO: I could be more clever here, and show a checksum? Not sure...
-
+    
     // do_lotus_minutes
     _memory->AddSigScan({0x0F, 0xBE, 0x6C, 0x08, 0xFF, 0x45}, [&](int64_t offset, int index, const std::vector<byte>& data) {
         _memory->WriteData<byte>({offset + index + 0x410}, {0x31, 0xC0, 0x90, 0x90, 0x90});
@@ -156,6 +164,10 @@ void Trainer::SetPlayerPos(const std::vector<float>& pos) {
     _memory->WriteData<float>({_globals, 0x18, 0x1E465 * 8, 0x24}, pos);
 }
 
+void Trainer::SetMainMenuColor(bool enable)
+{
+}
+
 bool Trainer::GetInfiniteChallenge() {
     return _memory->ReadData<byte>({_recordPlayerUpdate}, 1)[0] == 0xEB;
 }
@@ -182,17 +194,6 @@ void Trainer::SetMkChallenge(bool enable) {
     return;
 }
 
-bool Trainer::IsChallengeSolved() {
-    // Inspect the solved_t_target property of the challenge timer panel.
-    // If it is solved, the challenge was beaten; else it was not.
-    return _memory->ReadData<float>({_globals, 0x18, 0x04CB3 * 8, GetOffset(SolvedTarget)}, 1)[0] == 1;
-}
-
-float Trainer::GetChallengeTimer() {
-    // Inspect the multipanel that is the speed clock. Elapsed time is usually cleared, but we injected to replace that.
-    return _memory->ReadData<float>({_globals, 0x18, 0x03B33 * 8, GetOffset(ElapsedTime)}, 1)[0];
-}
-
 void Trainer::SetSeed(uint32_t seed) {
     _memory->WriteData<uint32_t>({_doSuccessSideEffects + 9}, {seed});
 }
@@ -206,6 +207,23 @@ void Trainer::RandomizeSeed() {
     uint32_t seed = GetSeed();
     seed = 0x8664f205 * seed + 5;
     SetSeed(seed);
+}
+
+float Trainer::GetChallengeTimer() {
+    return _memory->ReadData<float>({_globals, 0x18, 0x03B33 * 8, GetOffset(ElapsedTime)}, 1)[0];
+}
+
+ChallengeState Trainer::GetChallengeState() {
+    // Inspect the solved_t_target property of the challenge timer panel.
+    // If it is solved, the challenge was beaten; else it was not.
+    bool isChallengeSolved =  _memory->ReadData<float>({_globals, 0x18, 0x04CB3 * 8, GetOffset(SolvedTarget)}, 1)[0] == 1;
+    if (isChallengeSolved) return ChallengeState::Finished;
+
+    // Inspect the multipanel that is the speed clock. Elapsed time is usually cleared, but we injected to replace that.
+    float challengeTime = GetChallengeTimer();
+    if (challengeTime == -1.0f) return ChallengeState::Aborted;
+    if (challengeTime > 0) return ChallengeState::Started;
+    return ChallengeState::Off;
 }
 
 int32_t Trainer::GetOffset(Offset offset) {

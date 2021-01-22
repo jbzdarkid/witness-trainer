@@ -6,9 +6,6 @@
 
 #include "Trainer.h"
 
-// TODO: Maybe have a counter for consecutive solves? That would require me to know if you failed, though. Which I can do, it's just the record player iCounter.
-// TODO: Show current time (or time on completion?) Would be good for races when people aren't running a timer.
-
 #define HEARTBEAT           0x401
 #define ACTIVATE_GAME       0x402
 #define INFINITE_CHALLENGE  0x403
@@ -24,12 +21,11 @@
 HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
-HWND g_activateGame, g_seed;
+HWND g_activateGame, g_seed, g_eventLog;
 auto g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
-bool g_challengeSolved = true;
-std::wstring g_eventLog;
+ChallengeState g_challengeState = ChallengeState::Off;
 
-void SetStringText(HWND hwnd, const std::string& text) {
+void SetWindowString(HWND hwnd, const std::string& text) {
     static std::unordered_map<HWND, std::string> hwndText;
     auto search = hwndText.find(hwnd);
     if (search != hwndText.end()) {
@@ -42,7 +38,7 @@ void SetStringText(HWND hwnd, const std::string& text) {
     SetWindowTextA(hwnd, text.c_str());
 }
 
-void SetStringText(HWND hwnd, const std::wstring& text) {
+void SetWindowString(HWND hwnd, const std::wstring& text) {
     static std::unordered_map<HWND, std::wstring> hwndText;
     auto search = hwndText.find(hwnd);
     if (search != hwndText.end()) {
@@ -64,6 +60,12 @@ std::wstring GetWindowString(HWND hwnd) {
     return text;
 }
 
+void AddEvent(const std::wstring& event) {
+    std::wstring text = GetWindowString(g_eventLog);
+    text += L'\n' + event;
+    SetWindowString(g_eventLog, text);
+}
+
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_DESTROY:
@@ -82,7 +84,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 // Don't discard any settings, just free the trainer.
                 if (g_trainer) {
                     g_trainer = nullptr;
-                    SetStringText(g_activateGame, L"Launch game");
+                    SetWindowString(g_activateGame, L"Launch game");
                 }
                 break;
             case ProcStatus::Reload:
@@ -97,7 +99,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 g_trainer->SetInfiniteChallenge(IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE));
                 g_trainer->SetMkChallenge(IsDlgButtonChecked(hwnd, MK_CHALLENGE));
                 PostMessage(hwnd, WM_COMMAND, SET_SEED, 0); // Set seed from Randomizer -> Game
-                SetStringText(g_activateGame, L"Switch to game");
+                SetWindowString(g_activateGame, L"Switch to game");
                 break;
             case ProcStatus::Running:
                 if (!g_trainer) {
@@ -107,26 +109,25 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     CheckDlgButton(hwnd, INFINITE_CHALLENGE, g_trainer->GetInfiniteChallenge());
                     CheckDlgButton(hwnd, MK_CHALLENGE, g_trainer->GetMkChallenge());
                     PostMessage(hwnd, WM_COMMAND, SHOW_SEED, 0); // Load seed from Game -> Randomizer
-                    SetStringText(g_activateGame, L"Switch to game");
+                    SetWindowString(g_activateGame, L"Switch to game");
                 } else {
                     // Process was already running, and so were we (this recurs every heartbeat). Enforce settings and apply repeated actions.
-                    bool challengeIsNowSolved = g_trainer->IsChallengeSolved();
-                    if (!g_challengeSolved && challengeIsNowSolved) {
-                        g_eventLog.append(L"Completed seed " + std::to_wstring(g_trainer->GetSeed()) + L" in " + std::to_wstring(g_trainer->GetChallengeTimer()));
+                    ChallengeState newState = g_trainer->GetChallengeState();
+                    if (g_challengeState != ChallengeState::Finished && newState == ChallengeState::Finished) {
+                        AddEvent(L"Completed seed " + std::to_wstring(g_trainer->GetSeed()) + L" in " + std::to_wstring(g_trainer->GetChallengeTimer()));
                         if (IsDlgButtonChecked(hwnd, CHALLENGE_REROLL)) {
                             bool seedWasHidden = (GetWindowString(g_seed) == SEED_HIDDEN);
                             PostMessage(hwnd, WM_COMMAND, RANDOM_SEED, 0);
                             if (!seedWasHidden) PostMessage(hwnd, WM_COMMAND, SHOW_SEED, 0);
                         }
-                    }
-                    if (!g_challengeSolved && g_trainer->GetChallengeTimer() > 0) {
+                    } else if (g_challengeState != ChallengeState::Started && newState == ChallengeState::Started) {
                         if (GetWindowString(g_seed) == SEED_HIDDEN) {
-                            g_eventLog.append(L"Started challenge with a hidden seed");
+                            AddEvent(L"Started challenge with a hidden seed");
                         } else {
-                            g_eventLog.append(L"Started challenge with seed" + GetWindowString(g_seed));
+                            AddEvent(L"Started challenge with seed" + GetWindowString(g_seed));
                         }
                     }
-                    g_challengeSolved = challengeIsNowSolved;
+                    g_challengeState = newState;
                 }
 
                 break;
@@ -162,14 +163,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
 
     if (command == SET_SEED) {
         uint32_t seed = wcstoul(GetWindowString(g_seed).c_str(), nullptr, 10); // Load seed from UI
-        SetStringText(g_seed, std::to_wstring(seed).c_str()); // Restore parsed value
+        SetWindowString(g_seed, std::to_wstring(seed).c_str()); // Restore parsed value
         g_trainer->SetSeed(seed);
     } else if (command == RANDOM_SEED) {
         g_trainer->RandomizeSeed();
-        SetStringText(g_seed, SEED_HIDDEN);
+        SetWindowString(g_seed, SEED_HIDDEN);
     } else if (command == SHOW_SEED && (wParam & 0x1000000)) {
         uint32_t seed = g_trainer->GetSeed();
-        SetStringText(g_seed, std::to_wstring(seed).c_str());
+        SetWindowString(g_seed, std::to_wstring(seed).c_str());
     } else if (command == TELE_TO_CHALLENGE) {
         g_trainer->SetPlayerPos({-39.0f, -31.4f, -11.7f});
     }
@@ -244,7 +245,7 @@ void CreateComponents() {
     CreateLabel(x, y + 5, 100, L"Seed:");
     g_seed = CreateText(x + 40, y, 160, SEED_HIDDEN, SHOW_SEED);
     // PostMessage(g_seed, EM_SETEVENTMASK, 0, ENM_KEYEVENTS);
-    
+
     CreateButton(x, y, 200, L"Set seed", SET_SEED);
     CreateButton(x, y, 200, L"Generate new seed", RANDOM_SEED);
 
@@ -256,6 +257,8 @@ void CreateComponents() {
 
     CreateLabel(x, y, 185, L"Reroll RNG after victory");
     CreateCheckbox(200, y, CHALLENGE_REROLL);
+
+    g_eventLog = CreateLabel(x, y, 200, 300);
 }
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow) {
@@ -280,7 +283,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     GetClientRect(GetDesktopWindow(), &rect);
     g_hwnd = CreateWindow(WINDOW_CLASS, PRODUCT_NAME,
         WS_SYSMENU | WS_MINIMIZEBOX,
-        rect.right - 550, 200, 240, 300,
+        rect.right - 550, 200, 240, 500,
         nullptr, nullptr, hInstance, nullptr);
     ShowWindow(g_hwnd, nCmdShow);
     UpdateWindow(g_hwnd);

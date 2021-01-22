@@ -7,12 +7,20 @@
     static_cast<byte>((val & 0x00FF0000) >> 0x10), \
     static_cast<byte>((val & 0xFF000000) >> 0x18)
 
+enum class ChallengeState {
+    Aborted,
+    Off,
+    Started,
+    Finished,
+};
+
 class Trainer final {
 public:
     static std::shared_ptr<Trainer> Create(const std::shared_ptr<Memory>& memory);
     bool Init();
 
     void SetPlayerPos(const std::vector<float>& pos);
+    void SetMainMenuColor(bool enable);
 
     bool GetInfiniteChallenge();
     void SetInfiniteChallenge(bool enable);
@@ -20,21 +28,22 @@ public:
     bool GetMkChallenge();
     void SetMkChallenge(bool enable);
 
-    bool IsChallengeSolved();
-    float GetChallengeTimer();
-
     void SetSeed(uint32_t seed);
     uint32_t GetSeed();
     void RandomizeSeed();
 
+    float GetChallengeTimer();
+    ChallengeState GetChallengeState();
+
+private:
     enum Offset {
         PowerOffOnFail,
         ElapsedTime,
         SolvedTarget,
+        DoSuccessSideEffects,
     };
     int32_t GetOffset(Offset offset);
 
-private:
     static inline int32_t LongToInt(int64_t orig) {
         assert(orig < std::numeric_limits<int32_t>::max());
         assert(orig > std::numeric_limits<int32_t>::min());
