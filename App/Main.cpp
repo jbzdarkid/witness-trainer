@@ -18,7 +18,7 @@
 #define RANDOM_SEED         0x407
 #define SHOW_SEED           0x408
 #define TELE_TO_CHALLENGE   0x409
-#define SEED_HIDDEN         L"(hidden)"
+#define SEED_HIDDEN         L"(click to show)"
 
 // Globals
 HWND g_hwnd;
@@ -27,6 +27,7 @@ std::shared_ptr<Trainer> g_trainer;
 HWND g_activateGame, g_seed;
 auto g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
 bool g_challengeSolved = true;
+std::wstring g_eventLog;
 
 void SetStringText(HWND hwnd, const std::string& text) {
     static std::unordered_map<HWND, std::string> hwndText;
@@ -109,20 +110,23 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     SetStringText(g_activateGame, L"Switch to game");
                 } else {
                     // Process was already running, and so were we (this recurs every heartbeat). Enforce settings and apply repeated actions.
-                    if (g_trainer->IsChallengeSolved()) {
-                        if (!g_challengeSolved) { // Finished a run
-                            g_challengeSolved = true;
-                            if (IsDlgButtonChecked(hwnd, CHALLENGE_REROLL)) {
-                                PostMessage(hwnd, WM_COMMAND, RANDOM_SEED, 0);
-                                if (GetWindowString(g_seed) != SEED_HIDDEN) {
-                                    PostMessage(hwnd, WM_COMMAND, SHOW_SEED, 0);
-                                }
-                            }
+                    bool challengeIsNowSolved = g_trainer->IsChallengeSolved();
+                    if (!g_challengeSolved && challengeIsNowSolved) {
+                        g_eventLog.append(L"Completed seed " + std::to_wstring(g_trainer->GetSeed()) + L" in " + std::to_wstring(g_trainer->GetChallengeTimer()));
+                        if (IsDlgButtonChecked(hwnd, CHALLENGE_REROLL)) {
+                            bool seedWasHidden = (GetWindowString(g_seed) == SEED_HIDDEN);
+                            PostMessage(hwnd, WM_COMMAND, RANDOM_SEED, 0);
+                            if (!seedWasHidden) PostMessage(hwnd, WM_COMMAND, SHOW_SEED, 0);
                         }
-                    } else {
-                        // Started a new run
-                        g_challengeSolved = false;
                     }
+                    if (!g_challengeSolved && g_trainer->GetChallengeTimer() > 0) {
+                        if (GetWindowString(g_seed) == SEED_HIDDEN) {
+                            g_eventLog.append(L"Started challenge with a hidden seed");
+                        } else {
+                            g_eventLog.append(L"Started challenge with seed" + GetWindowString(g_seed));
+                        }
+                    }
+                    g_challengeSolved = challengeIsNowSolved;
                 }
 
                 break;
@@ -162,7 +166,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         g_trainer->SetSeed(seed);
     } else if (command == RANDOM_SEED) {
         g_trainer->RandomizeSeed();
-        SetStringText(g_seed, L"(click to show)");
+        SetStringText(g_seed, SEED_HIDDEN);
     } else if (command == SHOW_SEED && (wParam & 0x1000000)) {
         uint32_t seed = g_trainer->GetSeed();
         SetStringText(g_seed, std::to_wstring(seed).c_str());

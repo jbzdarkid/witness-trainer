@@ -1,11 +1,17 @@
 #pragma once
 
+// Note: Little endian
+#define INT_TO_BYTES(val) \
+    static_cast<byte>((val & 0x000000FF) >> 0x00), \
+    static_cast<byte>((val & 0x0000FF00) >> 0x08), \
+    static_cast<byte>((val & 0x00FF0000) >> 0x10), \
+    static_cast<byte>((val & 0xFF000000) >> 0x18)
+
 class Trainer final {
 public:
     static std::shared_ptr<Trainer> Create(const std::shared_ptr<Memory>& memory);
     bool Init();
 
-    std::vector<float> GetPlayerPos();
     void SetPlayerPos(const std::vector<float>& pos);
 
     bool GetInfiniteChallenge();
@@ -15,10 +21,18 @@ public:
     void SetMkChallenge(bool enable);
 
     bool IsChallengeSolved();
+    float GetChallengeTimer();
 
     void SetSeed(uint32_t seed);
     uint32_t GetSeed();
     void RandomizeSeed();
+
+    enum Offset {
+        PowerOffOnFail,
+        ElapsedTime,
+        SolvedTarget,
+    };
+    int32_t GetOffset(Offset offset);
 
 private:
     static inline int32_t LongToInt(int64_t orig) {

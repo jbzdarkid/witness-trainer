@@ -32,11 +32,16 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         trainer->_doSuccessSideEffects = LongToInt(doSuccessSideEffects);
     });
 
+    // finish_speed_clock
+    int32_t elapsedTimeOffset = trainer->GetOffset(ElapsedTime);
+    memory->AddSigScan({0xC7, 0x80, INT_TO_BYTES(elapsedTimeOffset), 0x00, 0x00, 0x80, 0xBF}, [memory](int64_t offset, int index, const std::vector<byte>& data) {
+        memory->WriteData<int32_t>({offset + index + 2}, {0}); // Do not clear elapsed time when completing the challenge
+    });
+
     numFailedScans = memory->ExecuteSigScans();
     if (numFailedScans != 0) return nullptr; // Sigscans failed, we'll try again later.
 
     if (!trainer->Init()) return nullptr; // Initialization failed
-
 
     // TODO: Also change the main menu color to blue!
 
@@ -52,14 +57,7 @@ void Trainer::AdjustRng(const std::vector<byte>& data, int64_t offset, int index
 bool Trainer::Init() {
     // Prevent challenge panels from turning off on failure. Otherwise, rerolling a panel could cause an RNG change.
     for (int32_t panel : _challengePanels) {
-        int32_t powerOffOnFail = 0;
-        if (_globals == 0x5B28C0) { // Version differences.
-            powerOffOnFail = 0x2C0;
-        } else {
-            assert(_globals == 0x62D0A0);
-            powerOffOnFail = 0x2B8;
-        }
-        _memory->WriteData<int32_t>({_globals, 0x18, panel * 8, powerOffOnFail}, {0});
+        _memory->WriteData<int32_t>({_globals, 0x18, panel * 8, GetOffset(PowerOffOnFail)}, {0});
     }
 
     int64_t rng = _memory->ReadData<int64_t>({_globals + 0x10}, 1)[0];
@@ -140,13 +138,6 @@ bool Trainer::Init() {
         int32_t relativeRng2 = (_globals + 0x30) - (_doSuccessSideEffects + 0x6); // +6 is for the length of the line
         uint32_t seed = static_cast<uint32_t>(time(nullptr)); // Seed from the time in milliseconds
 
-        // Note: Little endian
-        #define INT_TO_BYTES(val) \
-            static_cast<byte>((val & 0x000000FF) >> 0x00), \
-            static_cast<byte>((val & 0x0000FF00) >> 0x08), \
-            static_cast<byte>((val & 0x00FF0000) >> 0x10), \
-            static_cast<byte>((val & 0xFF000000) >> 0x18)
-
         // Overwritten bytes start just after the movsxd rax, dword ptr ds:[rdi + 0x230]
         // aka test eax, eax; jle 2C; imul rcx, rax, 34
         _memory->WriteData<byte>({_doSuccessSideEffects}, {
@@ -159,10 +150,6 @@ bool Trainer::Init() {
     }
 
     return true;
-}
-
-std::vector<float> Trainer::GetPlayerPos() {
-    return _memory->ReadData<float>({_globals, 0x18, 0x1E465 * 8, 0x24}, 3);
 }
 
 void Trainer::SetPlayerPos(const std::vector<float>& pos) {
@@ -196,17 +183,13 @@ void Trainer::SetMkChallenge(bool enable) {
 }
 
 bool Trainer::IsChallengeSolved() {
-    int32_t solvedTarget = 0;
-    if (_globals == 0x5B28C0) { // Version differences.
-        solvedTarget = 0x29C;
-    } else {
-        assert(_globals == 0x62D0A0);
-        solvedTarget = 0x294;
-    }
-
     // Inspect the solved_t_target property of the challenge timer panel.
     // If it is solved, the challenge was beaten; else it was not.
-    return _memory->ReadData<int32_t>({_globals, 0x18, 0x04CB3 * 8, solvedTarget}, 1)[0] == 1;
+    return _memory->ReadData<int32_t>({_globals, 0x18, 0x04CB3 * 8, GetOffset(SolvedTarget)}, 1)[0] == 1;
+}
+
+float Trainer::GetChallengeTimer() {
+    return _memory->ReadData<float>({_globals, 0x18, 0x03B33 * 8, GetOffset(ElapsedTime)}, 1)[0];
 }
 
 void Trainer::SetSeed(uint32_t seed) {
@@ -222,4 +205,20 @@ void Trainer::RandomizeSeed() {
     uint32_t seed = GetSeed();
     seed = 0x8664f205 * seed + 5;
     SetSeed(seed);
+}
+
+int32_t Trainer::GetOffset(Offset offset) {
+    if (_globals == 0x5B28C0) {
+        if (offset == PowerOffOnFail) return 0x2C0;
+        if (offset == ElapsedTime) return 0x224;
+        if (offset == SolvedTarget) return 0x29C;
+    } else {
+        assert(_globals == 0x62D0A0);
+        if (offset == PowerOffOnFail) return 0x2B8;
+        if (offset == ElapsedTime) return 0x21C;
+        if (offset == SolvedTarget) return 0x294;
+    }
+
+    assert(false);
+    return 0;
 }
