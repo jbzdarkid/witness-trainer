@@ -34,8 +34,8 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
 
     // finish_speed_clock
     int32_t elapsedTimeOffset = trainer->GetOffset(ElapsedTime);
-    memory->AddSigScan({0xC7, 0x80, INT_TO_BYTES(elapsedTimeOffset), 0x00, 0x00, 0x80, 0xBF}, [memory](int64_t offset, int index, const std::vector<byte>& data) {
-        memory->WriteData<int32_t>({offset + index + 2}, {0}); // Do not clear elapsed time when completing the challenge
+    memory->AddSigScan({0xC7, 0x80, INT_TO_BYTES(elapsedTimeOffset), 0x00, 0x00}, [memory](int64_t offset, int index, const std::vector<byte>& data) {
+        memory->WriteData<int32_t>({offset + index + 6}, {0}); // Do not clear elapsed time when completing the challenge
     });
 
     numFailedScans = memory->ExecuteSigScans();
@@ -185,10 +185,11 @@ void Trainer::SetMkChallenge(bool enable) {
 bool Trainer::IsChallengeSolved() {
     // Inspect the solved_t_target property of the challenge timer panel.
     // If it is solved, the challenge was beaten; else it was not.
-    return _memory->ReadData<int32_t>({_globals, 0x18, 0x04CB3 * 8, GetOffset(SolvedTarget)}, 1)[0] == 1;
+    return _memory->ReadData<float>({_globals, 0x18, 0x04CB3 * 8, GetOffset(SolvedTarget)}, 1)[0] == 1;
 }
 
 float Trainer::GetChallengeTimer() {
+    // Inspect the multipanel that is the speed clock. Elapsed time is usually cleared, but we injected to replace that.
     return _memory->ReadData<float>({_globals, 0x18, 0x03B33 * 8, GetOffset(ElapsedTime)}, 1)[0];
 }
 
