@@ -62,7 +62,7 @@ std::wstring GetWindowString(HWND hwnd) {
 
 void AddEvent(const std::wstring& event) {
     std::wstring text = GetWindowString(g_eventLog);
-    text += L'\n' + event;
+    text = event + L'\n' + text;
     SetWindowString(g_eventLog, text);
 }
 
@@ -118,7 +118,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                         int32_t minutes = seconds / 60;
                         seconds -= minutes * 60;
                         std::wstring buffer(128, L'\0');
-                        swprintf(&buffer[0], buffer.size(), L"Completed seed %d in %02d:%02d", g_trainer->GetSeed(), minutes, seconds);
+                        swprintf(&buffer[0], buffer.size(), L"Completed seed %u in %02d:%02d", g_trainer->GetSeed(), minutes, seconds);
                         AddEvent(buffer);
                         if (IsDlgButtonChecked(hwnd, CHALLENGE_REROLL)) {
                             bool seedWasHidden = (GetWindowString(g_seed) == SEED_HIDDEN);
@@ -126,10 +126,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                             if (!seedWasHidden) PostMessage(hwnd, WM_COMMAND, SHOW_SEED, 0);
                         }
                     } else if (g_challengeState != ChallengeState::Started && newState == ChallengeState::Started) {
+                        // TODO: The challenge timer keeps running! So how do I know if it's a new challenge...?
+                        // Probably I should look at the sound thing I found.
                         if (GetWindowString(g_seed) == SEED_HIDDEN) {
-                            AddEvent(L"Started challenge with a hidden seed");
+                            // AddEvent(L"Started challenge with a hidden seed");
                         } else {
-                            AddEvent(L"Started challenge with seed " + GetWindowString(g_seed));
+                            // AddEvent(L"Started challenge with seed " + GetWindowString(g_seed));
                         }
                     }
                     g_challengeState = newState;
@@ -168,10 +170,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
 
     if (command == SET_SEED) {
         uint32_t seed = wcstoul(GetWindowString(g_seed).c_str(), nullptr, 10); // Load seed from UI
-        if (seed != 0) { // Avoid parsing failures and initial empty seed
-            SetWindowString(g_seed, std::to_wstring(seed).c_str()); // Restore parsed value
-            g_trainer->SetSeed(seed);
-        }
+        SetWindowString(g_seed, std::to_wstring(seed).c_str()); // Restore parsed value
+        g_trainer->SetSeed(seed);
     } else if (command == RANDOM_SEED) {
         g_trainer->RandomizeSeed();
         SetWindowString(g_seed, SEED_HIDDEN);
@@ -250,7 +250,8 @@ void CreateComponents() {
     CreateButton(x, y, 200, L"Teleport to Challenge", TELE_TO_CHALLENGE);
 
     CreateLabel(x, y + 5, 100, L"Seed:");
-    g_seed = CreateText(x + 40, y, 160, L"0", SHOW_SEED);
+    uint32_t seed = 0x8664f205 * static_cast<uint32_t>(time(nullptr)) + 5; // Seeded from time & randomized once.
+    g_seed = CreateText(x + 40, y, 160, std::to_wstring(seed).c_str(), SHOW_SEED);
 
     CreateButton(x, y, 200, L"Set seed", SET_SEED);
     CreateButton(x, y, 200, L"Generate new seed", RANDOM_SEED);
