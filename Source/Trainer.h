@@ -20,7 +20,6 @@ public:
     bool Init();
 
     void SetPlayerPos(const std::vector<float>& pos);
-    void SetMainMenuColor(bool enable);
 
     bool GetInfiniteChallenge();
     void SetInfiniteChallenge(bool enable);
@@ -41,6 +40,7 @@ private:
         ElapsedTime,
         SolvedTarget,
         DoSuccessSideEffects,
+        DurationTotal,
     };
     int32_t GetOffset(Offset offset);
 
@@ -56,6 +56,7 @@ private:
 
     int32_t _globals = 0;
     int32_t _recordPlayerUpdate = 0;
+    int32_t _recordPlayerUpdate2 = 0;
     int32_t _doSuccessSideEffects = 0;
     int64_t _rng2 = 0;
 

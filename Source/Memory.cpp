@@ -23,11 +23,7 @@ void Memory::StartHeartbeat(HWND window, UINT message) {
         SetCurrentThreadName(L"Heartbeat");
         while (sharedThis->_threadActive) {
             sharedThis->Heartbeat(window, message);
-#ifdef NDEBUG
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
-#else // Induce more stress in debug, to catch errors more easily.
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-#endif
         }
     });
     _thread.detach();

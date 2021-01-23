@@ -13,7 +13,7 @@
 #define CHALLENGE_REROLL    0x405
 #define SET_SEED            0x406
 #define RANDOM_SEED         0x407
-#define SHOW_SEED           0x408
+#define SHOW_SEED           0x0000000001000408
 #define TELE_TO_CHALLENGE   0x409
 #define SEED_HIDDEN         L"(click to show)"
 
@@ -163,12 +163,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
 
     if (command == SET_SEED) {
         uint32_t seed = wcstoul(GetWindowString(g_seed).c_str(), nullptr, 10); // Load seed from UI
-        SetWindowString(g_seed, std::to_wstring(seed).c_str()); // Restore parsed value
-        g_trainer->SetSeed(seed);
+        if (seed != 0) { // Avoid parsing failures and initial empty seed
+            SetWindowString(g_seed, std::to_wstring(seed).c_str()); // Restore parsed value
+            g_trainer->SetSeed(seed);
+        }
     } else if (command == RANDOM_SEED) {
         g_trainer->RandomizeSeed();
         SetWindowString(g_seed, SEED_HIDDEN);
-    } else if (command == SHOW_SEED && (wParam & 0x1000000)) {
+    } else if (wParam == SHOW_SEED) { // Using wParam instead of command because we need to check the high bits.
         uint32_t seed = g_trainer->GetSeed();
         SetWindowString(g_seed, std::to_wstring(seed).c_str());
     } else if (command == TELE_TO_CHALLENGE) {
@@ -243,8 +245,7 @@ void CreateComponents() {
     CreateButton(x, y, 200, L"Teleport to Challenge", TELE_TO_CHALLENGE);
 
     CreateLabel(x, y + 5, 100, L"Seed:");
-    g_seed = CreateText(x + 40, y, 160, SEED_HIDDEN, SHOW_SEED);
-    // PostMessage(g_seed, EM_SETEVENTMASK, 0, ENM_KEYEVENTS);
+    g_seed = CreateText(x + 40, y, 160, L"0", SHOW_SEED);
 
     CreateButton(x, y, 200, L"Set seed", SET_SEED);
     CreateButton(x, y, 200, L"Generate new seed", RANDOM_SEED);

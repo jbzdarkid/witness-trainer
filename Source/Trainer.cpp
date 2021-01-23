@@ -20,22 +20,17 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
     size_t numFailedScans = memory->ExecuteSigScans();
     if (numFailedScans != 0) return nullptr; // Sigscans failed, we'll try again later.
 
+    // TODO: Why are these not in Init()?
+
     // do_success_side_effects
     memory->AddSigScan({0xFF, 0xC8, 0x99, 0x2B, 0xC2, 0xD1, 0xF8, 0x8B, 0xD0}, [trainer](int64_t offset, int index, const std::vector<byte>& data) {
-        int64_t doSuccessSideEffects = 0;
         if (trainer->_globals == 0x5B28C0) { // Version differences.
-            doSuccessSideEffects = offset + index + 0x3E;
+            index += 0x3E;
         } else {
             assert(trainer->_globals == 0x62D0A0);
-            doSuccessSideEffects = offset + index + 0x42;
+            index += 0x42;
         }
-        trainer->_doSuccessSideEffects = LongToInt(doSuccessSideEffects);
-    });
-
-    // finish_speed_clock
-    int32_t elapsedTimeOffset = trainer->GetOffset(ElapsedTime);
-    memory->AddSigScan({0xC7, 0x80, INT_TO_BYTES(elapsedTimeOffset), 0x00, 0x00}, [memory](int64_t offset, int index, const std::vector<byte>& data) {
-        memory->WriteData<int32_t>({offset + index + 6}, {0}); // Do not clear elapsed time when completing the challenge
+        trainer->_doSuccessSideEffects = LongToInt(offset + index);
     });
 
     memory->AddSigScan({0x41, 0xB8, 0x61, 0x00, 0x00, 0x00, 0x48, 0x8B, 0xD3}, [trainer, memory](__int64 offset, int index, const std::vector<byte>& data) {
@@ -48,6 +43,12 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
 
         // Set the main menu to red by *not* setting the green or blue component.
         memory->WriteData<byte>({offset + index}, {0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00}); // 8-byte NOP
+    });
+
+
+    memory->AddSigScan({0xF3, 0x0F, 0x10, 0x82, INT_TO_BYTES(trainer->GetOffset(DurationTotal))}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
+        // TODO: ... is this relative to _recordPlayerUpdate?
+        trainer->_recordPlayerUpdate2 = LongToInt(offset + index);
     });
 
     numFailedScans = memory->ExecuteSigScans();
@@ -74,6 +75,7 @@ bool Trainer::Init() {
     _rng2 = _memory->ReadData<int64_t>({_globals + 0x30}, 1)[0];
     if (_rng2 == rng + 4) return true; // Already injected
 
+    // We have to set this before adjusting RNG, because some of the RNG functions might get called, and if they are called before RNG2 is set, the game will crash.
     _rng2 = rng + 4;
     _memory->WriteData<int64_t>({_globals + 0x30}, {_rng2});
 
@@ -139,33 +141,35 @@ bool Trainer::Init() {
         _memory->WriteData<byte>({offset + index + 0x1AE}, {0x31, 0xC0, 0x90, 0x90, 0x90});
     });
 
+    // finish_speed_clock
+    _memory->AddSigScan({0xC7, 0x80, INT_TO_BYTES(GetOffset(ElapsedTime)), 0x00, 0x00, 0x80, 0xBF}, [&](int64_t offset, int index, const std::vector<byte>& data) {
+        // Do not clear elapsed time when completing the challenge
+        _memory->WriteData<byte>({offset + index}, {
+            0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, // nops
+        });
+    });
+
     size_t numFailedScans = _memory->ExecuteSigScans();
     if (numFailedScans != 0) return false; // Sigscans failed, we'll try again later.
 
-    {
-        int32_t relativeRng2 = (_globals + 0x30) - (_doSuccessSideEffects + 0x6); // +6 is for the length of the line
-        uint32_t seed = static_cast<uint32_t>(time(nullptr)); // Seed from the time in milliseconds
+    int32_t relativeRng2 = (_globals + 0x30) - (_doSuccessSideEffects + 0x6); // +6 is for the length of the line
+    uint32_t seed = static_cast<uint32_t>(time(nullptr)); // Seed from the time in milliseconds
 
-        // Overwritten bytes start just after the movsxd rax, dword ptr ds:[rdi + 0x230]
-        // aka test eax, eax; jle 2C; imul rcx, rax, 34
-        _memory->WriteData<byte>({_doSuccessSideEffects}, {
-            0x8B, 0x0D, INT_TO_BYTES(relativeRng2),     // mov ecx, [_rng2]
-            0x67, 0xC7, 0x01, INT_TO_BYTES(seed),       // mov dword ptr ds:[ecx], seed
-            0x48, 0x83, 0xF8, 0x02,                     // cmp rax, 0x2 ; Shortened version of the original code. This checks if the record player was short-solved.
-            0x90, 0x90, 0x90                            // nop nop nop
-        });
-        RandomizeSeed(); // Reroll the seed because time() isn't very random.
-    }
+    // Overwritten bytes start just after the movsxd rax, dword ptr ds:[rdi + 0x230]
+    // aka test eax, eax; jle 2C; imul rcx, rax, 34
+    _memory->WriteData<byte>({_doSuccessSideEffects}, {
+        0x8B, 0x0D, INT_TO_BYTES(relativeRng2),     // mov ecx, [_rng2]
+        0x67, 0xC7, 0x01, INT_TO_BYTES(seed),       // mov dword ptr ds:[ecx], seed
+        0x48, 0x83, 0xF8, 0x02,                     // cmp rax, 0x2 ; Shortened version of the original code. This checks if the record player was short-solved.
+        0x90, 0x90, 0x90                            // nop nop nop
+    });
+    RandomizeSeed(); // Reroll the seed because time() isn't very random.
 
     return true;
 }
 
 void Trainer::SetPlayerPos(const std::vector<float>& pos) {
     _memory->WriteData<float>({_globals, 0x18, 0x1E465 * 8, 0x24}, pos);
-}
-
-void Trainer::SetMainMenuColor(bool enable)
-{
 }
 
 bool Trainer::GetInfiniteChallenge() {
@@ -185,13 +189,24 @@ void Trainer::SetInfiniteChallenge(bool enable) {
 }
 
 bool Trainer::GetMkChallenge() {
-    return false;
+    return _memory->ReadData<byte>({_recordPlayerUpdate2}, 1)[0] == 0xB8;
 }
 
 void Trainer::SetMkChallenge(bool enable) {
-    // C7 83 F0 00 00 00 05 00 00 00 sets state to 5... but what triggers this?
-    // Entity_Record_Player::stop_playing is called when the timer runs out, and sets state = 6. Maybe this is what we want?
-    return;
+    if (enable) {
+        _memory->WriteData<byte>({_recordPlayerUpdate2}, {
+            0xB8, INT_TO_BYTES(100), // mov eax, 100        ; New duration in seconds
+            0xF3, 0x0F, 0x2A, 0xC0,  // cvtsi2ss xmm0, eax  ; We cannot directly write to float registers, so we convert from eax
+            0x90, 0x90, 0x90, 0x90,  // nop nop nop
+        });
+    } else {
+        // Original code
+        _memory->WriteData<byte>({_recordPlayerUpdate2}, {
+            0xF3, 0x0F, 0x10, 0x82, INT_TO_BYTES(GetOffset(DurationTotal)),
+            0x0F, 0x2E, 0xC6,
+            0x74, 0x3B,
+        });
+    }
 }
 
 void Trainer::SetSeed(uint32_t seed) {
@@ -210,6 +225,7 @@ void Trainer::RandomizeSeed() {
 }
 
 float Trainer::GetChallengeTimer() {
+    // Inspect the multipanel that is the speed clock. Elapsed time is usually cleared, but we injected to replace that.
     return _memory->ReadData<float>({_globals, 0x18, 0x03B33 * 8, GetOffset(ElapsedTime)}, 1)[0];
 }
 
@@ -219,7 +235,6 @@ ChallengeState Trainer::GetChallengeState() {
     bool isChallengeSolved =  _memory->ReadData<float>({_globals, 0x18, 0x04CB3 * 8, GetOffset(SolvedTarget)}, 1)[0] == 1;
     if (isChallengeSolved) return ChallengeState::Finished;
 
-    // Inspect the multipanel that is the speed clock. Elapsed time is usually cleared, but we injected to replace that.
     float challengeTime = GetChallengeTimer();
     if (challengeTime == -1.0f) return ChallengeState::Aborted;
     if (challengeTime > 0) return ChallengeState::Started;
@@ -231,11 +246,13 @@ int32_t Trainer::GetOffset(Offset offset) {
         if (offset == PowerOffOnFail) return 0x2C0;
         if (offset == ElapsedTime) return 0x224;
         if (offset == SolvedTarget) return 0x29C;
+        if (offset == DurationTotal) return 0xDC;
     } else {
         assert(_globals == 0x62D0A0);
         if (offset == PowerOffOnFail) return 0x2B8;
         if (offset == ElapsedTime) return 0x21C;
         if (offset == SolvedTarget) return 0x294;
+        if (offset == DurationTotal) return 0xD4;
     }
 
     assert(false);

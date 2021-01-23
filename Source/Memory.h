@@ -2,12 +2,12 @@
 #include "ThreadSafeAddressMap.h"
 
 enum ProcStatus : WPARAM {
-    NotRunning,
-    Started,
-    Running,
-    Reload,
-    NewGame,
-    Stopped
+    NotRunning = 0,
+    Started    = 1,
+    Running    = 2,
+    Reload     = 3,
+    NewGame    = 4,
+    Stopped    = 5,
 };
 
 using byte = unsigned char;
@@ -72,7 +72,7 @@ private:
     int _loadCountOffset = 0;
     __int64 _previousEntityManager = 0;
     int _previousLoadCount = 0;
-    ProcStatus _nextStatus = ProcStatus::Started;
+    ProcStatus _nextStatus = ProcStatus::Running;
 
     // Parts of Read / Write / Sigscan
     ThreadSafeAddressMap _computedAddresses;
