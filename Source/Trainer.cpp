@@ -195,7 +195,7 @@ bool Trainer::GetMkChallenge() {
 void Trainer::SetMkChallenge(bool enable) {
     if (enable) {
         _memory->WriteData<byte>({_recordPlayerUpdate2}, {
-            0xB8, INT_TO_BYTES(100), // mov eax, 100        ; New duration in seconds
+            0xB8, INT_TO_BYTES(277), // mov eax, 277        ; New duration in seconds
             0xF3, 0x0F, 0x2A, 0xC0,  // cvtsi2ss xmm0, eax  ; We cannot directly write to float registers, so we convert from eax
             0x90, 0x90, 0x90, 0x90,  // nop nop nop
         });

@@ -114,7 +114,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     // Process was already running, and so were we (this recurs every heartbeat). Enforce settings and apply repeated actions.
                     ChallengeState newState = g_trainer->GetChallengeState();
                     if (g_challengeState != ChallengeState::Finished && newState == ChallengeState::Finished) {
-                        AddEvent(L"Completed seed " + std::to_wstring(g_trainer->GetSeed()) + L" in " + std::to_wstring(g_trainer->GetChallengeTimer()));
+                        int32_t seconds = static_cast<int>(g_trainer->GetChallengeTimer());
+                        int32_t minutes = seconds / 60;
+                        seconds -= minutes * 60;
+                        std::wstring buffer(128, L'\0');
+                        swprintf(&buffer[0], buffer.size(), L"Completed seed %d in %02d:%02d", g_trainer->GetSeed(), minutes, seconds);
+                        AddEvent(buffer);
                         if (IsDlgButtonChecked(hwnd, CHALLENGE_REROLL)) {
                             bool seedWasHidden = (GetWindowString(g_seed) == SEED_HIDDEN);
                             PostMessage(hwnd, WM_COMMAND, RANDOM_SEED, 0);
@@ -124,7 +129,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                         if (GetWindowString(g_seed) == SEED_HIDDEN) {
                             AddEvent(L"Started challenge with a hidden seed");
                         } else {
-                            AddEvent(L"Started challenge with seed" + GetWindowString(g_seed));
+                            AddEvent(L"Started challenge with seed " + GetWindowString(g_seed));
                         }
                     }
                     g_challengeState = newState;
@@ -250,7 +255,7 @@ void CreateComponents() {
     CreateButton(x, y, 200, L"Set seed", SET_SEED);
     CreateButton(x, y, 200, L"Generate new seed", RANDOM_SEED);
 
-    CreateLabel(x, y, 185, L"Disable Challenge time limit");
+    CreateLabel(x, y, 185, L"Disable time limit");
     CreateCheckbox(200, y, INFINITE_CHALLENGE);
 
     CreateLabel(x, y, 185, L"First Song Only");
