@@ -166,11 +166,11 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetPanelData(int id) {
 
     auto numEdges = _memory->ReadData<int>({_globals, 0x18, id * 8, tracedEdgesOffset}, 1)[0];
     if (numEdges != 0) {
-        // Explicitly recomputing this intermediate, since the edges array might have re-allocated.
-        auto edgeDataPtr = _memory->ReadData<int>({_globals, 0x18, id * 8, tracedEdgesOffset + 8}, 1)[0];
+        // Explicitly computing this intermediate, since the edges array might have re-allocated.
+        auto edgeDataPtr = _memory->ReadData<__int64>({_globals, 0x18, id * 8, tracedEdgesOffset + 8}, 1)[0];
         if (edgeDataPtr != 0) {
             // Each Traced_Edge object is 0x34 bits == 13 bytes
-            auto edgeData = _memory->ReadData<float>({_globals, 0x18, id * 8, tracedEdgesOffset + 8, 0x0}, 13 * numEdges);
+            auto edgeData = _memory->ReadDataAbsolute<float>(edgeDataPtr, 13 * numEdges);
             data->tracedEdges.resize(numEdges * 3);
             for (int i=0; i<numEdges; i++) {
                 // position_a is a Vector3 at 0x18 (=element 6)
