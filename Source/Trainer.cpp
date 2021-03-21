@@ -145,6 +145,21 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetEntityData(int id) {
     return nullptr;
 }
 
+struct Traced_Edge final {
+    int32_t index_a;
+    int32_t index_b;
+    int32_t id_a;
+    int32_t id_b;
+    float t;
+    float t_highest;
+    float position_a[3];
+    float position_b[3];
+    bool water_reflect_a;
+    bool water_reflect_b;
+    bool hide_edge;
+    bool padding;
+};
+
 std::shared_ptr<Trainer::EntityData> Trainer::GetPanelData(int id) {
     int nameOffset = _solvedTargetOffset - 0x7C;
     int tracedEdgesOffset = _solvedTargetOffset - 0x6C;
@@ -169,14 +184,14 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetPanelData(int id) {
         // Explicitly computing this intermediate, since the edges array might have re-allocated.
         auto edgeDataPtr = _memory->ReadData<__int64>({_globals, 0x18, id * 8, tracedEdgesOffset + 8}, 1)[0];
         if (edgeDataPtr != 0) {
-            // Each Traced_Edge object is 0x34 bits == 13 bytes
-            auto edgeData = _memory->ReadDataAbsolute<float>(edgeDataPtr, 13 * numEdges);
+            std::vector<Traced_Edge> foo;
+            static_assert(sizeof(Traced_Edge) == 0x34);
+            std::vector<Traced_Edge> edgeData = _memory->ReadDataAbsolute<Traced_Edge>(edgeDataPtr, numEdges);
             data->tracedEdges.resize(numEdges * 3);
             for (int i=0; i<numEdges; i++) {
-                // position_a is a Vector3 at 0x18 (=element 6)
-                data->tracedEdges[i*3+0] = edgeData[i*13 + 6];
-                data->tracedEdges[i*3+1] = edgeData[i*13 + 7];
-                data->tracedEdges[i*3+2] = edgeData[i*13 + 8];
+                data->tracedEdges[i*3+0] = edgeData[i].position_a[0];
+                data->tracedEdges[i*3+1] = edgeData[i].position_a[1];
+                data->tracedEdges[i*3+2] = edgeData[i].position_a[2];
             }
         }
     }

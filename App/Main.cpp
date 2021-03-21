@@ -164,9 +164,11 @@ void SetActivePanel(int activePanel) {
             if (panelData->tracedEdges.size() > 0) {
                 previousPanelStart = {panelData->tracedEdges[0], panelData->tracedEdges[1], panelData->tracedEdges[2]};
             }
-            auto cameraPos = g_trainer->GetCameraPos();
-            auto distance = sqrt(pow(previousPanelStart[0] - cameraPos[0], 2) + pow(previousPanelStart[1] - cameraPos[1], 2) + pow(previousPanelStart[2] - cameraPos[2], 2));
-            SetStringText(g_panelDist, "Distance to panel: " + std::to_string(distance));
+            if (previousPanelStart.size() == 3) {
+                auto cameraPos = g_trainer->GetCameraPos();
+                auto distance = sqrt(pow(previousPanelStart[0] - cameraPos[0], 2) + pow(previousPanelStart[1] - cameraPos[1], 2) + pow(previousPanelStart[2] - cameraPos[2], 2));
+                SetStringText(g_panelDist, "Distance to panel: " + std::to_string(distance));
+            }
         }
     }
 }

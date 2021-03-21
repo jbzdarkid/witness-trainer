@@ -36,14 +36,14 @@ public:
 
     template<class T>
     inline std::vector<T> ReadData(const std::vector<__int64>& offsets, size_t numItems) {
-        std::vector<T> data(numItems, 0);
+        std::vector<T> data(numItems);
         if (!_handle) return data;
         ReadDataInternal(&data[0], ComputeOffset(offsets), numItems * sizeof(T));
         return data;
     }
     template<class T>
     inline std::vector<T> ReadDataAbsolute(uintptr_t address, size_t numItems) {
-        std::vector<T> data(numItems, 0);
+        std::vector<T> data(numItems);
         ReadDataInternal(&data[0], address, numItems * sizeof(T));
         return data;
     }
