@@ -254,7 +254,7 @@ void Trainer::ShowMissingPanels() {
 void Trainer::ShowNearbyEntities() {
     int32_t maxId = _memory->ReadData<int>({_globals, 0x14}, 1)[0];
 
-    std::vector<std::pair<float, int32_t>> nearbyEntities(20, {99999.9f, 0});
+    std::vector<std::pair<double, int32_t>> nearbyEntities(20, {99999.9f, 0});
 
     auto basePos = GetCameraPos();
     for (int32_t id = 0; id < maxId; id++) {
@@ -263,7 +263,7 @@ void Trainer::ShowNearbyEntities() {
         if (entity == 0) continue;
         std::vector<float> pos = _memory->ReadData<float>({_globals, 0x18, id * 8, 0x24}, 3);
 
-        float norm = std::pow(basePos[0] - pos[0], 2) + std::pow(basePos[1] - pos[1], 2) + std::pow(basePos[2] - pos[2], 2);
+        double norm = std::pow(basePos[0] - pos[0], 2) + std::pow(basePos[1] - pos[1], 2) + std::pow(basePos[2] - pos[2], 2);
         for (int i = 0; i < nearbyEntities.size(); i++) {
             if (norm < nearbyEntities[i].first) {
                 nearbyEntities.insert(nearbyEntities.begin() + i, {norm, id});
