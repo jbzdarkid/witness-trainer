@@ -200,8 +200,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             break; // LOWORD(wParam) contains the command
         case WM_CTLCOLORSTATIC:
             // Get rid of the gross gray background. https://stackoverflow.com/a/4495814
+            SetTextColor((HDC)wParam, RGB(0, 0, 0));
             SetBkColor((HDC)wParam, RGB(255, 255, 255));
-            return 0;
+            return (LRESULT)CreateSolidBrush(RGB(255, 255, 255));
+            // return 0;
         case HEARTBEAT:
             switch ((ProcStatus)wParam) {
             case ProcStatus::Stopped:
@@ -330,14 +332,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             g_savedCameraAng = trainer->GetCameraAng();
             SetPosAndAngText(g_savedPos, g_savedCameraPos, g_savedCameraAng);
         } else if (command == LOAD_POS) {
-            trainer->SetCameraPos(g_savedCameraPos);
-            trainer->SetCameraAng(g_savedCameraAng);
+            if (g_savedCameraPos[0] != 0 ||  g_savedCameraPos[1] != 0 || g_savedCameraPos[2] != 0) { // Prevent TP to origin (i.e. if the user hasn't set a position yet)
+                trainer->SetCameraPos(g_savedCameraPos);
+                trainer->SetCameraAng(g_savedCameraAng);
 
-            // The player position is from the feet, not the eyes, so we have to adjust slightly.
-            auto playerPos = g_savedCameraPos;
-            playerPos[2] -= 1.69f;
-            trainer->SetPlayerPos(playerPos);
-            SetPosAndAngText(g_currentPos, g_savedCameraPos, g_savedCameraAng);
+                // The player position is from the feet, not the eyes, so we have to adjust slightly.
+                auto playerPos = g_savedCameraPos;
+                playerPos[2] -= 1.69f;
+                trainer->SetPlayerPos(playerPos);
+                SetPosAndAngText(g_currentPos, g_savedCameraPos, g_savedCameraAng);
+            }
         }
     });
     t.detach();
