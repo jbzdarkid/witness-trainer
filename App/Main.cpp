@@ -6,6 +6,8 @@
 
 #include "Trainer.h"
 
+#include <unordered_set>
+
 #define HEARTBEAT           0x401
 #define SAVE_POS            0x402
 #define LOAD_POS            0x403
@@ -66,6 +68,7 @@ constexpr int32_t MASK_ALT     = 0x0400;
 constexpr int32_t MASK_WIN     = 0x0800;
 constexpr int32_t MASK_REPEAT  = 0x1000;
 std::map<int32_t, __int64> hotkeyCodes;
+std::unordered_set<int32_t> hotkeys; // Just the keys, for perf.
 
 #define SetWindowTextA(...) static_assert(false, "Call SetStringText instead of SetWindowTextA");
 #define SetWindowTextW(...) static_assert(false, "Call SetStringText instead of SetWindowTextW");
@@ -345,25 +348,31 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
 int32_t lastCode = 0;
 LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     // Only steal hotkeys when we (or the game) are the active window.
-    if (nCode == HC_ACTION && (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)) {
-        if (g_hwnd == GetForegroundWindow() || g_witnessProc->IsForeground()) {
-            PKBDLLHOOKSTRUCT p = (PKBDLLHOOKSTRUCT)lParam;
+    if (nCode == HC_ACTION)
+        if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP) {
+            lastCode = 0; // Cancel key repeat
+        } else if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
+            auto foreground = GetForegroundWindow();
+            if (g_hwnd == foreground || g_witnessProc->IsForeground()) {
+                auto p = (PKBDLLHOOKSTRUCT)lParam;
 
-            int32_t fullCode = p->vkCode;
-            if (GetKeyState(VK_SHIFT) & 0x8000)   fullCode |= MASK_SHIFT;
-            if (GetKeyState(VK_CONTROL) & 0x8000) fullCode |= MASK_CONTROL;
-            if (GetKeyState(VK_MENU) & 0x8000)    fullCode |= MASK_ALT;
-            if (GetKeyState(VK_LWIN) & 0x8000)    fullCode |= MASK_WIN;
-            if (GetKeyState(VK_RWIN) & 0x8000)    fullCode |= MASK_WIN;
-            if (lastCode == fullCode)             fullCode |= MASK_REPEAT;
+                int32_t fullCode = p->vkCode;
+                if (hotkeys.find(fullCode) != hotkeys.end()) {
+                    if (GetKeyState(VK_SHIFT) & 0x8000)     fullCode |= MASK_SHIFT;
+                    if (GetKeyState(VK_CONTROL) & 0x8000)   fullCode |= MASK_CONTROL;
+                    if (GetKeyState(VK_MENU) & 0x8000)      fullCode |= MASK_ALT;
+                    if (GetKeyState(VK_LWIN) & 0x8000)      fullCode |= MASK_WIN;
+                    if (GetKeyState(VK_RWIN) & 0x8000)      fullCode |= MASK_WIN;
+                    if (lastCode == fullCode)               fullCode |= MASK_REPEAT;
 
-            auto search = hotkeyCodes.find(fullCode);
-            if (search != std::end(hotkeyCodes)) {
-                PostMessage(g_hwnd, WM_COMMAND, search->second, NULL);
+                    auto search = hotkeyCodes.find(fullCode);
+                    if (search != std::end(hotkeyCodes)) {
+                        PostMessage(g_hwnd, WM_COMMAND, search->second, NULL);
+                    }
+                }
+                lastCode = fullCode & ~MASK_REPEAT;
+                return 0;
             }
-            lastCode = fullCode;
-            return 0;
-        }
     }
     return CallNextHookEx(NULL, nCode, wParam, lParam);
 }
@@ -509,6 +518,8 @@ void CreateComponents() {
     CreateButton(x, y, 200, L"Show nearby entities", SHOW_NEARBY);
     CreateButton(x, y, 200, L"Export all entities", EXPORT);
 #endif
+
+    for (const auto [key, _] : hotkeyCodes) hotkeys.insert(key & 0xFF);
 }
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow) {
