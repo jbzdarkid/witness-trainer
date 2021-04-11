@@ -275,7 +275,7 @@ void Memory::WriteDataInternal(const void* buffer, const std::vector<__int64>& o
     }
 }
 
-uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets) {
+uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets, bool absolute) {
     assert(offsets.size() > 0);
     assert(offsets.front() != 0);
 
@@ -283,7 +283,7 @@ uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets) {
     const __int64 final_offset = offsets.back();
     offsets.pop_back();
 
-    uintptr_t cumulativeAddress = _baseAddress;
+    uintptr_t cumulativeAddress = (absolute ? 0 : _baseAddress);
     for (const __int64 offset : offsets) {
         cumulativeAddress += offset;
 

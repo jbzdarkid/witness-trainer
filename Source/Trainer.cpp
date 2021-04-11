@@ -186,7 +186,7 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetPanelData(int id) {
         if (edgeDataPtr != 0) {
             std::vector<Traced_Edge> foo;
             static_assert(sizeof(Traced_Edge) == 0x34);
-            std::vector<Traced_Edge> edgeData = _memory->ReadDataAbsolute<Traced_Edge>(edgeDataPtr, numEdges);
+            std::vector<Traced_Edge> edgeData = _memory->ReadAbsoluteData<Traced_Edge>({edgeDataPtr}, numEdges);
             data->tracedEdges.resize(numEdges * 3);
             for (int i=0; i<numEdges; i++) {
                 data->tracedEdges[i*3+0] = edgeData[i].position_a[0];
