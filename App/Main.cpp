@@ -375,7 +375,6 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
                     }
                 }
                 lastCode = fullCode & ~MASK_REPEAT;
-                return 0;
             }
     }
     return CallNextHookEx(NULL, nCode, wParam, lParam);
