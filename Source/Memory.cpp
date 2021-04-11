@@ -97,7 +97,7 @@ void Memory::Heartbeat(HWND window, UINT message) {
     }
 
     // Loading a game causes entities to be shuffled
-    int loadCount = ReadData<int>({_globals, 0x0, _loadCountOffset}, 1)[0];
+    int loadCount = ReadAbsoluteData<int>({entityManager, _loadCountOffset}, 1)[0];
     if (_previousLoadCount != loadCount) {
         _previousLoadCount = loadCount;
         _computedAddresses.Clear();
@@ -110,7 +110,7 @@ void Memory::Heartbeat(HWND window, UINT message) {
         return;
     }
 
-    byte isLoading = ReadData<byte>({_globals, 0x0, _loadCountOffset - 0x4}, 1)[0];
+    byte isLoading = ReadAbsoluteData<byte>({entityManager, _loadCountOffset - 0x4}, 1)[0];
     if (isLoading == 0x01) {
         // Saved game is currently loading, do not take any actions.
         _nextStatus = ProcStatus::Reload;
