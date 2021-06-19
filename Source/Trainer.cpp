@@ -329,6 +329,21 @@ void Trainer::SnapToPoint(const std::vector<float>& point) {
     SetCameraAng(cameraAng);
 }
 
+void Trainer::DisableDistanceGating() {
+    int32_t maxId = _memory->ReadData<int>({_globals, 0x14}, 1)[0];
+
+    for (int32_t id = 1; id < maxId; id++) {
+        int64_t entity = _memory->ReadData<int64_t>({_globals, 0x18, id * 8}, 1)[0];
+        if (entity == 0) continue;
+        std::string typeName = _memory->ReadString({_globals, 0x18, id * 8, 0x08, 0x08});
+        if (typeName != "Machine_Panel") continue;
+
+        assert(_globals == 0x62D0A0);
+        float distanceGated = _memory->ReadAbsoluteData<float>({entity, 0x3BC}, 1)[0];
+        if (distanceGated != 0.0f) _memory->WriteData<float>({_globals, 0x18, id * 8, 0x3BC}, {0.0f});
+    }
+}
+
 bool Trainer::GetNoclip() {
     return (bool) _memory->ReadData<int>({_noclipEnabled}, 1)[0];
 }

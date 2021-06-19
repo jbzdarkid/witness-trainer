@@ -17,6 +17,7 @@ public:
     void ShowNearbyEntities();
     void ExportEntities();
     void SnapToPoint(const std::vector<float>& point);
+    void DisableDistanceGating();
 
     bool GetNoclip();
     float GetNoclipSpeed();

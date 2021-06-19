@@ -27,6 +27,7 @@
 #define START_TIMER         0x417
 #define CALLSTACK           0x418
 #define SNAP_TO_PANEL       0x419
+#define DISTANCE_GATING     0x420
 
 // Feature requests:
 // - show collision, somehow
@@ -321,12 +322,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         // All other messages need the trainer to be live in order to execute.
         if (!trainer) return;
 
-        if (command == NOCLIP_SPEED)        trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
-        else if (command == FOV_CURRENT)    trainer->SetFov(GetWindowFloat(g_fovCurrent));
-        else if (command == SPRINT_SPEED)   trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
-        else if (command == SHOW_PANELS)    trainer->ShowMissingPanels();
-        else if (command == SHOW_NEARBY)    trainer->ShowNearbyEntities();
-        else if (command == EXPORT)         trainer->ExportEntities();
+        if (command == NOCLIP_SPEED)         trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
+        else if (command == FOV_CURRENT)     trainer->SetFov(GetWindowFloat(g_fovCurrent));
+        else if (command == SPRINT_SPEED)    trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
+        else if (command == SHOW_PANELS)     trainer->ShowMissingPanels();
+        else if (command == SHOW_NEARBY)     trainer->ShowNearbyEntities();
+        else if (command == EXPORT)          trainer->ExportEntities();
+        else if (command == DISTANCE_GATING) trainer->DisableDistanceGating();
         else if (command == SAVE_POS) {
             g_savedCameraPos = trainer->GetCameraPos();
             g_savedCameraAng = trainer->GetCameraAng();
@@ -513,6 +515,8 @@ void CreateComponents() {
     CreateCheckbox(x, y, SNAP_TO_PANEL, L"Control-L", MASK_CONTROL | 'L');
 
     CreateButton(x, y, 200, L"Show unsolved panels", SHOW_PANELS);
+
+    CreateButton(x, y, 200, L"Disable distance gating", DISTANCE_GATING);
 
     // Hotkey for debug purposes, to get addresses based on a reported callstack
     hotkeyCodes[MASK_CONTROL | MASK_SHIFT | MASK_ALT | VK_OEM_PLUS] = CALLSTACK;
