@@ -221,9 +221,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             case ProcStatus::Started:
                 if (!g_trainer) {
                     // Process just started (we were already alive), enforce our settings.
+                    SetStringText(g_hwnd, L"Waiting for The Witness to start...");
                     g_trainer = Trainer::Create(g_witnessProc);
                 }
                 if (!g_trainer) break;
+                SetStringText(g_hwnd, L"Witness Trainer");
                 // Or, we started a new game / loaded a save, in which case some of the entity data might have been reset.
                 SetActivePanel(-1);
                 previousPanel = -1;
@@ -240,8 +242,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             case ProcStatus::Running:
                 if (!g_trainer) {
                     // Process was already running, and we just started. Load settings from the game.
+                    SetStringText(g_hwnd, L"Waiting for The Witness to start...");
                     g_trainer = Trainer::Create(g_witnessProc);
                     if (!g_trainer) break;
+                    SetStringText(g_hwnd, L"Witness Trainer");
                     SetFloatText(g_noclipSpeed, g_trainer->GetNoclipSpeed());
                     SetFloatText(g_sprintSpeed, g_trainer->GetSprintSpeed());
                     SetFloatText(g_fovCurrent, g_trainer->GetFov());
