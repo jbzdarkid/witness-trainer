@@ -221,7 +221,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             case ProcStatus::Started:
                 if (!g_trainer) {
                     // Process just started (we were already alive), enforce our settings.
-                    SetStringText(g_hwnd, L"Waiting for The Witness to start...");
+                    SetStringText(g_hwnd, L"Attaching to The Witness...");
                     g_trainer = Trainer::Create(g_witnessProc);
                 }
                 if (!g_trainer) break;
@@ -242,7 +242,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             case ProcStatus::Running:
                 if (!g_trainer) {
                     // Process was already running, and we just started. Load settings from the game.
-                    SetStringText(g_hwnd, L"Waiting for The Witness to start...");
+                    SetStringText(g_hwnd, L"Attaching to The Witness...");
                     g_trainer = Trainer::Create(g_witnessProc);
                     if (!g_trainer) break;
                     SetStringText(g_hwnd, L"Witness Trainer");
