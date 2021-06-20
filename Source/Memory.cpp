@@ -80,7 +80,7 @@ void Memory::Heartbeat(HWND window, UINT message) {
         _computedAddresses.Clear();
         _handle = nullptr;
 
-        _trainerHasStarted = true;
+        _nextStatus = ProcStatus::Started;
         PostMessage(window, message, ProcStatus::Stopped, NULL);
         // Wait for the process to fully close; otherwise we might accidentally re-attach to it.
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
