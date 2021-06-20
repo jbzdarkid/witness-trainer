@@ -211,7 +211,7 @@ void Memory::AddSigScan2(const std::vector<byte>& scanBytes, const ScanFunc2& sc
 int find(const std::vector<byte>& data, const std::vector<byte>& search) {
     const byte* dataBegin = &data[0];
     const byte* searchBegin = &search[0];
-    size_t maxI = data.size();
+    size_t maxI = data.size() - search.size();
     size_t maxJ = search.size();
 
     for (int i=0; i<maxI; i++) {
