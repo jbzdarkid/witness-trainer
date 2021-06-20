@@ -448,7 +448,6 @@ void Trainer::SetCameraAng(const std::vector<float>& ang) {
 }
 
 void Trainer::SetFov(float fov) {
-    if (!_fovCurrent) return;
     _memory->WriteData<float>({_fovCurrent}, {fov});
 }
 

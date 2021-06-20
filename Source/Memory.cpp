@@ -292,6 +292,7 @@ void Memory::ReadDataInternal(void* buffer, uintptr_t computedOffset, size_t buf
 void Memory::WriteDataInternal(const void* buffer, const std::vector<__int64>& offsets, size_t bufferSize) {
     assert(bufferSize > 0);
     if (!_handle) return;
+    if (offsets.empty() || offsets[0] == 0) return; // Empty offset path passed in.
     if (!WriteProcessMemory(_handle, (void*)ComputeOffset(offsets), buffer, bufferSize, nullptr)) {
         DebugPrint("Failed to write process memory.");
         assert(false);
