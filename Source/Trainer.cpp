@@ -103,6 +103,10 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         trainer->_epNameOffset = *(int*)&data[index + 0x05];
     });
 
+    memory->AddSigScan({0x74, 0x0B, 0x0F, 0x28, 0xD0}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
+        trainer->_menuOpenTarget = Memory::ReadStaticInt(offset, index + 0x19, data);
+    });
+
     // We need to save _memory before we exit, otherwise we can't destroy properly.
     trainer->_memory = memory;
 
@@ -110,7 +114,7 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
     if (trainer->_globals && trainer->_globals == 0x5B28C0) numFailedScans -= 1; // FOV scan is expected to fail on older versions.
     if (numFailedScans != 0) return nullptr; // Sigscans failed, we'll try again later.
 
-    trainer->SetMainMenuColor(true);
+    trainer->SetMainMenuColor(true); // Recolor the menu
     return trainer;
 }
 
@@ -465,6 +469,10 @@ void Trainer::SetMainMenuColor(bool enable) {
         std::vector<byte> code = _memory->ReadData<byte>({_mainMenuColor + 0x12}, 8);
         _memory->WriteData<byte>({_mainMenuColor}, code);
     }
+}
+
+void Trainer::SetMainMenuState(bool open) {
+    _memory->WriteData<float>({_menuOpenTarget}, {open ? 1.0f : 0.0f});
 }
 
 void Trainer::SetRandomDoorsPractice(bool enable) {

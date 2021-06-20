@@ -43,6 +43,7 @@ public:
     void SetConsoleOpen(bool enable);
     void SaveCampaign();
     void SetMainMenuColor(bool enable);
+    void SetMainMenuState(bool open);
     void SetRandomDoorsPractice(bool enable);
 
 private:
@@ -69,6 +70,7 @@ private:
     std::vector<__int64> _consoleWindowYB;
     __int64 _wantCampaignSave = 0;
     int _epNameOffset = 0;
+    __int64 _menuOpenTarget = 0;
 
     std::shared_ptr<EntityData> GetPanelData(int id);
     std::shared_ptr<EntityData> GetEPData(int id);
