@@ -123,7 +123,6 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
     if (numFailedScans != 0) return nullptr; // Sigscans failed, we'll try again later.
 
     trainer->SetMainMenuColor(true); // Recolor the menu
-    trainer->SetMainMenuState(true); // Open the menu
     return trainer;
 }
 
