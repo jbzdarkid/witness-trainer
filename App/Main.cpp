@@ -203,7 +203,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             // Get rid of the gross gray background. https://stackoverflow.com/a/4495814
             SetTextColor((HDC)wParam, RGB(0, 0, 0));
             SetBkColor((HDC)wParam, RGB(255, 255, 255));
-            return (LRESULT)CreateSolidBrush(RGB(255, 255, 255));
+            static HBRUSH s_solidBrush = CreateSolidBrush(RGB(255, 255, 255));
+            return (LRESULT)s_solidBrush;
             // return 0;
         case HEARTBEAT:
             switch ((ProcStatus)wParam) {
@@ -268,8 +269,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 }
 
                 // Settings which are always sourced from the game, since they are not editable in the trainer.
-                SetPosAndAngText(g_currentPos, g_trainer->GetCameraPos(), g_trainer->GetCameraAng());
-                SetActivePanel(g_trainer->GetActivePanel());
+                // For performance reasons (redrawing text is expensive), these update 10x slower than other display fields.
+                static int64_t update = 0;
+                if (++update % 10 == 0) {
+                    SetPosAndAngText(g_currentPos, g_trainer->GetCameraPos(), g_trainer->GetCameraAng());
+                    SetActivePanel(g_trainer->GetActivePanel());
+                }
                 break;
             }
             return 0;
