@@ -239,7 +239,7 @@ size_t Memory::ExecuteSigScans() {
             int index = find(buff, scanBytes);
             if (index == -1) continue;
             sigScan.found = sigScan.scanFunc(i, index, buff); // We're expecting i to be relative to the base address here.
-            notFound--;
+            if (sigScan.found) notFound--;
         }
         if (notFound == 0) break;
     }
