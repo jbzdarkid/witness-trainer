@@ -188,14 +188,12 @@ void Memory::Initialize() {
         _loadCountOffset = *(int*)&data[index-1];
     });
 
+    // This little song-and-dance is because we need _handle in order to execute sigscans.
+    // But, we use _handle to indicate success, so we need to reset it.
+    // Note that these sigscans are very lightweight -- they are *only* the scans required to handle loading.
     _handle = handle;
     size_t failedScans = ExecuteSigScans(); // Will DebugPrint the failed scans.
-    if (failedScans > 0) {
-        // This little song-and-dance is because we need _handle in order to execute sigscans.
-        // But, we use _handle to indicate success, so we need to reset it.
-        _handle = nullptr;
-        return;
-    }
+    if (failedScans > 0) _handle = nullptr;
 }
 
 // These functions are much more generic than this witness-specific implementation. As such, I'm keeping them somewhat separated.
