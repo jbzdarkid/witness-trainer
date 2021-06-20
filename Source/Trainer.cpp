@@ -115,6 +115,7 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
     if (numFailedScans != 0) return nullptr; // Sigscans failed, we'll try again later.
 
     trainer->SetMainMenuColor(true); // Recolor the menu
+    trainer->SetMainMenuState(true); // Open the menu
     return trainer;
 }
 
@@ -301,13 +302,37 @@ void Trainer::ExportEntities() {
         std::string entityName = _memory->ReadString({_globals, 0x18, id * 8, 0x58});
         std::vector<float> pos = _memory->ReadData<float>({_globals, 0x18, id * 8, 0x24}, 3);
 
+        if (typeName != "Power_Cable") continue;
+
+        std::vector<int> ids = _memory->ReadData<int>({_globals, 0x18, id * 8, 0xD4}, 4);
+        std::string textureName = _memory->ReadString({_globals, 0x18, id * 8, 0x140});
+        std::string materialName = _memory->ReadString({_globals, 0x18, id * 8, 0x148});
+        std::vector<float> colorData = _memory->ReadData<float>({_globals, 0x18, id * 8, 0x150}, 8);
+        std::string meshName = _memory->ReadString({_globals, 0x18, id * 8, 0x188});
+        std::string poweredOnTexture = _memory->ReadString({_globals, 0x18, id * 8, 0x190});
+        std::string powered_on_sound_name = _memory->ReadString({_globals, 0x18, id * 8, 0x198});
+        std::string powered_off_sound_name = _memory->ReadString({_globals, 0x18, id * 8, 0x1A0});
+        std::string ambient_sound_name = _memory->ReadString({_globals, 0x18, id * 8, 0x1A8});
+        std::string powered_on_texture_name = _memory->ReadString({_globals, 0x18, id * 8, 0x1B0});
+
         std::stringstream message;
         message << "0x" << std::hex << std::setfill('0') << std::setw(5) << id << '\t';
         message << typeName << '\t';
         message << entityName << '\t';
         message << pos[0] << '\t' << pos[1] << '\t' << pos[2] << '\t';
+        for (int i : ids) message << "0x" << std::hex << std::setfill('0') << std::setw(5) << i << '\t';
+        message << textureName << '\t';
+        message << materialName << '\t';
+        for (float c : colorData) message << c << '\t';
+        message << meshName << '\t';
+        message << poweredOnTexture << '\t';
+        message << powered_on_sound_name << '\t';
+        message << powered_off_sound_name << '\t';
+        message << ambient_sound_name << '\t';
+        message << powered_on_texture_name << '\t';
         DebugPrint(message.str());
     }
+    DebugPrint("------ Done ------");
 }
 
 void Trainer::SnapToPoint(const std::vector<float>& point) {

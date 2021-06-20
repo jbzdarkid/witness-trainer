@@ -21,13 +21,14 @@ void Memory::StartHeartbeat(HWND window, UINT message) {
     _threadActive = true;
     _thread = std::thread([sharedThis = shared_from_this(), window, message]{
         SetCurrentThreadName(L"Heartbeat");
+
+        // Run the first heartbeat before setting trainerHasStarted, to detect if we are attaching to a game already in progress.
+        sharedThis->Heartbeat(window, message);
+        sharedThis->_trainerHasStarted = true;
+
         while (sharedThis->_threadActive) {
+            std::this_thread::sleep_for(s_heartbeat);
             sharedThis->Heartbeat(window, message);
-#ifdef NDEBUG
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-#else // Induce more stress in debug, to catch errors more easily.
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-#endif
         }
     });
     _thread.detach();
@@ -39,6 +40,27 @@ void Memory::BringToFront() {
 
 bool Memory::IsForeground() {
     return GetForegroundWindow() == _hwnd;
+}
+
+HWND Memory::GetProcessHwnd(DWORD pid) {
+    struct Data {
+        DWORD pid;
+        HWND hwnd;
+    };
+    Data data = Data{pid, NULL};
+
+    BOOL result = EnumWindows([](HWND hwnd, LPARAM data) {
+        DWORD pid;
+        GetWindowThreadProcessId(hwnd, &pid);
+        DWORD targetPid = reinterpret_cast<Data*>(data)->pid;
+        if (pid == targetPid) {
+            reinterpret_cast<Data*>(data)->hwnd = hwnd;
+            return FALSE; // Stop enumerating
+        }
+        return TRUE; // Continue enumerating
+    }, (LPARAM)&data);
+
+    return data.hwnd;
 }
 
 void Memory::Heartbeat(HWND window, UINT message) {
@@ -58,6 +80,7 @@ void Memory::Heartbeat(HWND window, UINT message) {
         _computedAddresses.Clear();
         _handle = nullptr;
 
+        _trainerHasStarted = true;
         PostMessage(window, message, ProcStatus::Stopped, NULL);
         // Wait for the process to fully close; otherwise we might accidentally re-attach to it.
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -72,22 +95,11 @@ void Memory::Heartbeat(HWND window, UINT message) {
     }
 
     // To avoid obtaining the HWND for the launcher, we wait to determine HWND until the game is loaded.
-    if (_hwnd == 0) {
-        EnumWindows([](HWND hwnd, LPARAM memory){
-            DWORD pid;
-            GetWindowThreadProcessId(hwnd, &pid);
-            DWORD targetPid = reinterpret_cast<Memory*>(memory)->_pid;
-            if (pid == targetPid) {
-                reinterpret_cast<Memory*>(memory)->_hwnd = hwnd;
-                return FALSE; // Stop enumerating
-            }
-            return TRUE; // Continue enumerating
-        }, (LPARAM)this);
-        if (_hwnd == 0) {
-            DebugPrint("Couldn't find the HWND for the game");
-            assert(false);
-            return;
-        }
+    if (_hwnd == NULL) _hwnd = GetProcessHwnd(_pid);
+    if (_hwnd == NULL) {
+        DebugPrint("Couldn't find the HWND for the game");
+        assert(false);
+        return;
     }
 
     // New game causes the entity manager to re-allocate
@@ -117,7 +129,13 @@ void Memory::Heartbeat(HWND window, UINT message) {
         return;
     }
 
-    PostMessage(window, message, _nextStatus, NULL);
+    if (_trainerHasStarted == false) {
+        // If it's the first time we started, and the game appears to be running, return "Running" instead of "Started".
+        PostMessage(window, message, ProcStatus::Running, NULL);
+    } else {
+        // Else, report whatever status we last encountered.
+        PostMessage(window, message, _nextStatus, NULL);
+    }
     _nextStatus = ProcStatus::Running;
 }
 

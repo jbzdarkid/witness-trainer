@@ -25,6 +25,8 @@ public:
     void BringToFront();
     bool IsForeground();
 
+    static HWND GetProcessHwnd(DWORD pid);
+
     Memory(const Memory& memory) = delete;
     Memory& operator=(const Memory& other) = delete;
 
@@ -79,6 +81,14 @@ private:
     __int64 _previousEntityManager = 0;
     int _previousLoadCount = 0;
     ProcStatus _nextStatus = ProcStatus::Started;
+    bool _trainerHasStarted = false;
+
+#ifdef NDEBUG
+    static constexpr std::chrono::milliseconds s_heartbeat = std::chrono::milliseconds(100);
+#else // Induce more stress in debug, to catch errors more easily.
+    static constexpr std::chrono::milliseconds s_heartbeat = std::chrono::milliseconds(10);
+#endif
+
 
     // Parts of Read / Write / Sigscan
     ThreadSafeAddressMap _computedAddresses;
