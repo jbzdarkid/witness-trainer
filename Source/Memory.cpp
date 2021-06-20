@@ -94,8 +94,17 @@ void Memory::Heartbeat(HWND window, UINT message) {
         return;
     }
 
-    // To avoid obtaining the HWND for the launcher, we wait to determine HWND until the game is loaded.
-    if (_hwnd == NULL) _hwnd = GetProcessHwnd(_pid);
+    // To avoid obtaining the HWND for the launcher, we wait to determine HWND until after the entity manager is allocated (the main game has started).
+    if (_hwnd == NULL) {
+        _hwnd = GetProcessHwnd(_pid);
+    } else {
+        // Under some circumstances the window can expire? Or the game re-allocates it? I have no idea.
+        // Anyways, we check to see if the title is wrong, and if so, search for the window again.
+        static std::wstring title(12, L'\0');
+        GetWindowTextW(_hwnd, &title[0], 12);
+        if (title != L"The Witness") _hwnd = GetProcessHwnd(_pid);
+    }
+
     if (_hwnd == NULL) {
         DebugPrint("Couldn't find the HWND for the game");
         assert(false);
