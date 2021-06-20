@@ -567,7 +567,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     DebugUtils::version = VERSION_STR;
 
     g_witnessProc->StartHeartbeat(g_hwnd, HEARTBEAT);
-    HHOOK hook = SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardProc, hInstance, NULL);
+    HHOOK hook = NULL;
+    // Don't hook if launched from VS. While debugging, we are paused (and thus cannot run the hook). So, we will timeout on every hook call!
+    if (!IsDebuggerPresent()) hook = SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardProc, hInstance, NULL);
 
     MSG msg;
     while (GetMessage(&msg, nullptr, 0, 0)) {
@@ -575,7 +577,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         DispatchMessage(&msg);
     }
 
-    UnhookWindowsHookEx(hook);
+    if (hook) UnhookWindowsHookEx(hook);
 
     CoUninitialize();
     return (int) msg.wParam;
