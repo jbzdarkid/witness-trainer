@@ -40,8 +40,6 @@
 // - SuspendThread as a way to pause the game when an assert fires? Then I could investigate...
 // - Hotkeys should eat from game (e.g. shift-ctrl-s)
 // - Show time of last challenge / last 20 challenges
-// - Starting the trainer forces FOV=80
-// - Double-check that two trainers doesn't circumvent cheat protection
 
 // Bad/Hard ideas:
 // - Avoid hanging the UI during load; call Trainer::ctor on a background thread.

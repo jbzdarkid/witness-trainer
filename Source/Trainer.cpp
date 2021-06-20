@@ -13,9 +13,10 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         for (; index < data.size(); index++) {
             if (data[index - 2] == 0x8B && data[index - 1] == 0x05) {
                 trainer->_noclipEnabled = Memory::ReadStaticInt(offset, index, data);
-                break;
+                return true;
             }
         }
+        return false;
     });
 
     memory->AddSigScan({0xC7, 0x45, 0x77, 0x00, 0x00, 0x80, 0x3F, 0xC7, 0x45, 0x7F, 0x00, 0x00, 0x80, 0x3F}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
@@ -52,22 +53,27 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         trainer->_campaignState = Memory::ReadStaticInt(offset, index + 0x27, data);
     });
 
-    memory->AddSigScan({0xF3, 0x0F, 0x59, 0xFD, 0xF3, 0x0F, 0x5C, 0xC8}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
+    memory->AddSigScan2({0xF3, 0x0F, 0x59, 0xFD, 0xF3, 0x0F, 0x5C, 0xC8}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
+        int found = 0;
         // This doesn't have a consistent offset from the scan, so search until we find "jmp +08"
         for (; index < data.size(); index++) {
             if (data[index - 2] == 0xEB && data[index - 1] == 0x08) {
                 trainer->_walkAcceleration = Memory::ReadStaticInt(offset, index - 0x06, data);
                 trainer->_walkDeceleration = Memory::ReadStaticInt(offset, index + 0x04, data);
+                found++;
                 break;
             }
         }
+
         // Once again, there's no consistent offset, so we read until "movss xmm1, [addr]"
         for (; index < data.size(); index++) {
             if (data[index - 4] == 0xF3 && data[index - 3] == 0x0F && data[index - 2] == 0x10 && data[index - 1] == 0x0D) {
                 trainer->_runSpeed = Memory::ReadStaticInt(offset, index, data);
+                found++;
                 break;
             }
         }
+        return (found == 2);
     });
 
     memory->AddSigScan({0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00, 0xE9, 0xB3}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
@@ -77,16 +83,18 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
     memory->AddSigScan({0xF2, 0x0F, 0x58, 0xC8, 0x66, 0x0F, 0x5A, 0xC1, 0xF2}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
         trainer->_activePanelOffsets.push_back(Memory::ReadStaticInt(offset, index + 0x36, data, 5));
         trainer->_activePanelOffsets.push_back(data[index + 0x5A]); // This is 0x10 in both versions I have, but who knows.
-        trainer->_activePanelOffsets.push_back(*(int*) &data[index + 0x54]);
+        trainer->_activePanelOffsets.push_back(*(int*)&data[index + 0x54]);
     });
 
-    memory->AddSigScan({0x41, 0xB8, 0x61, 0x00, 0x00, 0x00, 0x48, 0x8B, 0xD3}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
+    // This scan intentionally fails if the injection has been applied. It makes this a bit unstable for development, but adds safety in case another trainer is attached.
+    memory->AddSigScan2({0x41, 0xB8, 0x61, 0x00, 0x00, 0x00, 0x48, 0x8B, 0xD3}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
         for (; index > 0; index--) {
-            if (data[index + 8] == 0x74 && data[index + 9] == 0x10) {
+            if (data[index] == 0x44 && data[index + 8] == 0x74 && data[index + 9] == 0x10) {
                 trainer->_mainMenuColor = offset + index;
-                break;
+                return true;
             }
         }
+        return false;
     });
 
     memory->AddSigScan({0x0F, 0x57, 0xC0, 0x0F, 0x2F, 0x80, 0xB4, 0x00, 0x00, 0x00, 0x0F, 0x92, 0xC0, 0xC3}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {

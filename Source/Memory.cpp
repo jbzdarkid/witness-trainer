@@ -196,7 +196,15 @@ __int64 Memory::ReadStaticInt(__int64 offset, int index, const std::vector<byte>
     return offset + index + lineLength + *(int*)&data[index];
 }
 
+// Small wrapper for non-failing scan functions
 void Memory::AddSigScan(const std::vector<byte>& scanBytes, const ScanFunc& scanFunc) {
+    _sigScans[scanBytes] = {false, [scanFunc](__int64 offset, int index, const std::vector<byte>& data) {
+        scanFunc(offset, index, data);
+        return true;
+    }};
+}
+
+void Memory::AddSigScan2(const std::vector<byte>& scanBytes, const ScanFunc2& scanFunc) {
     _sigScans[scanBytes] = {false, scanFunc};
 }
 
@@ -230,8 +238,7 @@ size_t Memory::ExecuteSigScans() {
             if (sigScan.found) continue;
             int index = find(buff, scanBytes);
             if (index == -1) continue;
-            sigScan.scanFunc(i, index, buff); // We're expecting i to be relative to the base address here.
-            sigScan.found = true;
+            sigScan.found = sigScan.scanFunc(i, index, buff); // We're expecting i to be relative to the base address here.
             notFound--;
         }
         if (notFound == 0) break;
