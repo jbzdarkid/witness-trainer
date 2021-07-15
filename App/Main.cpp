@@ -237,6 +237,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 g_trainer->SetRandomDoorsPractice(IsDlgButtonChecked(hwnd, DOORS_PRACTICE));
                 g_trainer->SetInfiniteChallenge(IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE));
                 g_trainer->SetConsoleOpen(IsDlgButtonChecked(hwnd, OPEN_CONSOLE));
+                g_trainer->SetChallengePillarsPractice(true);
                 SetStringText(g_activateGame, L"Switch to game");
                 break;
             case ProcStatus::Running:
@@ -256,6 +257,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     CheckDlgButton(hwnd, OPEN_CONSOLE, g_trainer->GetConsoleOpen());
                     SetStringText(g_activateGame, L"Switch to game");
                     g_trainer->SetMainMenuState(true);
+                    g_trainer->SetChallengePillarsPractice(true);
                 } else {
                     // Process was already running, and so were we (this recurs every heartbeat). Enforce settings and apply repeated actions.
                     g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));

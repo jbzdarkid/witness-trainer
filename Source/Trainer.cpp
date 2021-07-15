@@ -137,6 +137,7 @@ Trainer::~Trainer() {
     if (fov > 88.50715637f) SetFov(88.50715637f);
     SetSprintSpeed(2.0f);
     SetMainMenuColor(false);
+    SetChallengePillarsPractice(false);
 }
 
 int Trainer::GetActivePanel() {
@@ -555,5 +556,18 @@ void Trainer::SetRandomDoorsPractice(bool enable) {
         // When the panel powers on, only randomize if it's off
         _memory->WriteData<int>({_powerOn}, {onTargetOffset});
         _memory->WriteData<byte>({_powerOn + 0x04}, {0x76, 0x18});
+    }
+}
+
+void Trainer::SetChallengePillarsPractice(bool enable) {
+    if (_solvedTargetOffset == 0) return;
+    int idToPowerOffset = _solvedTargetOffset + 0x20;
+
+    if (enable) {
+        // When enabled, you can solve the challenge vault box to turn on the pillars
+        _memory->WriteData<int>({_globals, 0x18, 0x356B * 8, idToPowerOffset}, {0x3618});
+    } else {
+        // When disabled, the box powers its original target
+        _memory->WriteData<int>({_globals, 0x18, 0x356B * 8, idToPowerOffset}, {0x3615});
     }
 }

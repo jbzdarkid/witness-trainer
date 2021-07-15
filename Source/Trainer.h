@@ -45,6 +45,7 @@ public:
     void SetMainMenuColor(bool enable);
     void SetMainMenuState(bool open);
     void SetRandomDoorsPractice(bool enable);
+    void SetChallengePillarsPractice(bool enable);
 
 private:
     std::shared_ptr<Memory> _memory;
