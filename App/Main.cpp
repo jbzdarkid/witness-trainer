@@ -577,7 +577,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     g_witnessProc->StartHeartbeat(g_hwnd, HEARTBEAT);
     HHOOK hook = NULL;
-#if !DEBUG
+#if !_DEBUG
     // Don't hook in debug mode. While debugging, we are paused (and thus cannot run the hook). So, we will timeout on every hook call!
     hook = SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardProc, hInstance, NULL);
 #endif
