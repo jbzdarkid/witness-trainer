@@ -29,6 +29,9 @@
 #define SNAP_TO_PANEL       0x419
 #define DISTANCE_GATING     0x420
 
+// BUGS:
+// - Changing from old ver to new ver can set FOV = 0?
+
 // Feature requests:
 // - show collision, somehow
 // - Icon for trainer
