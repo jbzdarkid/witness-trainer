@@ -27,10 +27,6 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         trainer->_noclipSpeed = Memory::ReadStaticInt(offset, index + 0x4F, data);
     });
 
-    memory->AddSigScan({0x76, 0x09, 0xF3, 0x0F, 0x11, 0x05}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
-        trainer->_fovCurrent = Memory::ReadStaticInt(offset, index + 0x0F, data);
-    });
-
     memory->AddSigScan({0x74, 0x41, 0x48, 0x85, 0xC0, 0x74, 0x04, 0x48, 0x8B, 0x48, 0x10}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
         trainer->_globals = Memory::ReadStaticInt(offset, index + 0x14, data);
     });
@@ -119,8 +115,17 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
     trainer->_memory = memory;
 
     size_t numFailedScans = memory->ExecuteSigScans();
-    if (trainer->_globals && trainer->_globals == 0x5B28C0) numFailedScans -= 1; // FOV scan is expected to fail on older versions.
     if (numFailedScans != 0) return nullptr; // Sigscans failed, we'll try again later.
+
+    // FOV doesn't exist on older versions, so don't scan for it. (TODO: Maybe a smarter scan?)
+    if (trainer->_globals != 0 && trainer->_globals != 0x5B28C0 && trainer->_globals != 0x5AC850 && trainer->_globals != 0x5AB8C0) {
+        memory->AddSigScan({0x76, 0x09, 0xF3, 0x0F, 0x11, 0x05}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
+            trainer->_fovCurrent = Memory::ReadStaticInt(offset, index + 0x0F, data);
+        });
+
+        numFailedScans = memory->ExecuteSigScans();
+        if (numFailedScans != 0) return nullptr; // Sigscans failed, we'll try again later.
+    }
 
     trainer->SetMainMenuColor(true); // Recolor the menu
     return trainer;

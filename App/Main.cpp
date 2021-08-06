@@ -496,16 +496,14 @@ void CreateComponents() {
     CreateLabel(x, y, 185, L"Open the Console");
     CreateCheckbox(200, y, OPEN_CONSOLE, L"Tilde (~)", MASK_SHIFT | VK_OEM_3);
 
-    CreateButton(x, y, 100, L"Save Position", SAVE_POS, L"Control-P", MASK_CONTROL | 'P');
-    g_currentPos = CreateLabel(x + 5, y, 90, 80);
-    SetPosAndAngText(g_currentPos, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f });
-
-    // Column 1a
-    x = 110;
+    CreateButton(x,       y, 100, L"Save Position", SAVE_POS, L"Control-P",                    MASK_CONTROL | 'P');
     y -= 30;
-    CreateButton(x, y, 100, L"Load Position", LOAD_POS, L"Shift-Control-P", MASK_SHIFT | MASK_CONTROL | 'P');
-    g_savedPos = CreateLabel(x + 5, y, 90, 80);
-    SetPosAndAngText(g_savedPos, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f });
+    CreateButton(x + 100, y, 100, L"Load Position", LOAD_POS, L"Shift-Control-P", MASK_SHIFT | MASK_CONTROL | 'P');
+    g_currentPos = CreateLabel(x + 5,   y, 90, 80);
+    g_savedPos   = CreateLabel(x + 105, y, 90, 80);
+    SetPosAndAngText(g_currentPos, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f });
+    SetPosAndAngText(g_savedPos,   { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f });
+
 
     // Column 2
     x = 270;
@@ -526,7 +524,7 @@ void CreateComponents() {
     g_panelState = CreateLabel(x, y, 200, L"");
     y += 20;
 
-    CreateLabel(x+20, y, 200, L"Lock view to panel");
+    CreateLabel(x + 20, y, 200, L"Lock view to panel");
     CreateCheckbox(x, y, SNAP_TO_PANEL, L"Control-L", MASK_CONTROL | 'L');
 
     CreateButton(x, y, 200, L"Show unsolved panels", SHOW_PANELS);

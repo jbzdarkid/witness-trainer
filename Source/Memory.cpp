@@ -266,6 +266,8 @@ size_t Memory::ExecuteSigScans() {
             }
             DebugPrint(ss.str());
         }
+    } else {
+        DebugPrint("Found all sigscans!");
     }
 
     _sigScans.clear();
