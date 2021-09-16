@@ -1,4 +1,3 @@
-#include "HazardPointer.h"
 #include <mutex>
 #include <map>
 

@@ -111,14 +111,14 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         trainer->_menuOpenTarget = Memory::ReadStaticInt(offset, index + 0x19, data);
     });
 
-    memory->AddSigScan2({0x48, 0x85, 0xC0, 0x74, 0x0A, 0xC7, 0x80, 0x28, 0x03}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
+    // This scan will actually succeed on older patches, but _fovCurrent will still be 0.
+    memory->AddSigScan({0x48, 0x85, 0xC0, 0x74, 0x0A, 0xC7, 0x80, 0x28, 0x03}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
         for (; index > 0; index--) {
             if (data[index+4] == 0x33 && data[index+5] == 0xC9) {
                 trainer->_fovCurrent = Memory::ReadStaticInt(offset, index, data);
-                return true;
+                return;
             }
         }
-        return false;
     });
 
     // We need to save _memory before we exit, otherwise we can't destroy properly.
