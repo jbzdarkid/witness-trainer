@@ -406,6 +406,10 @@ std::vector<float> Trainer::GetCameraAng() {
     return _memory->ReadData<float>({_cameraAng}, 2);
 }
 
+std::vector<float> Trainer::GetBoatPos() {
+    return _memory->ReadData<float>({_globals, 0x18, 0x00030 * 8, 0x24}, 3);
+}
+
 float Trainer::GetFov() {
     if (_fovCurrent == 0) return 0.0f; // FOV is not available on some old patches
     return _memory->ReadData<float>({_fovCurrent}, 1)[0];
@@ -429,6 +433,10 @@ bool Trainer::GetConsoleOpen() {
 
 bool Trainer::GetRandomDoorsPractice() {
     return _memory->ReadData<byte>({_doorOpen}, 1)[0] == 0x90;
+}
+
+double Trainer::GetGameTime() {
+    return _memory->ReadData<double>({_globals, 0x1B8}, 1)[0];
 }
 
 void Trainer::SetNoclip(bool enabled) {

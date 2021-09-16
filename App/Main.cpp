@@ -5,6 +5,7 @@
 #include "Shlobj.h"
 
 #include "Trainer.h"
+#include "CircularBuffer.h"
 
 #include <unordered_set>
 
@@ -58,8 +59,9 @@
 HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
-HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelDist, g_panelName, g_panelState, g_panelPicture, g_activateGame;
+HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelDist, g_panelName, g_panelState, g_panelPicture, g_activateGame, g_currentSpeed;
 auto g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
+auto g_positionBuffer = CircularBuffer<double>(21 * 4);
 
 std::vector<float> g_savedCameraPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> g_savedCameraAng = {0.0f, 0.0f};
@@ -117,6 +119,22 @@ void SetPosAndAngText(HWND hwnd, const std::vector<float>& pos, const std::vecto
     std::wstring text(65, '\0');
     swprintf_s(text.data(), text.size() + 1, L"X %8.3f\nY %8.3f\nZ %8.3f\n\u0398 %8.5f\n\u03A6 %8.5f", pos[0], pos[1], pos[2], ang[0], ang[1]);
     SetStringText(hwnd, text);
+}
+
+void SetSpeedText(const std::vector<float>& playerPosition, const std::vector<double>& previousPosition, double time, double previousTime) {
+    assert(playerPosition.size() == 3);
+    assert(previousPosition.size() == 3);
+
+    double xSpeed = std::pow(playerPosition[0] - previousPosition[0], 2);
+    double ySpeed = std::pow(playerPosition[1] - previousPosition[1], 2);
+    double zSpeed = std::pow(playerPosition[2] - previousPosition[2], 2);
+    double totalSpeed = std::sqrt(xSpeed + ySpeed + zSpeed) / (time - previousTime);
+    xSpeed = std::sqrt(xSpeed) / (time - previousTime);
+    ySpeed = std::sqrt(ySpeed) / (time - previousTime);
+    zSpeed = std::sqrt(zSpeed) / (time - previousTime);
+    std::wstring text(50, '\0');
+    swprintf_s(text.data(), text.size() + 1, L"Speed: %.8lg", totalSpeed);
+    SetStringText(g_currentSpeed, text);
 }
 
 void SetFloatText(HWND hwnd, float f) {
@@ -277,12 +295,29 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     }
                 }
 
+                // auto playerPosition = g_trainer->GetPlayerPos();
+                auto time = g_trainer->GetGameTime();
+                // g_positionBuffer.Add(playerPosition[0]);
+                // g_positionBuffer.Add(playerPosition[1]);
+                // g_positionBuffer.Add(playerPosition[2]);
+                // g_positionBuffer.Add(time);
+
+                auto playerPosition = g_trainer->GetBoatPos();
+                //auto time = g_trainer->GetGameTime();
+                std::string output(1024, '\0');
+                sprintf_s(&output[0], output.size(), "%f\t%f\t%f\t%lf", playerPosition[0], playerPosition[1], playerPosition[2], time);
+                DebugPrint(output);
+
                 // Settings which are always sourced from the game, since they are not editable in the trainer.
                 // For performance reasons (redrawing text is expensive), these update 10x slower than other display fields.
                 static int64_t update = 0;
                 if (++update % 10 == 0) {
                     SetPosAndAngText(g_currentPos, g_trainer->GetCameraPos(), g_trainer->GetCameraAng());
                     SetActivePanel(g_trainer->GetActivePanel());
+
+                    auto previousPosition = std::vector<double>{g_positionBuffer.Get(0), g_positionBuffer.Get(1), g_positionBuffer.Get(2)};
+                    auto previousTime = g_positionBuffer.Get(3);
+                    SetSpeedText(playerPosition, previousPosition, time, previousTime);
                 }
                 break;
             }
@@ -504,6 +539,8 @@ void CreateComponents() {
     SetPosAndAngText(g_currentPos, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f });
     SetPosAndAngText(g_savedPos,   { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f });
 
+    y += 90;
+    g_currentSpeed = CreateLabel(x, y, 200, L"");
 
     // Column 2
     x = 270;

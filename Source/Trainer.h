@@ -24,12 +24,14 @@ public:
     std::vector<float> GetPlayerPos();
     std::vector<float> GetCameraPos();
     std::vector<float> GetCameraAng();
+    std::vector<float> GetBoatPos();
     float GetFov();
     bool CanSave();
     float GetSprintSpeed();
     bool GetInfiniteChallenge();
     bool GetConsoleOpen();
     bool GetRandomDoorsPractice();
+    double GetGameTime();
 
     void SetNoclip(bool enabled);
     void SetNoclipSpeed(float speed);

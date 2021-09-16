@@ -188,6 +188,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="CircularBuffer.h" />
     <ClInclude Include="DebugUtils.h" />
     <ClInclude Include="Memory.h" />
     <ClInclude Include="pch.h" />
