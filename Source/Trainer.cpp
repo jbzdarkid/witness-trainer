@@ -111,21 +111,21 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         trainer->_menuOpenTarget = Memory::ReadStaticInt(offset, index + 0x19, data);
     });
 
+    memory->AddSigScan2({0x48, 0x85, 0xC0, 0x74, 0x0A, 0xC7, 0x80, 0x28, 0x03}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
+        for (; index > 0; index--) {
+            if (data[index+4] == 0x33 && data[index+5] == 0xC9) {
+                trainer->_fovCurrent = Memory::ReadStaticInt(offset, index, data);
+                return true;
+            }
+        }
+        return false;
+    });
+
     // We need to save _memory before we exit, otherwise we can't destroy properly.
     trainer->_memory = memory;
 
     size_t numFailedScans = memory->ExecuteSigScans();
     if (numFailedScans != 0) return nullptr; // Sigscans failed, we'll try again later.
-
-    // FOV doesn't exist on older versions, so don't scan for it. (TODO: Maybe a smarter scan?)
-    if (trainer->_globals != 0 && trainer->_globals != 0x5B28C0 && trainer->_globals != 0x5AC850 && trainer->_globals != 0x5AB8C0) {
-        memory->AddSigScan({0x76, 0x09, 0xF3, 0x0F, 0x11, 0x05}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
-            trainer->_fovCurrent = Memory::ReadStaticInt(offset, index + 0x0F, data);
-        });
-
-        numFailedScans = memory->ExecuteSigScans();
-        if (numFailedScans != 0) return nullptr; // Sigscans failed, we'll try again later.
-    }
 
     trainer->SetMainMenuColor(true); // Recolor the menu
     return trainer;
@@ -453,6 +453,8 @@ void Trainer::SetCameraAng(const std::vector<float>& ang) {
 }
 
 void Trainer::SetFov(float fov) {
+    float fovExpected = 19.2f + 0.0231f * fov + 0.00462f * fov * fov;
+    DebugPrint("Expected FOV: " + std::to_string(fovExpected));
     _memory->WriteData<float>({_fovCurrent}, {fov});
 }
 

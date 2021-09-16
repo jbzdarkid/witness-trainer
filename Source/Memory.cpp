@@ -242,7 +242,7 @@ size_t Memory::ExecuteSigScans() {
     std::vector<byte> buff;
     buff.resize(BUFFER_SIZE + 0x100); // padding in case the sigscan is past the end of the buffer
 
-    for (uintptr_t i = 0; i < 0x300000; i += BUFFER_SIZE) {
+    for (uintptr_t i = 0; i < 0x500000; i += BUFFER_SIZE) {
         SIZE_T numBytesWritten;
         if (!ReadProcessMemory(_handle, reinterpret_cast<void*>(_baseAddress + i), &buff[0], buff.size(), &numBytesWritten)) continue;
         buff.resize(numBytesWritten);
