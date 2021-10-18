@@ -216,6 +216,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 // Don't discard any settings, just free the trainer.
                 if (g_trainer) {
                     g_trainer = nullptr;
+                    SetStringText(g_hwnd, L"Witness Trainer");
                     SetStringText(g_activateGame, L"Launch game");
                 }
                 break;
@@ -414,15 +415,15 @@ HWND CreateTooltip(HWND target, LPCWSTR hoverText) {
     return tooltip;
 }
 
-HWND CreateLabel(int x, int y, int width, int height, LPCWSTR text = L"") {
+HWND CreateLabel(int x, int y, int width, int height, LPCWSTR text = L"", __int64 message = 0) {
     return CreateWindow(L"STATIC", text,
-        WS_TABSTOP | WS_VISIBLE | WS_CHILD | SS_LEFT,
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | SS_LEFT | SS_NOTIFY,
         x, y, width, height,
-        g_hwnd, NULL, g_hInstance, NULL);
+        g_hwnd, (HMENU)message, g_hInstance, NULL);
 }
 
-HWND CreateLabel(int x, int y, int width, LPCWSTR text) {
-    return CreateLabel(x, y, width, 16, text);
+HWND CreateLabel(int x, int y, int width, LPCWSTR text, __int64 message = 0) {
+    return CreateLabel(x, y, width, 16, text, message);
 }
 
 HWND CreateButton(int x, int& y, int width, LPCWSTR text, __int64 message) {
@@ -457,6 +458,19 @@ HWND CreateCheckbox(int x, int& y, __int64 message, LPCWSTR hoverText, int32_t h
     return checkbox;
 }
 
+// The same arguments as Button.
+HWND CreateLabelAndCheckbox(int x, int& y, int width, LPCWSTR text, __int64 message, LPCWSTR hoverText, int32_t hotkey) {
+    // We need a distinct message (HMENU) for the label so that when we call CheckDlgButton it targets the checkbox, not the label.
+    // However, we only use the low word (bottom 2 bytes) for logic, so we can safely modify the high word to make it distinct.
+    CreateLabel(x + 20, y, width, text, message + 0x10000);
+    return CreateCheckbox(x, y, message, hoverText, hotkey);
+}
+
+// Also the same arguments as Button.
+HWND CreateLabelAndCheckbox(int x, int& y, int width, LPCWSTR text, __int64 message) {
+    return CreateLabelAndCheckbox(x, y, width, text, message, L"", 0);
+}
+
 HWND CreateText(int x, int& y, int width, LPCWSTR defaultText = L"", __int64 message = NULL) {
     HWND text = CreateWindow(MSFTEDIT_CLASS, defaultText,
         WS_TABSTOP | WS_VISIBLE | WS_CHILD | WS_BORDER,
@@ -471,8 +485,7 @@ void CreateComponents() {
     int x = 10;
     int y = 10;
 
-    CreateLabel(x, y, 100, L"Noclip Enabled");
-    CreateCheckbox(115, y, NOCLIP_ENABLED, L"Control-N", MASK_CONTROL | 'N');
+    CreateLabelAndCheckbox(x, y, 100, L"Noclip Enabled", NOCLIP_ENABLED, L"Control-N", MASK_CONTROL | 'N');
 
     CreateLabel(x, y + 4, 100, L"Noclip Speed");
     g_noclipSpeed = CreateText(100, y, 130, L"10", NOCLIP_SPEED);
@@ -483,18 +496,14 @@ void CreateComponents() {
     CreateLabel(x, y + 4, 100, L"Field of View");
     g_fovCurrent = CreateText(100, y, 130, L"50.534012", FOV_CURRENT);
 
-    CreateLabel(x, y, 185, L"Can save the game");
-    CreateCheckbox(200, y, CAN_SAVE, L"Shift-Control-S", MASK_SHIFT | MASK_CONTROL | 'S');
+    CreateLabelAndCheckbox(x, y, 185, L"Can save the game", CAN_SAVE, L"Shift-Control-S", MASK_SHIFT | MASK_CONTROL | 'S');
     CheckDlgButton(g_hwnd, CAN_SAVE, true);
 
-    CreateLabel(x, y, 185, L"Random Doors Practice");
-    CreateCheckbox(200, y, DOORS_PRACTICE);
+    CreateLabelAndCheckbox(x, y, 185, L"Random Doors Practice", DOORS_PRACTICE);
 
-    CreateLabel(x, y, 185, L"Disable Challenge time limit");
-    CreateCheckbox(200, y, INFINITE_CHALLENGE);
+    CreateLabelAndCheckbox(x, y, 185, L"Disable Challenge time limit", INFINITE_CHALLENGE);
 
-    CreateLabel(x, y, 185, L"Open the Console");
-    CreateCheckbox(200, y, OPEN_CONSOLE, L"Tilde (~)", MASK_SHIFT | VK_OEM_3);
+    CreateLabelAndCheckbox(x, y, 185, L"Open the Console", OPEN_CONSOLE, L"Tilde (~)", MASK_SHIFT | VK_OEM_3);
 
     CreateButton(x,       y, 100, L"Save Position", SAVE_POS, L"Control-P",                    MASK_CONTROL | 'P');
     y -= 30;
@@ -524,8 +533,7 @@ void CreateComponents() {
     g_panelState = CreateLabel(x, y, 200, L"");
     y += 20;
 
-    CreateLabel(x + 20, y, 200, L"Lock view to panel");
-    CreateCheckbox(x, y, SNAP_TO_PANEL, L"Control-L", MASK_CONTROL | 'L');
+    CreateLabelAndCheckbox(x, y, 200, L"Lock view to panel", SNAP_TO_PANEL, L"Control-L", MASK_CONTROL | 'L');
 
     CreateButton(x, y, 200, L"Show unsolved panels", SHOW_PANELS);
 
