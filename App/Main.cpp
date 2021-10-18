@@ -58,7 +58,7 @@
 HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
-HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelDist, g_panelName, g_panelState, g_panelPicture, g_activateGame;
+HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelDist, g_panelName, g_panelState, g_panelPicture, g_activateGame, g_snapToPanel;
 auto g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
 
 std::vector<float> g_savedCameraPos = {0.0f, 0.0f, 0.0f};
@@ -165,6 +165,8 @@ void SetActivePanel(int activePanel) {
             SetStringText(g_panelName, "");
             SetStringText(g_panelState, "");
             SetStringText(g_panelDist, "");
+            CheckDlgButton(g_hwnd, SNAP_TO_PANEL, false);
+            EnableWindow(g_snapToPanel, false);
         } else {
             SetStringText(g_panelName, entityData->name);
             SetStringText(g_panelState, entityData->state);
@@ -175,6 +177,7 @@ void SetActivePanel(int activePanel) {
                 auto cameraPos = g_trainer->GetCameraPos();
                 auto distance = sqrt(pow(previousPanelStart[0] - cameraPos[0], 2) + pow(previousPanelStart[1] - cameraPos[1], 2) + pow(previousPanelStart[2] - cameraPos[2], 2));
                 SetStringText(g_panelDist, "Distance to " + entityData->type + ": " + std::to_string(distance));
+                EnableWindow(g_snapToPanel, true);
             }
         }
     }
@@ -329,8 +332,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             savesFolder += L"\\The Witness";
             ShellExecute(NULL, L"open", savesFolder.c_str(), NULL, NULL, SW_SHOWDEFAULT);
         } else if (command == SNAP_TO_PANEL) {
-            bool enabled = IsDlgButtonChecked(g_hwnd, SNAP_TO_PANEL);
-            CheckDlgButton(g_hwnd, SNAP_TO_PANEL, !enabled);
+            if (IsWindowEnabled(g_snapToPanel)) {
+                bool enabled = IsDlgButtonChecked(g_hwnd, SNAP_TO_PANEL);
+                CheckDlgButton(g_hwnd, SNAP_TO_PANEL, !enabled);
+            }
         } else if (!trainer && HIWORD(wParam) == 0) { // Message was triggered by the user
             MessageBox(g_hwnd, L"The process must be running in order to use this button", L"", MB_OK);
         }
@@ -533,7 +538,8 @@ void CreateComponents() {
     g_panelState = CreateLabel(x, y, 200, L"");
     y += 20;
 
-    CreateLabelAndCheckbox(x, y, 200, L"Lock view to panel", SNAP_TO_PANEL, L"Control-L", MASK_CONTROL | 'L');
+    g_snapToPanel = CreateLabelAndCheckbox(x, y, 200, L"Lock view to panel", SNAP_TO_PANEL, L"Control-L", MASK_CONTROL | 'L');
+    EnableWindow(g_snapToPanel, false);
 
     CreateButton(x, y, 200, L"Show unsolved panels", SHOW_PANELS);
 
