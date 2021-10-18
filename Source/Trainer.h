@@ -8,9 +8,10 @@ public:
     int GetActivePanel();
     struct EntityData {
         std::string name;
+        std::string type;
         std::string state;
         bool solved = false;
-        std::vector<float> tracedEdges;
+        std::vector<float> startPoint;
     };
     std::shared_ptr<EntityData> GetEntityData(int id);
     void ShowMissingPanels();

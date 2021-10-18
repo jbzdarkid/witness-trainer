@@ -186,6 +186,7 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetPanelData(int id) {
 
     auto data = std::make_shared<EntityData>();
     data->name = _memory->ReadString({_globals, 0x18, id * 8, nameOffset});
+    data->type = "panel";
     int state = _memory->ReadData<int>({_globals, 0x18, id * 8, stateOffset}, 1)[0];
     int hasEverBeenSolved = _memory->ReadData<int>({_globals, 0x18, id * 8, hasEverBeenSolvedOffset}, 1)[0];
     data->solved = hasEverBeenSolved;
@@ -198,46 +199,29 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetPanelData(int id) {
     else data->state = "Unknown";
 
     auto numEdges = _memory->ReadData<int>({_globals, 0x18, id * 8, tracedEdgesOffset}, 1)[0];
-    if (numEdges != 0) {
-        // Explicitly computing this intermediate, since the edges array might have re-allocated.
+    if (numEdges > 0) {
+        // Explicitly computing this as an intermediate, since the edges array might have re-allocated.
         auto edgeDataPtr = _memory->ReadData<__int64>({_globals, 0x18, id * 8, tracedEdgesOffset + 8}, 1)[0];
         if (edgeDataPtr != 0) {
-            std::vector<Traced_Edge> foo;
             static_assert(sizeof(Traced_Edge) == 0x34);
-            std::vector<Traced_Edge> edgeData = _memory->ReadAbsoluteData<Traced_Edge>({edgeDataPtr}, numEdges);
-            data->tracedEdges.resize(numEdges * 3);
-            for (int i=0; i<numEdges; i++) {
-                data->tracedEdges[i*3+0] = edgeData[i].position_a[0];
-                data->tracedEdges[i*3+1] = edgeData[i].position_a[1];
-                data->tracedEdges[i*3+2] = edgeData[i].position_a[2];
-            }
+            // However, we only need the first edge -- since all we care about is the startpoint.
+            std::vector<Traced_Edge> edgeData = _memory->ReadAbsoluteData<Traced_Edge>({edgeDataPtr}, 1);
+            data->startPoint = {
+                edgeData[0].position_a[0],
+                edgeData[0].position_a[1],
+                edgeData[0].position_a[2],
+            };
         }
     }
 
     return data;
-
-    /* Note: Care must be taken to invalidate cache entries when reading this data, since AutoArray reallocates.
-    int numDotsOffset = _solvedTargetOffset + 0x11C;
-    int dotPositionsOffset = _solvedTargetOffset + 0x12C;
-    int numEdges = _memory->ReadData<int>({_globals, 0x18, id * 8, tracedEdgesOffset}, 1)[0];
-
-    if (numEdges > 0) {
-        std::vector<Traced_Edge> edges = _memory->ReadData<Traced_Edge>({_globals, 0x18, id*8, tracedEdgesOffset + 0x08, 0}, numEdges);
-        int numDots = _memory->ReadData<int>({_globals, 0x18, id*8, numDotsOffset}, 1)[0];
-        std::vector<float> positions = _memory->ReadData<float>({_globals, 0x18, id*8, dotPositionsOffset, 0}, numDots*2);
-        for (auto edge : edges) {
-            data->tracedEdges.push_back(positions[edge.index_a * 2]); // x1
-            data->tracedEdges.push_back(positions[edge.index_a * 2 + 1]); // y1
-            data->tracedEdges.push_back(positions[edge.index_b * 2]); // x2
-            data->tracedEdges.push_back(positions[edge.index_b * 2 + 1]); // y2
-        }
-    }
-    */
 }
 
 std::shared_ptr<Trainer::EntityData> Trainer::GetEPData(int id) {
     auto data = std::make_shared<EntityData>();
     data->name = _memory->ReadString({_globals, 0x18, id * 8, _epNameOffset});
+    data->type = "ep";
+    data->startPoint = _memory->ReadData<float>({_globals, 0x18, id * 8, 0x24}, 3);
     return data;
 }
 
@@ -361,7 +345,7 @@ void Trainer::SnapToPoint(const std::vector<float>& point) {
     float hypotenuse2 = sqrt((Ax - Bx) * (Ax - Bx) + (Ay - By) * (Ay - By));
     float hypotenuse3 = sqrt((Ax - Bx) * (Ax - Bx) + (Ay - By) * (Ay - By) + (Az - Bz) * (Az - Bz));
 
-    std::vector<float> cameraAng{
+    std::vector<float> cameraAng = {
         asin((By - Ay) / hypotenuse2),
         acos(hypotenuse2 / hypotenuse3),
     };
@@ -454,7 +438,7 @@ void Trainer::SetCameraAng(const std::vector<float>& ang) {
 
 void Trainer::SetFov(float fov) {
     float fovExpected = 19.2f + 0.0231f * fov + 0.00462f * fov * fov;
-    DebugPrint("Expected FOV: " + std::to_string(fovExpected));
+    // DebugPrint("Expected FOV: " + std::to_string(fovExpected));
     _memory->WriteData<float>({_fovCurrent}, {fov});
 }
 

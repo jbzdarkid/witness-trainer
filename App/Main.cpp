@@ -148,11 +148,11 @@ void SetActivePanel(int activePanel) {
 
     std::stringstream ss;
     if (activePanel != -1) {
-        ss << "Active Panel:";
+        ss << "Active ID:";
     } else if (previousPanel != -1) {
-        ss << "Previous Panel:";
+        ss << "Previous ID:";
     } else {
-        ss << "No Active Panel";
+        ss << "No Active ID";
     }
     if (previousPanel != -1) {
         ss << " 0x" << std::hex << std::setfill('0') << std::setw(5) << previousPanel;
@@ -160,21 +160,21 @@ void SetActivePanel(int activePanel) {
     SetStringText(g_activePanel, ss.str());
 
     if (g_trainer) {
-        std::shared_ptr<Trainer::EntityData> panelData = g_trainer->GetEntityData(previousPanel);
-        if (!panelData) {
+        std::shared_ptr<Trainer::EntityData> entityData = g_trainer->GetEntityData(previousPanel);
+        if (!entityData) {
             SetStringText(g_panelName, "");
             SetStringText(g_panelState, "");
             SetStringText(g_panelDist, "");
         } else {
-            SetStringText(g_panelName, panelData->name);
-            SetStringText(g_panelState, panelData->state);
-            if (panelData->tracedEdges.size() > 0) {
-                previousPanelStart = {panelData->tracedEdges[0], panelData->tracedEdges[1], panelData->tracedEdges[2]};
+            SetStringText(g_panelName, entityData->name);
+            SetStringText(g_panelState, entityData->state);
+            if (!entityData->startPoint.empty()) {
+                previousPanelStart = entityData->startPoint;
             }
-            if (previousPanelStart.size() == 3) {
+            if (!previousPanelStart.empty()) {
                 auto cameraPos = g_trainer->GetCameraPos();
                 auto distance = sqrt(pow(previousPanelStart[0] - cameraPos[0], 2) + pow(previousPanelStart[1] - cameraPos[1], 2) + pow(previousPanelStart[2] - cameraPos[2], 2));
-                SetStringText(g_panelDist, "Distance to panel: " + std::to_string(distance));
+                SetStringText(g_panelDist, "Distance to " + entityData->type + ": " + std::to_string(distance));
             }
         }
     }
