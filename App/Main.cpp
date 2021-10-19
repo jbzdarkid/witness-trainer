@@ -236,17 +236,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             SetBkMode((HDC)wParam, OPAQUE); // ???
             static HBRUSH s_solidBrush = CreateSolidBrush(RGB(255, 255, 255));
             return (LRESULT)s_solidBrush;
-            // return 0;
         case HEARTBEAT:
             switch ((ProcStatus)wParam) {
             case ProcStatus::Stopped:
             case ProcStatus::NotRunning:
                 // Don't discard any settings, just free the trainer.
-                if (g_trainer) {
-                    g_trainer = nullptr;
-                    SetStringText(g_hwnd, L"Witness Trainer");
-                    SetStringText(g_activateGame, L"Launch game");
-                }
+                if (g_trainer) g_trainer = nullptr;
+                // Also reset the title & launch text, since they can get stuck
+                SetStringText(g_hwnd, L"Witness Trainer");
+                SetStringText(g_activateGame, L"Launch game");
                 break;
             case ProcStatus::Reload:
             case ProcStatus::NewGame:
