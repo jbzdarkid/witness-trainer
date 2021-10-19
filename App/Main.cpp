@@ -59,7 +59,7 @@ HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
 std::shared_ptr<Memory> g_witnessProc;
-HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelDist, g_panelName, g_panelState, g_panelPicture, g_activateGame, g_snapToPanel;
+HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelDist, g_panelName, g_panelState, g_panelPicture, g_activateGame, g_snapToPanel, g_snapToLabel;
 
 std::vector<float> g_savedCameraPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> g_savedCameraAng = {0.0f, 0.0f};
@@ -146,18 +146,7 @@ float GetWindowFloat(HWND hwnd) {
 void SetActivePanel(int activePanel) {
     if (activePanel != -1) previousPanel = activePanel;
 
-    std::stringstream ss;
-    if (activePanel != -1) {
-        ss << "Active ID:";
-    } else if (previousPanel != -1) {
-        ss << "Previous ID:";
-    } else {
-        ss << "No Active ID";
-    }
-    if (previousPanel != -1) {
-        ss << " 0x" << std::hex << std::setfill('0') << std::setw(5) << previousPanel;
-    }
-    SetStringText(g_activePanel, ss.str());
+    std::string typeName = "entity";
 
     if (g_trainer) {
         std::shared_ptr<Trainer::EntityData> entityData = g_trainer->GetEntityData(previousPanel);
@@ -166,9 +155,11 @@ void SetActivePanel(int activePanel) {
             SetStringText(g_panelState, "");
             SetStringText(g_panelDist, "");
             CheckDlgButton(g_hwnd, SNAP_TO_PANEL, false);
+            EnableWindow(g_snapToLabel, false);
             EnableWindow(g_snapToPanel, false);
         } else {
-            SetStringText(g_panelName, entityData->name);
+            typeName = entityData->type;
+            SetStringText(g_panelName, "Name: " + entityData->name);
             SetStringText(g_panelState, entityData->state);
             if (!entityData->startPoint.empty()) {
                 previousPanelStart = entityData->startPoint;
@@ -177,10 +168,25 @@ void SetActivePanel(int activePanel) {
                 auto cameraPos = g_trainer->GetCameraPos();
                 auto distance = sqrt(pow(previousPanelStart[0] - cameraPos[0], 2) + pow(previousPanelStart[1] - cameraPos[1], 2) + pow(previousPanelStart[2] - cameraPos[2], 2));
                 SetStringText(g_panelDist, "Distance to " + entityData->type + ": " + std::to_string(distance));
-                EnableWindow(g_snapToPanel, true);
+                SetStringText(g_snapToLabel, "Lock view to " + entityData->type);
+                EnableWindow(g_snapToLabel, true);
+                EnableWindow(g_snapToPanel, false);
             }
         }
     }
+
+    std::stringstream ss;
+    if (activePanel != -1) {
+        ss << "Active " << typeName << ":";
+    } else if (previousPanel != -1) {
+        ss << "Previous " << typeName << ":";
+    } else {
+        ss << "No active entity";
+    }
+    if (previousPanel != -1) {
+        ss << " 0x" << std::hex << std::setfill('0') << std::setw(5) << previousPanel;
+    }
+    SetStringText(g_activePanel, ss.str());
 }
 
 // https://stackoverflow.com/a/12662950
@@ -545,7 +551,7 @@ void CreateComponents() {
     g_activateGame = CreateButton(x, y, 200, L"Launch game", ACTIVATE_GAME);
     CreateButton(x, y, 200, L"Open save folder", OPEN_SAVES);
 
-    g_activePanel = CreateLabel(x, y, 200, L"No Active Panel");
+    g_activePanel = CreateLabel(x, y, 200, L"No active entity");
     y += 20;
 
     g_panelDist = CreateLabel(x, y, 200, L"");
@@ -557,7 +563,9 @@ void CreateComponents() {
     g_panelState = CreateLabel(x, y, 200, L"");
     y += 20;
 
-    g_snapToPanel = CreateLabelAndCheckbox(x, y, 200, L"Lock view to panel", SNAP_TO_PANEL, L"Control-L", MASK_CONTROL | 'L');
+    g_snapToLabel = CreateLabel(x + 20, y, 200, L"Lock view to entity", SNAP_TO_PANEL + 0x10000);
+    g_snapToPanel = CreateCheckbox(x, y, SNAP_TO_PANEL, L"Control-L", MASK_CONTROL | 'L');
+    EnableWindow(g_snapToLabel, false);
     EnableWindow(g_snapToPanel, false);
 
     CreateButton(x, y, 200, L"Show unsolved panels", SHOW_PANELS);
