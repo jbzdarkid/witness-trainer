@@ -196,9 +196,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         case WM_DESTROY:
             if (g_trainer) {
                 auto trainer = g_trainer;
-                g_trainer = nullptr; // Reset any modifications
+                g_trainer = nullptr; // Close the trainer, which undoes any modifications to the game.
+
                 // Wait to actually quit until all background threads have finished their work.
-                while (trainer.use_count() > 1) std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                // Note that we do need to pump messages here, since said work may require the message pump,
+                // which we are currently holding hostage.
+                while (trainer.use_count() > 1) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    MSG msg;
+                    if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+                        TranslateMessage(&msg);
+                        DispatchMessage(&msg);
+                    }
+                }
             }
             PostQuitMessage(0);
             return 0;
