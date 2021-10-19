@@ -214,10 +214,20 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             return 0;
         case WM_COMMAND:
             break; // LOWORD(wParam) contains the command
+		    case WM_ERASEBKGND: // ???
+		    {
+			      RECT rc;
+			      ::GetClientRect(hwnd, &rc);
+			      HBRUSH brush = CreateSolidBrush(RGB(255,255,255));
+			      FillRect((HDC)wParam, &rc, brush);
+			      DeleteObject(brush);
+			      return TRUE;
+		    }
         case WM_CTLCOLORSTATIC:
             // Get rid of the gross gray background. https://stackoverflow.com/a/4495814
             SetTextColor((HDC)wParam, RGB(0, 0, 0));
             SetBkColor((HDC)wParam, RGB(255, 255, 255));
+            SetBkMode((HDC)wParam, OPAQUE); // ???
             static HBRUSH s_solidBrush = CreateSolidBrush(RGB(255, 255, 255));
             return (LRESULT)s_solidBrush;
             // return 0;
@@ -519,7 +529,7 @@ void CreateComponents() {
 
     CreateLabelAndCheckbox(x, y, 185, L"Open the Console", OPEN_CONSOLE, L"Tilde (~)", MASK_SHIFT | VK_OEM_3);
 
-    CreateButton(x,       y, 100, L"Save Position", SAVE_POS, L"Control-P",                    MASK_CONTROL | 'P');
+    CreateButton(x, y, 100, L"Save Position", SAVE_POS, L"Control-P", MASK_CONTROL | 'P');
     y -= 30;
     CreateButton(x + 100, y, 100, L"Load Position", LOAD_POS, L"Shift-Control-P", MASK_SHIFT | MASK_CONTROL | 'P');
     g_currentPos = CreateLabel(x + 5,   y, 90, 80);
@@ -576,7 +586,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         0,
         hInstance,
         NULL,
-        NULL, // LoadCursor(nullptr, IDC_ARROW),
+        NULL,
         NULL,
         WINDOW_CLASS,
         WINDOW_CLASS,

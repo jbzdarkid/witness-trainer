@@ -102,9 +102,10 @@ void Memory::Heartbeat(HWND window, UINT message) {
     } else {
         // Under some circumstances the window can expire? Or the game re-allocates it? I have no idea.
         // Anyways, we check to see if the title is wrong, and if so, search for the window again.
-        static std::wstring title(12, L'\0');
-        GetWindowTextW(_hwnd, &title[0], 12);
-        if (title != L"The Witness") _hwnd = GetProcessHwnd(_pid);
+        constexpr int TITLE_SIZE = sizeof(L"The Witness") / sizeof(wchar_t);
+        wchar_t title[TITLE_SIZE] = {L'\0'};
+        GetWindowTextW(_hwnd, title, TITLE_SIZE);
+        if (wcsncmp(title, L"The Witness", TITLE_SIZE) == 0) _hwnd = GetProcessHwnd(_pid);
     }
 
     if (_hwnd == NULL) {
