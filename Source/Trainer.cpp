@@ -229,8 +229,8 @@ void Trainer::ShowMissingPanels() {
     std::vector<std::string> missingPanels;
     for (const auto& [id, panelName] : PANELS) {
         std::shared_ptr<EntityData> data = GetEntityData(id);
-        assert(data);
-        if (data && !data->solved) missingPanels.push_back(panelName);
+        // Treat non-existent panels as unsolved until we know better.
+        if (!data || !data->solved) missingPanels.push_back(panelName);
     }
     if (missingPanels.empty()) {
         MessageBoxA(NULL, "You solved all the panels!", "", MB_OK);
