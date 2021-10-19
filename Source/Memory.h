@@ -22,6 +22,7 @@ public:
     Memory(const std::wstring& processName);
     ~Memory();
     void StartHeartbeat(HWND window, UINT message);
+    void StopHeartbeat();
     void BringToFront();
     bool IsForeground();
 

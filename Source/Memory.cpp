@@ -6,10 +6,8 @@
 Memory::Memory(const std::wstring& processName) : _processName(processName) {}
 
 Memory::~Memory() {
-    if (_threadActive) {
-        _threadActive = false;
-        _thread.join();
-    }
+    StopHeartbeat();
+    if (_thread.joinable()) _thread.join();
 
     if (_handle != nullptr) {
         CloseHandle(_handle);
@@ -32,6 +30,10 @@ void Memory::StartHeartbeat(HWND window, UINT message) {
         }
     });
     _thread.detach();
+}
+
+void Memory::StopHeartbeat() {
+    _threadActive = false;
 }
 
 void Memory::BringToFront() {

@@ -58,8 +58,8 @@
 HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
+std::shared_ptr<Memory> g_witnessProc;
 HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelDist, g_panelName, g_panelState, g_panelPicture, g_activateGame, g_snapToPanel;
-auto g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
 
 std::vector<float> g_savedCameraPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> g_savedCameraAng = {0.0f, 0.0f};
@@ -197,7 +197,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             if (g_trainer) {
                 auto trainer = g_trainer;
                 g_trainer = nullptr; // Reset any modifications
-                g_witnessProc = nullptr; // Free any allocated memory
                 // Wait to actually quit until all background threads have finished their work.
                 while (trainer.use_count() > 1) std::this_thread::sleep_for(std::chrono::milliseconds(1000));
             }
@@ -587,6 +586,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     CreateComponents();
     DebugUtils::version = VERSION_STR;
 
+    g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
     g_witnessProc->StartHeartbeat(g_hwnd, HEARTBEAT);
     HHOOK hook = NULL;
 #if !_DEBUG
@@ -601,6 +601,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     }
 
     if (hook) UnhookWindowsHookEx(hook);
+    g_witnessProc->StopHeartbeat();
+    g_witnessProc = nullptr;
 
     CoUninitialize();
     return (int) msg.wParam;
