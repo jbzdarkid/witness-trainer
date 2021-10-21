@@ -170,7 +170,7 @@ void SetActivePanel(int activePanel) {
                 SetStringText(g_panelDist, "Distance to " + entityData->type + ": " + std::to_string(distance));
                 SetStringText(g_snapToLabel, "Lock view to " + entityData->type);
                 EnableWindow(g_snapToLabel, true);
-                EnableWindow(g_snapToPanel, false);
+                EnableWindow(g_snapToPanel, true);
             }
         }
     }
@@ -487,15 +487,17 @@ HWND CreateCheckbox(int x, int& y, __int64 message, LPCWSTR hoverText, int32_t h
 }
 
 // The same arguments as Button.
-HWND CreateLabelAndCheckbox(int x, int& y, int width, LPCWSTR text, __int64 message, LPCWSTR hoverText, int32_t hotkey) {
+std::pair<HWND, HWND> CreateLabelAndCheckbox(int x, int& y, int width, LPCWSTR text, __int64 message, LPCWSTR hoverText, int32_t hotkey) {
     // We need a distinct message (HMENU) for the label so that when we call CheckDlgButton it targets the checkbox, not the label.
     // However, we only use the low word (bottom 2 bytes) for logic, so we can safely modify the high word to make it distinct.
-    CreateLabel(x + 20, y, width, text, message + 0x10000);
-    return CreateCheckbox(x, y, message, hoverText, hotkey);
+    auto label = CreateLabel(x + 20, y, width, text, message + 0x10000);
+    CreateTooltip(label, hoverText);
+    auto checkbox = CreateCheckbox(x, y, message, hoverText, hotkey);
+    return {label, checkbox};
 }
 
 // Also the same arguments as Button.
-HWND CreateLabelAndCheckbox(int x, int& y, int width, LPCWSTR text, __int64 message) {
+std::pair<HWND, HWND> CreateLabelAndCheckbox(int x, int& y, int width, LPCWSTR text, __int64 message) {
     return CreateLabelAndCheckbox(x, y, width, text, message, L"", 0);
 }
 
@@ -561,8 +563,7 @@ void CreateComponents() {
     g_panelState = CreateLabel(x, y, 200, L"");
     y += 20;
 
-    g_snapToLabel = CreateLabel(x + 20, y, 200, L"Lock view to entity", SNAP_TO_PANEL + 0x10000);
-    g_snapToPanel = CreateCheckbox(x, y, SNAP_TO_PANEL, L"Control-L", MASK_CONTROL | 'L');
+    std::tie(g_snapToLabel, g_snapToPanel) = CreateLabelAndCheckbox(x, y, 200, L"Lock view to entity", SNAP_TO_PANEL, L"Control-L", MASK_CONTROL | 'L');
     EnableWindow(g_snapToLabel, false);
     EnableWindow(g_snapToPanel, false);
 

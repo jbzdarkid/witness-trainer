@@ -37,7 +37,8 @@ void Memory::StopHeartbeat() {
 }
 
 void Memory::BringToFront() {
-    SetForegroundWindow(_hwnd);
+    ShowWindow(_hwnd, SW_RESTORE); // This handles fullscreen mode
+    SetForegroundWindow(_hwnd); // This handles windowed mode
 }
 
 bool Memory::IsForeground() {
