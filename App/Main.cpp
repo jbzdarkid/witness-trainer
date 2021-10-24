@@ -43,6 +43,7 @@
 // - SuspendThread as a way to pause the game when an assert fires? Then I could investigate...
 // - Hotkeys should eat from game (e.g. shift-ctrl-s)
 // - Show time of last challenge / last 20 challenges
+// - Change the solution fade time so that you can TP to puzzle (or whatever) and see what you traced. This will be easier than GDI+ nonsense.
 
 // Bad/Hard ideas:
 // - Avoid hanging the UI during load; call Trainer::ctor on a background thread.
