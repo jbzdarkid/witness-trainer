@@ -50,6 +50,7 @@
 //   Instead, I just sped up the sigscan.
 // - Show currently traced line (hard, requires changes in Memory)
 //   Would also require figuring out what needs to be changed to properly reset "panel data".
+//   I actually figured out how to do this, but drawing the line is a behemoth.
 // - _timing asl to the trainer? Just something simple would be good enough, mostly
 // - LOD hack
 // - Change current save name
@@ -356,7 +357,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             savesFolder += L"\\The Witness";
             ShellExecute(NULL, L"open", savesFolder.c_str(), NULL, NULL, SW_SHOWDEFAULT);
         } else if (command == SNAP_TO_PANEL) {
-            if (IsWindowEnabled(g_snapToPanel)) {
+            if (HIWORD(wParam) == STN_CLICKED && IsWindowEnabled(g_snapToPanel)) {
                 bool enabled = IsDlgButtonChecked(g_hwnd, SNAP_TO_PANEL);
                 CheckDlgButton(g_hwnd, SNAP_TO_PANEL, !enabled);
             }
