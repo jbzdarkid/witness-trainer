@@ -32,6 +32,8 @@
 
 // BUGS:
 // - Changing from old ver to new ver can set FOV = 0?
+// - Document (and maybe test some more) random pillars practice
+// - Document anything that was added since I wrote the documentation
 
 // Feature requests:
 // - show collision, somehow
@@ -123,7 +125,7 @@ void SetPosAndAngText(HWND hwnd, const std::vector<float>& pos, const std::vecto
 }
 
 void SetFloatText(HWND hwnd, float f) {
-    std::wstring text(10, '\0');
+    std::wstring text(15, '\0');
     int size = swprintf_s(text.data(), text.size() + 1, L"%.8g", f);
     text.resize(size);
     SetStringText(hwnd, text);
@@ -373,7 +375,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         if (!trainer) return;
 
         if (command == NOCLIP_SPEED)         trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
-        else if (command == FOV_CURRENT)     trainer->SetFov(GetWindowFloat(g_fovCurrent));
+        else if (command == FOV_CURRENT)     {} // Because we constantly update FOV, we should not respond to this command here.
         else if (command == SPRINT_SPEED)    trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
         else if (command == SHOW_PANELS)     trainer->ShowMissingPanels();
         else if (command == SHOW_NEARBY)     trainer->ShowNearbyEntities();

@@ -31,13 +31,14 @@ public:
     bool GetInfiniteChallenge();
     bool GetConsoleOpen();
     bool GetRandomDoorsPractice();
+    bool GetEPOverlay();
 
-    void SetNoclip(bool enabled);
+    void SetNoclip(bool enable);
     void SetNoclipSpeed(float speed);
     void SetPlayerPos(const std::vector<float>& pos);
     void SetCameraPos(const std::vector<float>& pos);
     void SetCameraAng(const std::vector<float>& ang);
-    void SetFov(float fov);
+    void SetFov(double fov);
     void SetCanSave(bool canSave);
     void SetSprintSpeed(float speed);
     void SetInfiniteChallenge(bool enable);
@@ -47,6 +48,7 @@ public:
     void SetMainMenuState(bool open);
     void SetRandomDoorsPractice(bool enable);
     void SetChallengePillarsPractice(bool enable);
+    void SetEPOverlay(bool enable);
 
 private:
     std::shared_ptr<Memory> _memory;
@@ -73,6 +75,7 @@ private:
     __int64 _wantCampaignSave = 0;
     int _epNameOffset = 0;
     __int64 _menuOpenTarget = 0;
+    __int64 _showPatternStatus = 0;
 
     std::shared_ptr<EntityData> GetPanelData(int id);
     std::shared_ptr<EntityData> GetEPData(int id);

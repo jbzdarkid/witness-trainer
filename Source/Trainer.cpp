@@ -142,8 +142,8 @@ Trainer::~Trainer() {
     SetCanSave(true);
     SetInfiniteChallenge(false);
     float fov = GetFov();
-    if (fov < 50.53401947f) SetFov(50.53401947f);
-    if (fov > 88.50715637f) SetFov(88.50715637f);
+    if (fov < 80.0f) SetFov(80.0f);
+    if (fov > 120.0f) SetFov(120.0f);
     SetSprintSpeed(2.0f);
     SetMainMenuColor(false);
     SetChallengePillarsPractice(false);
@@ -396,7 +396,16 @@ std::vector<float> Trainer::GetCameraAng() {
 
 float Trainer::GetFov() {
     if (_fovCurrent == 0) return 0.0f; // FOV is not available on some old patches
-    return _memory->ReadData<float>({_fovCurrent}, 1)[0];
+
+    // This insanity taken directly from the assembly, with simplified multiplication. I have no idea what it's doing.
+    // I do know that the two outer multiplication steps are inverses.
+    double fov = _memory->ReadData<float>({_fovCurrent}, 1)[0];
+    fov *= 0.00872664625997165;
+    fov = tan(fov);
+    fov *= 1.7777777777777778;
+    fov = atan(fov);
+    fov *= 114.5915590261646;
+    return (float)fov;
 }
 
 bool Trainer::CanSave() {
@@ -444,10 +453,16 @@ void Trainer::SetCameraAng(const std::vector<float>& ang) {
     _memory->WriteData<float>({_cameraAng}, ang);
 }
 
-void Trainer::SetFov(float fov) {
-    float fovExpected = 19.2f + 0.0231f * fov + 0.00462f * fov * fov;
-    // DebugPrint("Expected FOV: " + std::to_string(fovExpected));
-    _memory->WriteData<float>({_fovCurrent}, {fov});
+void Trainer::SetFov(double fov) {
+    // This insanity taken directly from the assembly, with simplified multiplication. I have no idea what it's doing.
+    // I do know that the two outer multiplication steps are inverses.
+    fov *= 0.00872664625997165;
+    fov = tan(fov);
+    fov *= 0.5625f;
+    fov = atan(fov);
+    fov *= 114.5915590261646;
+
+    _memory->WriteData<float>({_fovCurrent}, {(float)fov});
 }
 
 void Trainer::SetCanSave(bool canSave) {
