@@ -28,6 +28,7 @@
 #define CALLSTACK           0x418
 #define SNAP_TO_PANEL       0x419
 #define DISTANCE_GATING     0x420
+#define EP_OVERLAY          0x421
 
 // BUGS:
 // - Changing from old ver to new ver can set FOV = 0?
@@ -269,6 +270,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 g_trainer->SetRandomDoorsPractice(IsDlgButtonChecked(hwnd, DOORS_PRACTICE));
                 g_trainer->SetInfiniteChallenge(IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE));
                 g_trainer->SetConsoleOpen(IsDlgButtonChecked(hwnd, OPEN_CONSOLE));
+                g_trainer->SetEPOverlay(IsDlgButtonChecked(hwnd, EP_OVERLAY));
                 g_trainer->SetChallengePillarsPractice(true);
                 SetStringText(g_activateGame, L"Switch to game");
                 break;
@@ -287,6 +289,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     CheckDlgButton(hwnd, DOORS_PRACTICE, g_trainer->GetRandomDoorsPractice());
                     CheckDlgButton(hwnd, INFINITE_CHALLENGE, g_trainer->GetInfiniteChallenge());
                     CheckDlgButton(hwnd, OPEN_CONSOLE, g_trainer->GetConsoleOpen());
+                    CheckDlgButton(hwnd, EP_OVERLAY, g_trainer->GetEPOverlay());
                     SetStringText(g_activateGame, L"Switch to game");
                     g_trainer->SetMainMenuState(true);
                     g_trainer->SetChallengePillarsPractice(true);
@@ -330,6 +333,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         if (command == INFINITE_CHALLENGE)      ToggleOption(INFINITE_CHALLENGE, &Trainer::SetInfiniteChallenge);
         else if (command == DOORS_PRACTICE)     ToggleOption(DOORS_PRACTICE, &Trainer::SetRandomDoorsPractice);
         else if (command == OPEN_CONSOLE)       ToggleOption(OPEN_CONSOLE, &Trainer::SetConsoleOpen);
+        else if (command == EP_OVERLAY)         ToggleOption(EP_OVERLAY, &Trainer::SetEPOverlay);
         else if (command == CALLSTACK)          DebugUtils::RegenerateCallstack(GetWindowString(g_fovCurrent));
         else if (command == NOCLIP_ENABLED) {
             // Fix up the player position when exiting noclip
@@ -536,6 +540,8 @@ void CreateComponents() {
     CreateLabelAndCheckbox(x, y, 185, L"Disable Challenge time limit", INFINITE_CHALLENGE);
 
     CreateLabelAndCheckbox(x, y, 185, L"Open the Console", OPEN_CONSOLE, L"Tilde (~)", MASK_SHIFT | VK_OEM_3);
+
+    CreateLabelAndCheckbox(x, y, 185, L"Show Entity Solvability", EP_OVERLAY, L"Alt-2", MASK_ALT | '2');
 
     CreateButton(x, y, 100, L"Save Position", SAVE_POS, L"Control-P", MASK_CONTROL | 'P');
     y -= 30;

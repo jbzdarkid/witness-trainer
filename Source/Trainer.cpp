@@ -121,6 +121,10 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         }
     });
 
+    memory->AddSigScan({0x0F, 0x84, 0x38, 0x06, 0x00, 0x00, 0x48, 0x89, 0x58, 0xF0}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
+        trainer->_showPatternStatus = Memory::ReadStaticInt(offset, index - 5, data, 5);
+    }); 
+
     // We need to save _memory before we exit, otherwise we can't destroy properly.
     trainer->_memory = memory;
 
@@ -415,8 +419,12 @@ bool Trainer::GetRandomDoorsPractice() {
     return _memory->ReadData<byte>({_doorOpen}, 1)[0] == 0x90;
 }
 
-void Trainer::SetNoclip(bool enabled) {
-    _memory->WriteData<byte>({_noclipEnabled}, {static_cast<byte>(enabled)});
+bool Trainer::GetEPOverlay() {
+  return _memory->ReadData<byte>({_showPatternStatus}, 1)[0] != 0x00;
+}
+
+void Trainer::SetNoclip(bool enable) {
+    _memory->WriteData<byte>({_noclipEnabled}, {static_cast<byte>(enable)});
 }
 
 void Trainer::SetNoclipSpeed(float speed) {
@@ -561,4 +569,8 @@ void Trainer::SetChallengePillarsPractice(bool enable) {
         // When disabled, the box powers its original target
         _memory->WriteData<int>({_globals, 0x18, 0x356B * 8, idToPowerOffset}, {0x3615});
     }
+}
+
+void Trainer::SetEPOverlay(bool enable) {
+  _memory->WriteData<byte>({_showPatternStatus}, {static_cast<byte>(enable)});
 }
