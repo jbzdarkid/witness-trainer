@@ -119,9 +119,12 @@ void SetStringText(HWND hwnd, const std::wstring& text) {
 void SetPosAndAngText(HWND hwnd, const std::vector<float>& pos, const std::vector<float>& ang) {
     assert(pos.size() == 3);
     assert(ang.size() == 2);
-    std::wstring text(65, '\0');
-    swprintf_s(text.data(), text.size() + 1, L"X %8.3f\nY %8.3f\nZ %8.3f\n\u0398 %8.5f\n\u03A6 %8.5f", pos[0], pos[1], pos[2], ang[0], ang[1]);
-    SetStringText(hwnd, text);
+    wchar_t text[128] = {'\0'};
+    swprintf_s(text, sizeof(text) / sizeof(text[0]), L"X %.3f\nY %.3f\nZ %.3f\n\u0398 %.8f\n\u03A6 %.8f", pos[0], pos[1], pos[2], ang[0], ang[1]);
+#pragma push_macro("SetWindowTextW")
+#undef SetWindowTextW
+    SetWindowTextW(hwnd, text);
+#pragma pop_macro("SetWindowTextW")
 }
 
 void SetFloatText(HWND hwnd, float f) {
@@ -545,11 +548,11 @@ void CreateComponents() {
 
     CreateLabelAndCheckbox(x, y, 185, L"Show Entity Solvability", EP_OVERLAY, L"Alt-2", MASK_ALT | '2');
 
-    CreateButton(x, y, 100, L"Save Position", SAVE_POS, L"Control-P", MASK_CONTROL | 'P');
+    CreateButton(x, y, 110, L"Save Position", SAVE_POS, L"Control-P", MASK_CONTROL | 'P');
     y -= 30;
-    CreateButton(x + 100, y, 100, L"Load Position", LOAD_POS, L"Shift-Control-P", MASK_SHIFT | MASK_CONTROL | 'P');
-    g_currentPos = CreateLabel(x + 5,   y, 90, 80);
-    g_savedPos   = CreateLabel(x + 105, y, 90, 80);
+    CreateButton(x + 120, y, 110, L"Load Position", LOAD_POS, L"Shift-Control-P", MASK_SHIFT | MASK_CONTROL | 'P');
+    g_currentPos = CreateLabel(x + 5,   y, 110, 80);
+    g_savedPos   = CreateLabel(x + 125, y, 110, 80);
     SetPosAndAngText(g_currentPos, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f });
     SetPosAndAngText(g_savedPos,   { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f });
 
