@@ -397,8 +397,7 @@ std::vector<float> Trainer::GetCameraAng() {
 float Trainer::GetFov() {
     if (_fovCurrent == 0) return 0.0f; // FOV is not available on some old patches
 
-    // This insanity taken directly from the assembly, with simplified multiplication. I have no idea what it's doing.
-    // I do know that the two outer multiplication steps are inverses.
+    // This is the inverse of fov_vertical_from_horizontal.
     double fov = _memory->ReadData<float>({_fovCurrent}, 1)[0];
     fov *= 0.00872664625997165;
     fov = tan(fov);
@@ -454,8 +453,7 @@ void Trainer::SetCameraAng(const std::vector<float>& ang) {
 }
 
 void Trainer::SetFov(double fov) {
-    // This insanity taken directly from the assembly, with simplified multiplication. I have no idea what it's doing.
-    // I do know that the two outer multiplication steps are inverses.
+    // This computation is called fov_vertical_from_horizontal.
     fov *= 0.00872664625997165;
     fov = tan(fov);
     fov *= 0.5625f;
