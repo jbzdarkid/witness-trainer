@@ -32,23 +32,24 @@
 
 // BUGS:
 // - Changing from old ver to new ver can set FOV = 0?
-// - Document (and maybe test some more) random pillars practice
-// - Document anything that was added since I wrote the documentation
+// - Test random pillars practice some more.
 
 // Feature requests:
 // - show collision, somehow
+//   The trick here is going to be immediate-mode UI, coupled with determining which entities are presenting collision.
 // - Icon for trainer
-//  https://stackoverflow.com/questions/40933304
+//   https://stackoverflow.com/questions/40933304
 // - Delete all saves (?)
-// - Basic timer
 // - Save settings to some file, and reload them on trainer start
 // - CreateRemoteThread + VirtualAllocEx allows me to *run* code in another process. This seems... powerful!
 // - SuspendThread as a way to pause the game when an assert fires? Then I could investigate...
 // - Hotkeys should eat from game (e.g. shift-ctrl-s)
-// - Show time of last challenge / last 20 challenges
 // - Change the solution fade time so that you can TP to puzzle (or whatever) and see what you traced. This will be easier than GDI+ nonsense.
+//   It's still hard though.
 
 // Bad/Hard ideas:
+// - Basic timer, Show time of last challenge / last 20 challenges
+//   Out of scope.
 // - Avoid hanging the UI during load; call Trainer::ctor on a background thread.
 //   Instead, I just sped up the sigscan.
 // - Show currently traced line (hard, requires changes in Memory)

@@ -41,6 +41,17 @@ This program is Windows-only for the forseeable future.
   * Psi (Φ) represents your vertical angle (-Φ = rotating down, +Φ = rotating up)
 - Show unsolved panels
   * Fairly self-explanatory, but very helpful for figuring out what you missed in a failed 100% run.
-- Lock to panel [Hotkey: Control-L]
-  * When you have a previous panel, this checkbox will keep your 3d view snapped into the startpoint of that panel.
+- Lock to entity [Hotkey: Control-L]
+  * When you have a previous panel or EP, this checkbox will keep your 3d view snapped into the startpoint of that entity.
   * This is helpful for practicing snipes, or trying to develop new snipes.
+  * It is also helpful for solving panels through walls
+- Disable distance gating
+  * Allows you to solve all panels (notably laser panels) from any distance
+- Challenge pillars practice
+  * After completing the challenge, pause to power off the pillars, then solve the vault box inside the cage. This will turn on and re-randomize the pillars.
+  * Closing the trainer will restore the box's original effect.
+- Solvability overlay
+  * This will show which panels and EPs can be started from your current location.
+  * If it is possible to start a panel or EP, it will have a circle -- otherwise, it will have a triangle.
+    * Note that this does not account for collision -- just the angle of attack.
+  * While solving, all valid (connected) points are shown with circles, and all covered points are shown with diamonds.
