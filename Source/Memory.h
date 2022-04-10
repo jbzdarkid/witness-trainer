@@ -79,6 +79,7 @@ private:
     DWORD _pid = 0;
     HWND _hwnd = NULL;
     uintptr_t _baseAddress = 0;
+    uintptr_t _endOfModule = 0;
     __int64 _globals = 0;
     int _loadCountOffset = 0;
     __int64 _previousEntityManager = 0;

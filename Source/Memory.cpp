@@ -174,7 +174,7 @@ void Memory::Initialize() {
 
     _hwnd = NULL; // Will be populated later.
 
-    _baseAddress = DebugUtils::GetBaseAddress(handle);
+    std::tie(_baseAddress, _endOfModule) = DebugUtils::GetModuleBounds(handle);
     if (_baseAddress == 0) {
         DebugPrint("Couldn't locate base address");
         return;
@@ -246,15 +246,15 @@ size_t Memory::ExecuteSigScans() {
     std::vector<byte> buff;
     buff.resize(BUFFER_SIZE + 0x100); // padding in case the sigscan is past the end of the buffer
 
-    for (uintptr_t i = 0; i < 0x500000; i += BUFFER_SIZE) {
+    for (uintptr_t i = _baseAddress; i < _endOfModule; i += BUFFER_SIZE) {
         SIZE_T numBytesWritten;
-        if (!ReadProcessMemory(_handle, reinterpret_cast<void*>(_baseAddress + i), &buff[0], buff.size(), &numBytesWritten)) continue;
+        if (!ReadProcessMemory(_handle, reinterpret_cast<void*>(i), &buff[0], buff.size(), &numBytesWritten)) continue;
         buff.resize(numBytesWritten);
         for (auto& [scanBytes, sigScan] : _sigScans) {
             if (sigScan.found) continue;
             int index = find(buff, scanBytes);
             if (index == -1) continue;
-            sigScan.found = sigScan.scanFunc(i, index, buff); // We're expecting i to be relative to the base address here.
+            sigScan.found = sigScan.scanFunc(i - _baseAddress, index, buff); // We're expecting i to be relative to the base address here.
             if (sigScan.found) notFound--;
         }
         if (notFound == 0) break;
@@ -345,6 +345,14 @@ uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets, bool absolute) {
             return 0;
         } else if (computedAddress == 0) {
             DebugPrint("Attempted to dereference NULL!");
+            assert(false);
+            return 0;
+        } else if (computedAddress < _baseAddress) {
+            DebugPrint("Address out of range (too small)");
+            assert(false);
+            return 0;
+        } else if (computedAddress >= _endOfModule) {
+            DebugPrint("Address out of range (too large)");
             assert(false);
             return 0;
         }
