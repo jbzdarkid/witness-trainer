@@ -3,7 +3,7 @@
 #include "Panels.h"
 
 std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) {
-    auto trainer = std::shared_ptr<Trainer>(new Trainer());
+    auto trainer = std::make_shared<Trainer>();
 
     memory->AddSigScan({0x84, 0xC0, 0x75, 0x59, 0xBA, 0x20, 0x00, 0x00, 0x00}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
         // This int is actually desired_movement_direction, which immediately preceeds camera_position
