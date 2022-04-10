@@ -35,8 +35,9 @@
 // - Test random pillars practice some more.
 
 // Feature requests:
-// - show collision, somehow
+// - show solve collision
 //   The trick here is going to be immediate-mode UI, coupled with determining which entities are presenting collision.
+// - show player collision
 // - Icon for trainer
 //   https://stackoverflow.com/questions/40933304
 // - Delete all saves (?)
