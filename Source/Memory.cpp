@@ -180,8 +180,7 @@ void Memory::Initialize() {
         return;
     }
 
-    // Clear sigscans to avoid duplication (or leftover sigscans from the trainer)
-    assert(_sigScans.size() == 0);
+    // Clear out any leftover sigscans from consumers (e.g. the trainer)
     _sigScans.clear();
 
     AddSigScan({0x74, 0x41, 0x48, 0x85, 0xC0, 0x74, 0x04, 0x48, 0x8B, 0x48, 0x10}, [&](__int64 offset, int index, const std::vector<byte>& data) {
