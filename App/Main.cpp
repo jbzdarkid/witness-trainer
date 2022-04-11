@@ -207,6 +207,20 @@ void ToggleOption(int message, void (Trainer::*setter)(bool)) {
     if (g_trainer) (*g_trainer.*setter)(!enabled);
 }
 
+void LaunchSteamGame(const char* gameId, const char* arguments = "") {
+    std::string steamUrl = "steam://rungameid/";
+    steamUrl += gameId;
+    ShellExecuteA(g_hwnd, "open", steamUrl.c_str(), NULL, NULL, SW_SHOWDEFAULT);
+
+    /* The above doesn't really work with arguments, so in the future we should do this:
+    auto key = REG_QUERY("Computer\HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Valve\Steam")
+    char* steamPath = REG_KEY_READ(key, "InstallPath");
+
+    std::string fullArguments = "-applaunch " + gameId + " " + arguments;
+    ShellExecuteW(g_hwnd, L"open", steamPath, fullArguments.c_str(), NULL, SW_SHOWDEFAULT);
+    */
+}
+
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_DESTROY:
@@ -358,7 +372,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             }
             ToggleOption(CAN_SAVE, &Trainer::SetCanSave);
         } else if (command == ACTIVATE_GAME) {
-            if (!trainer) ShellExecute(NULL, L"open", L"steam://rungameid/210970", NULL, NULL, SW_SHOWDEFAULT);
+            if (!trainer) LaunchSteamGame("210970", "-skip_config_dialog");
             else g_witnessProc->BringToFront();
         } else if (command == OPEN_SAVES) {
             PWSTR outPath;
