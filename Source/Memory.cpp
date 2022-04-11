@@ -338,26 +338,31 @@ uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets, bool absolute) {
         // If the address was not yet computed, read it from memory.
         uintptr_t computedAddress = 0;
         if (!_handle) return 0;
-        if (!ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(cumulativeAddress), &computedAddress, sizeof(computedAddress), NULL)) {
-            DebugPrint("Failed to read process memory.");
-            assert(false);
-            return 0;
-        } else if (computedAddress == 0) {
-            DebugPrint("Attempted to dereference NULL!");
-            assert(false);
-            return 0;
-        } else if (computedAddress < _baseAddress) {
-            DebugPrint("Address out of range (too small)");
-            assert(false);
-            return 0;
-        } else if (computedAddress >= _endOfModule) {
-            DebugPrint("Address out of range (too large)");
-            assert(false);
-            return 0;
+        if (ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(cumulativeAddress), &computedAddress, sizeof(computedAddress), NULL) && computedAddress != 0) {
+            // Success!
+            _computedAddresses.Set(cumulativeAddress, computedAddress);
+            cumulativeAddress = computedAddress;
+            continue;
         }
 
-        _computedAddresses.Set(cumulativeAddress, computedAddress);
-        cumulativeAddress = computedAddress;
+        MEMORY_BASIC_INFORMATION info;
+        if (computedAddress == 0) {
+            DebugPrint("Attempted to dereference NULL!");
+            assert(false);
+        } else if (!VirtualQuery(reinterpret_cast<LPVOID>(cumulativeAddress), &info, sizeof(computedAddress))) {
+            DebugPrint("Failed to read process memory, probably because cumulativeAddress was too large.");
+            assert(false);
+        } else if (info.State != MEM_COMMIT) {
+            DebugPrint("Attempted to read unallocated memory.");
+            assert(false);
+        } else if ((info.AllocationProtect & 0xC4) == 0) { // 0xC4 = PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY | PAGE_READWRITE
+            DebugPrint("Attempted to read unreadable memory.");
+            assert(false);
+        } else {
+            DebugPrint("Failed to read memory for some as-yet unknown reason.");
+            assert(false);
+        }
+        return 0;
     }
     return cumulativeAddress + final_offset;
 }
