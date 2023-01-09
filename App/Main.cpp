@@ -262,26 +262,25 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         case HEARTBEAT:
             switch ((ProcStatus)wParam) {
             case ProcStatus::Stopped:
-            case ProcStatus::NotRunning:
                 // Don't discard any settings, just free the trainer.
-                if (g_trainer) g_trainer = nullptr;
+                g_trainer = nullptr;
                 // Also reset the title & launch text, since they can get stuck
                 SetStringText(g_hwnd, L"Witness Trainer");
                 SetStringText(g_activateGame, L"Launch game");
                 break;
-            case ProcStatus::Reload:
-            case ProcStatus::NewGame:
             case ProcStatus::Started:
-                if (!g_trainer) {
-                    // Process just started (we were already alive), enforce our settings.
-                    SetStringText(g_hwnd, L"Attaching to The Witness...");
-                    g_trainer = Trainer::Create(g_witnessProc);
-                }
+                assert(!g_trainer);
+                SetStringText(g_hwnd, L"Attaching to The Witness...");
+                g_trainer = Trainer::Create(g_witnessProc);
+                [[fallthrough]]; // Other than starting up the trainer object, we treat 'game start' the same as save load / new game
+            case ProcStatus::LoadSave:
+            case ProcStatus::NewGame:
                 if (!g_trainer) break;
                 SetStringText(g_hwnd, L"Witness Trainer");
-                // Or, we started a new game / loaded a save, in which case some of the entity data might have been reset.
+                SetStringText(g_activateGame, L"Switch to game");
                 SetActivePanel(-1);
                 previousPanel = -1;
+                previousPanelStart.clear();
                 g_trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
                 g_trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
                 g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
@@ -292,52 +291,65 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 g_trainer->SetConsoleOpen(IsDlgButtonChecked(hwnd, OPEN_CONSOLE));
                 g_trainer->SetEPOverlay(IsDlgButtonChecked(hwnd, EP_OVERLAY));
                 g_trainer->SetChallengePillarsPractice(true);
+                break;
+            case ProcStatus::AlreadyRunning:
+                // Process was already running, and we just started. Load settings from the game.
+                assert(!g_trainer);
+                SetStringText(g_hwnd, L"Attaching to The Witness...");
+                g_trainer = Trainer::Create(g_witnessProc);
+                if (!g_trainer) break;
+                SetStringText(g_hwnd, L"Witness Trainer");
+                SetFloatText(g_noclipSpeed, g_trainer->GetNoclipSpeed());
+                SetFloatText(g_sprintSpeed, g_trainer->GetSprintSpeed());
+                SetFloatText(g_fovCurrent, g_trainer->GetFov());
+                CheckDlgButton(hwnd, NOCLIP_ENABLED, g_trainer->GetNoclip());
+                CheckDlgButton(hwnd, CAN_SAVE, g_trainer->CanSave());
+                CheckDlgButton(hwnd, DOORS_PRACTICE, g_trainer->GetRandomDoorsPractice());
+                CheckDlgButton(hwnd, INFINITE_CHALLENGE, g_trainer->GetInfiniteChallenge());
+                CheckDlgButton(hwnd, OPEN_CONSOLE, g_trainer->GetConsoleOpen());
+                CheckDlgButton(hwnd, EP_OVERLAY, g_trainer->GetEPOverlay());
                 SetStringText(g_activateGame, L"Switch to game");
+                g_trainer->SetMainMenuState(true);
+                g_trainer->SetChallengePillarsPractice(true);
+
+                SetPosAndAngText(g_currentPos, g_trainer->GetCameraPos(), g_trainer->GetCameraAng());
+                SetActivePanel(g_trainer->GetActivePanel());
                 break;
             case ProcStatus::Running:
-                if (!g_trainer) {
-                    // Process was already running, and we just started. Load settings from the game.
-                    SetStringText(g_hwnd, L"Attaching to The Witness...");
-                    g_trainer = Trainer::Create(g_witnessProc);
-                    if (!g_trainer) break;
-                    SetStringText(g_hwnd, L"Witness Trainer");
-                    SetFloatText(g_noclipSpeed, g_trainer->GetNoclipSpeed());
-                    SetFloatText(g_sprintSpeed, g_trainer->GetSprintSpeed());
+                if (!g_trainer) break;
+                // This is the steady state of the system. The process is running and so are we.
+                // We do fairly minimal things here, since mostly action is taken when the user clicks on a button or checkbox.
+
+                // On legacy versions, there is a hotkey to toggle noclip. Update the trainer checkbox if that happens.
+                CheckDlgButton(hwnd, NOCLIP_ENABLED, g_trainer->GetNoclip());
+
+                // If the FOV disagrees between the trainer and the game, get or set depending on which window is foremost.
+                if (g_hwnd == GetForegroundWindow()) { // The trainer is foreground
+                    g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
+                } else { // Any other window is foreground (e.g. changed in-game and then quickly alt-tabbed)
                     SetFloatText(g_fovCurrent, g_trainer->GetFov());
-                    CheckDlgButton(hwnd, NOCLIP_ENABLED, g_trainer->GetNoclip());
-                    CheckDlgButton(hwnd, CAN_SAVE, g_trainer->CanSave());
-                    CheckDlgButton(hwnd, DOORS_PRACTICE, g_trainer->GetRandomDoorsPractice());
-                    CheckDlgButton(hwnd, INFINITE_CHALLENGE, g_trainer->GetInfiniteChallenge());
-                    CheckDlgButton(hwnd, OPEN_CONSOLE, g_trainer->GetConsoleOpen());
-                    CheckDlgButton(hwnd, EP_OVERLAY, g_trainer->GetEPOverlay());
-                    SetStringText(g_activateGame, L"Switch to game");
-                    g_trainer->SetMainMenuState(true);
-                    g_trainer->SetChallengePillarsPractice(true);
-                } else {
-                    // Process was already running, and so were we (this recurs every heartbeat). Enforce settings and apply repeated actions.
-                    g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
-
-                    // If we are the foreground window, set FOV. Otherwise, read FOV.
-                    if (g_hwnd == GetForegroundWindow()) {
-                        g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
-                    } else {
-                        SetFloatText(g_fovCurrent, g_trainer->GetFov());
-                    }
-
-                    if (IsDlgButtonChecked(hwnd, SNAP_TO_PANEL) && previousPanel != -1) {
-                        g_trainer->SnapToPoint(previousPanelStart);
-                    }
                 }
 
-                // Settings which are always sourced from the game, since they are not editable in the trainer.
+                // The "Snap to Panel" checkbox keeps the user's view locked on the panel's startpoint.
+                // To do this (even while the user looks around), we need to constantly (re)set their view.
+                if (previousPanel != -1 && previousPanelStart.size() == 3 && IsDlgButtonChecked(hwnd, SNAP_TO_PANEL)) {
+                    g_trainer->SnapToPoint(previousPanelStart);
+                }
+
+                // These settings are always sourced from the game, since they are not editable in the trainer.
                 // For performance reasons (redrawing text is expensive), these update 10x slower than other display fields.
-                static int64_t update = 0;
-                if (++update % 10 == 0) {
-                    SetPosAndAngText(g_currentPos, g_trainer->GetCameraPos(), g_trainer->GetCameraAng());
-                    SetActivePanel(g_trainer->GetActivePanel());
+                {
+                    static int64_t update = 0;
+                    if (++update % 10 == 0) {
+                        SetPosAndAngText(g_currentPos, g_trainer->GetCameraPos(), g_trainer->GetCameraAng());
+                        SetActivePanel(g_trainer->GetActivePanel());
+                    }
                 }
                 break;
-            }
+            case ProcStatus::Loading:
+                // Don't do anything while The Witness is loading. We'll refresh all of our settings once the load is completed.
+                break;
+            } // End switch ((ProcStatus)wParam)
             return 0;
         default:
             return DefWindowProc(hwnd, message, wParam, lParam);

@@ -1,7 +1,8 @@
 #include "pch.h"
-#include "Memory.h"
 #include <psapi.h>
 #include <tlhelp32.h>
+
+#include "Memory.h"
 
 Memory::Memory(const std::wstring& processName) : _processName(processName) {}
 
@@ -21,12 +22,17 @@ void Memory::StartHeartbeat(HWND window, UINT message) {
         SetCurrentThreadName(L"Heartbeat");
 
         // Run the first heartbeat before setting trainerHasStarted, to detect if we are attaching to a game already in progress.
-        sharedThis->Heartbeat(window, message);
+        ProcStatus status = sharedThis->Heartbeat();
+        PostMessage(window, message, status, NULL);
         sharedThis->_trainerHasStarted = true;
 
         while (sharedThis->_threadActive) {
             std::this_thread::sleep_for(s_heartbeat);
-            sharedThis->Heartbeat(window, message);
+            status = sharedThis->Heartbeat();
+            PostMessage(window, message, status, NULL);
+
+            // Wait for the process to fully close; otherwise we might accidentally re-attach to it.
+            if (status == ProcStatus::Stopped) std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         }
     });
     _thread.detach();
@@ -66,36 +72,30 @@ HWND Memory::GetProcessHwnd(DWORD pid) {
     return data.hwnd;
 }
 
-void Memory::Heartbeat(HWND window, UINT message) {
+ProcStatus Memory::Heartbeat() {
     if (!_handle) {
         Initialize(); // Initialize promises to set _handle only on success
         if (!_handle) {
             // Couldn't initialize, definitely not running
-            PostMessage(window, message, ProcStatus::NotRunning, NULL);
-            return;
+            return NotRunning;
         }
     }
 
     DWORD exitCode = 0;
     GetExitCodeProcess(_handle, &exitCode);
-    if (exitCode != STILL_ACTIVE) {
+    if (_trainerHasStarted && exitCode != STILL_ACTIVE) {
         // Process has exited, clean up. We only need to reset _handle here -- its validity is linked to all other class members.
         _computedAddresses.Clear();
         _handle = nullptr;
+        _gameHasStarted = false;
+        _wasLoading = false;
 
-        _nextStatus = ProcStatus::Started;
-        PostMessage(window, message, ProcStatus::Stopped, NULL);
-        // Wait for the process to fully close; otherwise we might accidentally re-attach to it.
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-        return;
+        return Stopped;
     }
 
     __int64 entityManager = ReadData<__int64>({_globals}, 1)[0];
-    if (entityManager == 0) {
-        // Game hasn't loaded yet, we're still sitting on the launcher
-        PostMessage(window, message, ProcStatus::NotRunning, NULL);
-        return;
-    }
+    // Game hasn't loaded yet, we're still sitting on the launcher
+    if (entityManager == 0) return NotRunning;
 
     // To avoid obtaining the HWND for the launcher, we wait to determine HWND until after the entity manager is allocated (the main game has started).
     if (_hwnd == NULL) {
@@ -111,45 +111,52 @@ void Memory::Heartbeat(HWND window, UINT message) {
 
     if (_hwnd == NULL) {
         DebugPrint("Couldn't find the HWND for the game");
-        assert(false);
-        return;
+        return NotRunning;
     }
 
-    // New game causes the entity manager to re-allocate
+    // New game / load game causes the entity manager to re-allocate,
+    // but we need the entity manager to check if we're loading.
     if (entityManager != _previousEntityManager) {
         _previousEntityManager = entityManager;
         _computedAddresses.Clear();
     }
 
-    // Loading a game causes entities to be shuffled
+    uint8_t isLoading = ReadData<uint8_t>({_globals, _loadCountOffset - 0x4}, 1)[0];
+    // Saved game is currently loading, do not take any actions.
+    if (isLoading == 0x01) {
+        _wasLoading = true;
+        return Loading;
+    }
+
     int loadCount = ReadAbsoluteData<int>({entityManager, _loadCountOffset}, 1)[0];
+    // Loading a game causes entities to be shuffled
     if (_previousLoadCount != loadCount) {
         _previousLoadCount = loadCount;
         _computedAddresses.Clear();
     }
 
-    int numEntities = ReadData<int>({_globals, 0x10}, 1)[0];
-    if (numEntities != 400'000) {
-        // New game is starting, do not take any actions.
-        _nextStatus = ProcStatus::NewGame;
-        return;
-    }
+    // This is slightly imprecise, since we can miss a load if it happens between heartbeats.
+    // However, if we do detect a load, we should always emit either NewGame or LoadSave.
+    if (_wasLoading) {
+        _wasLoading = false;
+        _gameHasStarted = true;
 
-    byte isLoading = ReadAbsoluteData<byte>({entityManager, _loadCountOffset - 0x4}, 1)[0];
-    if (isLoading == 0x01) {
-        // Saved game is currently loading, do not take any actions.
-        _nextStatus = ProcStatus::Reload;
-        return;
+        if (loadCount == 0) return NewGame;
+        return LoadSave;
     }
-
-    if (_trainerHasStarted == false) {
-        // If it's the first time we started, and the game appears to be running, return "Running" instead of "Started".
-        PostMessage(window, message, ProcStatus::Running, NULL);
-    } else {
-        // Else, report whatever status we last encountered.
-        PostMessage(window, message, _nextStatus, NULL);
+    
+    if (!_trainerHasStarted) { // This is our first heartbeat where the entity manager was allocated.
+        // The trainer just started, so the game was already running.
+        _gameHasStarted = true;
+        return AlreadyRunning;
+    } else { // The trainer was already running
+        if (!_gameHasStarted) {
+            _gameHasStarted = true;
+            return Started;
+        } else {
+            return Running;
+        }
     }
-    _nextStatus = ProcStatus::Running;
 }
 
 void Memory::Initialize() {
@@ -165,12 +172,9 @@ void Memory::Initialize() {
             break;
         }
     }
-    if (!handle || !_pid) {
-        // Game likely not opened yet. Don't spam the log.
-        _nextStatus = ProcStatus::Started;
-        return;
-    }
-    DebugPrint(L"Found " + _processName + L": PID " + std::to_wstring(_pid));
+    // Game likely not opened yet. Don't spam the log.
+    if (!handle || !_pid) return;
+    DebugPrint(L"Found " + _processName + L": PID " + to_wstring(_pid));
 
     _hwnd = NULL; // Will be populated later.
 
@@ -199,8 +203,18 @@ void Memory::Initialize() {
     if (failedScans > 0) _handle = nullptr;
 }
 
-// These functions are much more generic than this witness-specific implementation. As such, I'm keeping them somewhat separated.
+void Memory::SetCurrentThreadName(const wchar_t* name) {
+    HMODULE module = GetModuleHandleA("Kernel32.dll");
+    if (!module) return;
 
+    typedef HRESULT (WINAPI *TSetThreadDescription)(HANDLE, PCWSTR);
+    auto setThreadDescription = (TSetThreadDescription)GetProcAddress(module, "SetThreadDescription");
+    if (!setThreadDescription) return;
+
+    setThreadDescription(GetCurrentThread(), name);
+}
+
+// These functions are much more generic than this witness-specific implementation. As such, I'm keeping them somewhat separated.
 __int64 Memory::ReadStaticInt(__int64 offset, int index, const std::vector<byte>& data, size_t bytesToEOL) {
     // (address of next line) + (index interpreted as 4byte int)
     return offset + index + bytesToEOL + *(int*)&data[index];
