@@ -32,7 +32,6 @@
 
 // BUGS:
 // - Changing from old ver to new ver can set FOV = 0?
-// - Test random pillars practice some more.
 
 // Feature requests:
 // - show solve collision
@@ -66,7 +65,7 @@ HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
 std::shared_ptr<Memory> g_witnessProc;
-HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelDist, g_panelName, g_panelState, g_panelPicture, g_activateGame, g_snapToPanel, g_snapToLabel;
+HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelDist, g_panelName, g_panelState, g_panelPicture, g_activateGame, g_snapToPanel, g_snapToLabel, g_canSave;
 
 std::vector<float> g_savedCameraPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> g_savedCameraAng = {0.0f, 0.0f};
@@ -366,9 +365,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             }
             ToggleOption(NOCLIP_ENABLED, &Trainer::SetNoclip);
         } else if (command == CAN_SAVE) {
-            // Request one last save before disabling saving
-            if (IsDlgButtonChecked(g_hwnd, CAN_SAVE) && trainer) {
-                trainer->SaveCampaign();
+            if (IsDlgButtonChecked(g_hwnd, CAN_SAVE)) {
+                // If the game is running, request one last save before disabling saving
+                if (trainer) {
+                    EnableWindow(g_canSave, false); // This can take a little while, prevent accidental re-clicks by disabling the checkbox.
+                    bool saved = trainer->SaveCampaign();
+                    EnableWindow(g_canSave, true);
+                    if (!saved) return; // If we failed to save after the timeout, don't toggle the checkbox.
+                }
             }
             ToggleOption(CAN_SAVE, &Trainer::SetCanSave);
         } else if (command == ACTIVATE_GAME) {
@@ -425,16 +429,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
 int32_t lastCode = 0;
 LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     // Only steal hotkeys when we (or the game) are the active window.
-    if (nCode == HC_ACTION)
+    if (nCode == HC_ACTION) {
         if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP) {
             lastCode = 0; // Cancel key repeat
         } else if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
             auto foreground = GetForegroundWindow();
             if (g_hwnd == foreground || g_witnessProc->IsForeground()) {
                 auto p = (PKBDLLHOOKSTRUCT)lParam;
-
                 int32_t fullCode = p->vkCode;
-                if (hotkeys.find(fullCode) != hotkeys.end()) {
+
+                __int64 found = 0;
+                if (hotkeys.find(fullCode) != hotkeys.end()) { // For perf, we look at just the keyboard key first (before consulting GetKeyState).
                     if (GetKeyState(VK_SHIFT) & 0x8000)     fullCode |= MASK_SHIFT;
                     if (GetKeyState(VK_CONTROL) & 0x8000)   fullCode |= MASK_CONTROL;
                     if (GetKeyState(VK_MENU) & 0x8000)      fullCode |= MASK_ALT;
@@ -443,12 +448,16 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
                     if (lastCode == fullCode)               fullCode |= MASK_REPEAT;
 
                     auto search = hotkeyCodes.find(fullCode);
-                    if (search != std::end(hotkeyCodes)) {
-                        PostMessage(g_hwnd, WM_COMMAND, search->second, NULL);
-                    }
+                    if (search != std::end(hotkeyCodes)) found = search->second;
                 }
                 lastCode = fullCode & ~MASK_REPEAT;
+
+                if (found) {
+                    PostMessage(g_hwnd, WM_COMMAND, found, NULL);
+                    return -1; // Do not let the game see this keyboard input (in case it overlaps with the user's keybinds)
+                }
             }
+        }
     }
     return CallNextHookEx(NULL, nCode, wParam, lParam);
 }
@@ -553,7 +562,8 @@ void CreateComponents() {
     CreateLabel(x, y + 4, 100, L"Field of View");
     g_fovCurrent = CreateText(100, y, 130, L"50.534012", FOV_CURRENT);
 
-    CreateLabelAndCheckbox(x, y, 185, L"Can save the game", CAN_SAVE, L"Shift-Control-S", MASK_SHIFT | MASK_CONTROL | 'S');
+    auto [_, canSave] = CreateLabelAndCheckbox(x, y, 185, L"Can save the game", CAN_SAVE, L"Shift-Control-S", MASK_SHIFT | MASK_CONTROL | 'S');
+    g_canSave = canSave;
     CheckDlgButton(g_hwnd, CAN_SAVE, true);
 
     CreateLabelAndCheckbox(x, y, 185, L"Random Doors Practice", DOORS_PRACTICE);

@@ -487,13 +487,15 @@ void Trainer::SetConsoleOpen(bool enable) {
     }
 }
 
-void Trainer::SaveCampaign() {
+bool Trainer::SaveCampaign() {
     _memory->WriteData<byte>({_wantCampaignSave}, {0x01});
     for (int i=0; i<100; i++) {
         ::Sleep(10); // Wait a bit for the game to run
         byte wantCampaignSave = _memory->ReadData<byte>({_wantCampaignSave}, 1)[0];
-        if (wantCampaignSave == 0x00) break;
+        if (wantCampaignSave == 0x00) return true;
     }
+
+    return false; // Didn't save successfully
 }
 
 void Trainer::SetInfiniteChallenge(bool enable) {

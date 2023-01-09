@@ -43,7 +43,7 @@ public:
     void SetSprintSpeed(float speed);
     void SetInfiniteChallenge(bool enable);
     void SetConsoleOpen(bool enable);
-    void SaveCampaign();
+    bool SaveCampaign();
     void SetMainMenuColor(bool enable);
     void SetMainMenuState(bool open);
     void SetRandomDoorsPractice(bool enable);
