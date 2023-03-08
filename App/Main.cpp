@@ -275,6 +275,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 [[fallthrough]]; // Other than starting up the trainer object, we treat 'game start' the same as save load / new game
             case ProcStatus::LoadSave:
             case ProcStatus::NewGame:
+                // Process just started and we were already running. Set settings from the trainer.
                 if (!g_trainer) break;
                 SetStringText(g_hwnd, L"Witness Trainer");
                 SetStringText(g_activateGame, L"Switch to game");
@@ -290,6 +291,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 g_trainer->SetInfiniteChallenge(IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE));
                 g_trainer->SetConsoleOpen(IsDlgButtonChecked(hwnd, OPEN_CONSOLE));
                 g_trainer->SetEPOverlay(IsDlgButtonChecked(hwnd, EP_OVERLAY));
+                if ((ProcStatus)wParam != ProcStatus::LoadSave) g_trainer->SetMainMenuState(true); // Don't try this immediately after loading. Hmm.
                 g_trainer->SetChallengePillarsPractice(true);
                 break;
             case ProcStatus::AlreadyRunning:
@@ -299,6 +301,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 g_trainer = Trainer::Create(g_witnessProc);
                 if (!g_trainer) break;
                 SetStringText(g_hwnd, L"Witness Trainer");
+                SetStringText(g_activateGame, L"Switch to game");
                 SetFloatText(g_noclipSpeed, g_trainer->GetNoclipSpeed());
                 SetFloatText(g_sprintSpeed, g_trainer->GetSprintSpeed());
                 SetFloatText(g_fovCurrent, g_trainer->GetFov());
@@ -308,12 +311,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 CheckDlgButton(hwnd, INFINITE_CHALLENGE, g_trainer->GetInfiniteChallenge());
                 CheckDlgButton(hwnd, OPEN_CONSOLE, g_trainer->GetConsoleOpen());
                 CheckDlgButton(hwnd, EP_OVERLAY, g_trainer->GetEPOverlay());
-                SetStringText(g_activateGame, L"Switch to game");
+                // These two values never come from the game.
                 g_trainer->SetMainMenuState(true);
                 g_trainer->SetChallengePillarsPractice(true);
-
-                SetPosAndAngText(g_currentPos, g_trainer->GetCameraPos(), g_trainer->GetCameraAng());
-                SetActivePanel(g_trainer->GetActivePanel());
                 break;
             case ProcStatus::Running:
                 if (!g_trainer) break;

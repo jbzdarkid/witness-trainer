@@ -121,10 +121,20 @@ ProcStatus Memory::Heartbeat() {
         _computedAddresses.Clear();
     }
 
+    // TODO: Something bad is happening here. I need to fix the loading indicator (I guess?) because it's somehow going from NotRunning->Loading without going through Started.
     uint8_t isLoading = ReadData<uint8_t>({_globals, _loadCountOffset - 0x4}, 1)[0];
     // Saved game is currently loading, do not take any actions.
     if (isLoading == 0x01) {
         _wasLoading = true;
+        return Loading;
+    }
+
+    // The 'isLoading' flag gets cleared pretty quickly, but there's still some time before all the assets are loaded.
+    // Wait for Core::time_info.current_time to resume before reporting that the game is actually ready.
+    double currentTime = ReadData<double>({_coreTimeInfo + 0x10}, 1)[0];
+    bool isProbablyLoading = (currentTime == _previousTime);
+    _previousTime = currentTime;
+    if (_wasLoading && isProbablyLoading) {
         return Loading;
     }
 
@@ -174,7 +184,7 @@ void Memory::Initialize() {
     }
     // Game likely not opened yet. Don't spam the log.
     if (!handle || !_pid) return;
-    DebugPrint(L"Found " + _processName + L": PID " + to_wstring(_pid));
+    DebugPrint(L"Found " + _processName + L": PID " + std::to_wstring(_pid));
 
     _hwnd = NULL; // Will be populated later.
 
@@ -193,6 +203,10 @@ void Memory::Initialize() {
 
     AddSigScan({0x01, 0x00, 0x00, 0x66, 0xC7, 0x87}, [&](__int64 offset, int index, const std::vector<byte>& data) {
         _loadCountOffset = *(int*)&data[index-1];
+    });
+
+    AddSigScan({0x83, 0xFA, 0x02, 0x7F, 0x3B, 0xF2, 0x0F, 0x10, 0x05}, [&](__int64 offset, int index, const std::vector<byte>& data) {
+        _coreTimeInfo = Memory::ReadStaticInt(offset, index + 9, data);
     });
 
     // This little song-and-dance is because we need _handle in order to execute sigscans.

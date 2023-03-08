@@ -97,13 +97,15 @@ private:
     uintptr_t _endOfModule = 0;
 
     // These variables are all used to track game state
-    int64_t _globals = 0;
+    __int64 _globals = 0;
     int _loadCountOffset = 0;
-    int64_t _previousEntityManager = 0;
+    __int64 _coreTimeInfo = 0;
+    __int64 _previousEntityManager = 0;
     int _previousLoadCount = 0;
+    double _previousTime = 0.0;
     bool _gameHasStarted = false;
     bool _trainerHasStarted = false;
-    bool _wasLoading = false;
+    bool _wasLoading = true; // By default, assume the game in case we start in the middle of a load.
 
 #ifdef NDEBUG
     static constexpr std::chrono::milliseconds s_heartbeat = std::chrono::milliseconds(100);
