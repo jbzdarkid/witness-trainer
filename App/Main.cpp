@@ -65,7 +65,7 @@ HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
 std::shared_ptr<Memory> g_witnessProc;
-HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelDist, g_panelName, g_panelState, g_panelPicture, g_activateGame, g_snapToPanel, g_snapToLabel, g_canSave;
+HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelDist, g_panelName, g_panelState, g_panelPicture, g_activateGame, g_snapToPanel, g_snapToLabel, g_canSave, g_audioData;
 
 std::vector<float> g_savedCameraPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> g_savedCameraAng = {0.0f, 0.0f};
@@ -336,6 +336,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     SetPosAndAngText(g_currentPos, g_trainer->GetCameraPos(), g_trainer->GetCameraAng());
                     SetActivePanel(g_trainer->GetActivePanel());
                 }
+
+#if _DEBUG
+                static std::string genericSoundData;
+                if (++update % 1000 == 0) genericSoundData = g_trainer->GetSoundData();
+                if (++update % 10 == 0) {
+                    std::string text = genericSoundData + "\nCurrent: " + std::to_string(g_trainer->GetNextUnusedIdIndex());
+                    SetStringText(g_audioData, text);
+                }
+#endif
                 break;
             }
             return 0;
@@ -616,6 +625,8 @@ void CreateComponents() {
 #ifdef _DEBUG
     CreateButton(x, y, 200, L"Show nearby entities", SHOW_NEARBY);
     CreateButton(x, y, 200, L"Export all entities", EXPORT);
+
+    g_audioData = CreateLabel(x, y, 200, 50, L"");
 #endif
 
     for (const auto [key, _] : hotkeyCodes) hotkeys.insert(key & 0xFF);

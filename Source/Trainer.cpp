@@ -428,7 +428,34 @@ bool Trainer::GetRandomDoorsPractice() {
 }
 
 bool Trainer::GetEPOverlay() {
-  return _memory->ReadData<byte>({_showPatternStatus}, 1)[0] != 0x00;
+    return _memory->ReadData<byte>({_showPatternStatus}, 1)[0] != 0x00;
+}
+
+int Trainer::GetNextUnusedIdIndex() {
+    return _memory->ReadData<int>({0x62D0A0, 0x1E4}, 1)[0];
+}
+
+std::string Trainer::GetSoundData() {
+    int numUnusedIds = _memory->ReadData<int>({0x62D0A0, 0x1E0}, 1)[0];
+    std::vector<int> unusedIds = _memory->ReadData<int>({0x62D0A0, 0x1D8, 0}, numUnusedIds);
+
+    int drySoundId = _memory->ReadData<int>({0x649808, 0, 0x48}, 1)[0];
+    int reverbSoundId = _memory->ReadData<int>({0x649808, 0, 0x4C}, 1)[0];
+    int drySoundIndex = -1;
+    int reverbSoundIndex = -1;
+
+    for (int i = 0; i < numUnusedIds; i++) {
+        int unusedId = unusedIds[i];
+        if (unusedId == 0) unusedId = _memory->ReadData<int>({0x62D0A0, 0x1D8, i*4}, 1)[0];
+        if (unusedId == drySoundId) drySoundIndex = i;
+        if (unusedId == reverbSoundId) reverbSoundIndex = i;
+        if (drySoundIndex != -1 && reverbSoundIndex != -1) break;
+    }
+
+    std::string buffer(1024, '\0');
+    int len = sprintf_s(&buffer[0], buffer.size(), "Targets: %d and %d\nRange: %d to %d", drySoundIndex, reverbSoundIndex, 0, numUnusedIds-1);
+    buffer.resize(len);
+    return buffer;
 }
 
 void Trainer::SetNoclip(bool enable) {

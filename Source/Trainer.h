@@ -32,6 +32,8 @@ public:
     bool GetConsoleOpen();
     bool GetRandomDoorsPractice();
     bool GetEPOverlay();
+    int GetNextUnusedIdIndex();
+    std::string GetSoundData();
 
     void SetNoclip(bool enable);
     void SetNoclipSpeed(float speed);
@@ -76,6 +78,8 @@ private:
     int _epNameOffset = 0;
     __int64 _menuOpenTarget = 0;
     __int64 _showPatternStatus = 0;
+    __int64 _unusedIdsPtr = 0;
+    std::vector<int> _unusedIds;
 
     std::shared_ptr<EntityData> GetPanelData(int id);
     std::shared_ptr<EntityData> GetEPData(int id);
