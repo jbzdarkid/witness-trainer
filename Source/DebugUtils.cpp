@@ -64,11 +64,12 @@ std::wstring DebugUtils::GetStackTrace() {
 
 std::wstring DebugUtils::version = L"(unknown)"; // Slight hack. Will be overwritten by main during startup.
 time_t lastShownAssert = ~0ULL; // MAXINT
-void DebugUtils::ShowAssertDialogue() {
+void DebugUtils::ShowAssertDialogue(const wchar_t* message) {
     // Only show an assert every 30 seconds. This prevents assert loops inside the WndProc, as well as adding a grace period after an assert fires.
     if (time(nullptr) - lastShownAssert < 30) return;
     std::wstring msg = L"WitnessTrainer version " + version + L" has encountered an error.\n";
     msg += L"Please press Control C to copy this error, and paste it to darkid.\n";
+    msg += message;
     msg += GetStackTrace();
     MessageBox(NULL, msg.c_str(), L"WitnessTrainer encountered an error.", MB_TASKMODAL | MB_ICONHAND | MB_OK | MB_SETFOREGROUND);
     lastShownAssert = time(nullptr);

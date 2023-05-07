@@ -6,7 +6,7 @@ class DebugUtils final
 {
 public:
     static void RegenerateCallstack(const std::wstring& callstack);
-    static void ShowAssertDialogue();
+    static void ShowAssertDialogue(const wchar_t* message);
     static std::wstring version;
     // Returns [start of module, end of module)
     static std::pair<uint64_t, uint64_t> GetModuleBounds(HANDLE process);
@@ -24,6 +24,6 @@ void SetCurrentThreadName(const wchar_t* name);
   #define DebugPrint(text)
 #endif
 
-inline void ShowAssertDialogue() {
-    DebugUtils::ShowAssertDialogue();
+inline void ShowAssertDialogue(const wchar_t* message) {
+    DebugUtils::ShowAssertDialogue(message);
 }

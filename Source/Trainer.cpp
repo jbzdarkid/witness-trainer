@@ -374,7 +374,7 @@ void Trainer::DisableDistanceGating() {
         std::string typeName = _memory->ReadString({_globals, 0x18, id * 8, 0x08, 0x08});
         if (typeName != "Machine_Panel") continue;
 
-        assert(_globals == 0x62D0A0);
+        assert(_globals == 0x62D0A0, "DisableDistanceGating is only supported on the latest version");
         float distanceGated = _memory->ReadAbsoluteData<float>({entity, 0x3BC}, 1)[0];
         if (distanceGated != 0.0f) _memory->WriteData<float>({_globals, 0x18, id * 8, 0x3BC}, {0.0f});
     }

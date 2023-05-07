@@ -110,8 +110,7 @@ void Memory::Heartbeat(HWND window, UINT message) {
     }
 
     if (_hwnd == NULL) {
-        DebugPrint("Couldn't find the HWND for the game");
-        assert(false);
+        assert(false, "Couldn't find the HWND for the game");
         return;
     }
 
@@ -294,31 +293,29 @@ std::string Memory::ReadString(std::vector<__int64> offsets) {
 }
 
 void Memory::ReadDataInternal(void* buffer, uintptr_t computedOffset, size_t bufferSize) {
-    assert(bufferSize > 0);
+    assert(bufferSize > 0, "[Internal error] Attempting to read 0 bytes");
     if (!_handle) return;
     // Ensure that the buffer size does not cause a read across a page boundary.
     if (bufferSize > 0x1000 - (computedOffset & 0x0000FFF)) {
         bufferSize = 0x1000 - (computedOffset & 0x0000FFF);
     }
     if (!ReadProcessMemory(_handle, (void*)computedOffset, buffer, bufferSize, nullptr)) {
-        DebugPrint("Failed to read process memory.");
-        assert(false);
+        assert(false, "Failed to read process memory.");
     }
 }
 
 void Memory::WriteDataInternal(const void* buffer, const std::vector<__int64>& offsets, size_t bufferSize) {
-    assert(bufferSize > 0);
+    assert(bufferSize > 0, "[Internal error] Attempting to read 0 bytes");
     if (!_handle) return;
     if (offsets.empty() || offsets[0] == 0) return; // Empty offset path passed in.
     if (!WriteProcessMemory(_handle, (void*)ComputeOffset(offsets), buffer, bufferSize, nullptr)) {
-        DebugPrint("Failed to write process memory.");
-        assert(false);
+        assert(false, "Failed to write process memory.");
     }
 }
 
 uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets, bool absolute) {
-    assert(offsets.size() > 0);
-    assert(offsets.front() != 0);
+    assert(offsets.size() > 0, "[Internal error] Attempting to compute 0 offsets");
+    assert(offsets.front() != 0, "[Internal error] First offset to compute was 0");
 
     // Leave off the last offset, since it will be either read/write, and may not be of type uintptr_t.
     const __int64 final_offset = offsets.back();
@@ -346,21 +343,13 @@ uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets, bool absolute) {
         }
 
         MEMORY_BASIC_INFORMATION info;
-        if (computedAddress == 0) {
-            DebugPrint("Attempted to dereference NULL!");
-            assert(false);
-        } else if (!VirtualQuery(reinterpret_cast<LPVOID>(cumulativeAddress), &info, sizeof(info))) {
-            DebugPrint("Failed to read process memory, probably because cumulativeAddress was too large.");
-            assert(false);
-        } else if (info.State != MEM_COMMIT) {
-            DebugPrint("Attempted to read unallocated memory.");
-            assert(false);
-        } else if ((info.AllocationProtect & 0xC4) == 0) { // 0xC4 = PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY | PAGE_READWRITE
-            DebugPrint("Attempted to read unreadable memory.");
-            assert(false);
+        assert(computedAddress != 0, "Attempted to dereference NULL!");
+        if (!VirtualQuery(reinterpret_cast<LPVOID>(cumulativeAddress), &info, sizeof(info))) {
+            assert(false, "Failed to read process memory, possibly because cumulativeAddress was too large.");
         } else {
-            DebugPrint("Failed to read memory for some as-yet unknown reason.");
-            assert(false);
+            assert(info.State == MEM_COMMIT, "Attempted to read unallocated memory.");
+            assert(info.AllocationProtect & 0xC4, "Attempted to read unreadable memory."); // 0xC4 = PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY | PAGE_READWRITE
+            assert(false, "Failed to read memory for some as-yet unknown reason."); // Won't fire an assert dialogue if a previous one did, because that would be within 30s.
         }
         return 0;
     }

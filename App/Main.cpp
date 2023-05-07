@@ -118,8 +118,8 @@ void SetStringText(HWND hwnd, const std::wstring& text) {
 }
 
 void SetPosAndAngText(HWND hwnd, const std::vector<float>& pos, const std::vector<float>& ang) {
-    assert(pos.size() == 3);
-    assert(ang.size() == 2);
+    assert(pos.size() == 3, "[Internal error] Attempted to set position of <> 3 elements");
+    assert(ang.size() == 2, "[Internal error] Attempted to set angle of <> 2 elements");
     wchar_t text[128] = {'\0'};
     swprintf_s(text, sizeof(text) / sizeof(text[0]), L"X %.3f\nY %.3f\nZ %.3f\n\u0398 %.8f\n\u03A6 %.8f", pos[0], pos[1], pos[2], ang[0], ang[1]);
 #pragma push_macro("SetWindowTextW")
