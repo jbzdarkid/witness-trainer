@@ -349,7 +349,7 @@ uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets, bool absolute) {
         if (computedAddress == 0) {
             DebugPrint("Attempted to dereference NULL!");
             assert(false);
-        } else if (!VirtualQuery(reinterpret_cast<LPVOID>(cumulativeAddress), &info, sizeof(computedAddress))) {
+        } else if (!VirtualQuery(reinterpret_cast<LPVOID>(cumulativeAddress), &info, sizeof(info))) {
             DebugPrint("Failed to read process memory, probably because cumulativeAddress was too large.");
             assert(false);
         } else if (info.State != MEM_COMMIT) {
