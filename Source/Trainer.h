@@ -32,6 +32,7 @@ public:
     bool GetConsoleOpen();
     bool GetRandomDoorsPractice();
     bool GetEPOverlay();
+    bool GetEPOverlayMinSize();
 
     void SetNoclip(bool enable);
     void SetNoclipSpeed(float speed);
@@ -49,6 +50,7 @@ public:
     void SetRandomDoorsPractice(bool enable);
     void SetChallengePillarsPractice(bool enable);
     void SetEPOverlay(bool enable);
+    void SetEPOverlayMinSize(bool enable);
 
 private:
     std::shared_ptr<Memory> _memory;
@@ -76,6 +78,7 @@ private:
     int _epNameOffset = 0;
     __int64 _menuOpenTarget = 0;
     __int64 _showPatternStatus = 0;
+    __int64 _drawPatternManager = 0;
 
     std::shared_ptr<EntityData> GetPanelData(int id);
     std::shared_ptr<EntityData> GetEPData(int id);

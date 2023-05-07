@@ -125,6 +125,10 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         trainer->_showPatternStatus = Memory::ReadStaticInt(offset, index - 5, data, 5);
     }); 
 
+    memory->AddSigScan({0x41, 0x3B, 0xFC, 0x41, 0x0F, 0x4F, 0xFC}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
+        trainer->_drawPatternManager = offset + index + 0x16;
+    });
+
     // We need to save _memory before we exit, otherwise we can't destroy properly.
     trainer->_memory = memory;
 
@@ -132,6 +136,7 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
     if (numFailedScans != 0) return nullptr; // Sigscans failed, we'll try again later.
 
     trainer->SetMainMenuColor(true); // Recolor the menu
+    trainer->SetEPOverlayMinSize(true); // Prevent the solvability overlay from getting subpixel
     return trainer;
 }
 
@@ -147,6 +152,7 @@ Trainer::~Trainer() {
     SetSprintSpeed(2.0f);
     SetMainMenuColor(false);
     SetChallengePillarsPractice(false);
+    SetEPOverlayMinSize(false);
 }
 
 int Trainer::GetActivePanel() {
@@ -428,7 +434,11 @@ bool Trainer::GetRandomDoorsPractice() {
 }
 
 bool Trainer::GetEPOverlay() {
-  return _memory->ReadData<byte>({_showPatternStatus}, 1)[0] != 0x00;
+    return _memory->ReadData<byte>({_showPatternStatus}, 1)[0] != 0x00;
+}
+
+bool Trainer::GetEPOverlayMinSize() {
+    return _memory->ReadData<byte>({_drawPatternManager}, 1)[0] == 0x44;
 }
 
 void Trainer::SetNoclip(bool enable) {
@@ -588,4 +598,24 @@ void Trainer::SetChallengePillarsPractice(bool enable) {
 
 void Trainer::SetEPOverlay(bool enable) {
   _memory->WriteData<byte>({_showPatternStatus}, {static_cast<byte>(enable)});
+}
+
+void Trainer::SetEPOverlayMinSize(bool enable) {
+    if (_drawPatternManager == 0) return;
+
+    // If the injection state matches the enable request, no futher action is needed.
+    if (enable == GetEPOverlayMinSize()) return;
+
+    if (enable) {
+        // If the size is less than 1.0 (xmm0), set it to 1.0.
+        _memory->WriteData<byte>({_drawPatternManager}, {
+            0x44, 0x0F, 0x2F, 0xC0,         // comiss xmm8, xmm0
+            0x73, 0x06,                     // jae +0x6
+            0xF3, 0x44, 0x0F, 0x10, 0xC0,   // movss xmm8, xmm0
+            0x90,                           // nop
+        }); // <-- jump target
+    } else {
+        // This is overridding 4 instructions that are useless sanity checks.
+        _memory->WriteData<byte>({_drawPatternManager}, {0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 });
+    };
 }
