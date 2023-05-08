@@ -129,6 +129,10 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         trainer->_drawPatternManager = offset + index + 0x16;
     });
 
+    memory->AddSigScan({0x83, 0xF8, 0x01, 0x75, 0x0E, 0x33, 0xC0}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
+        trainer->_debugMode = Memory::ReadStaticInt(offset, index - 4, data);
+    });
+
     // We need to save _memory before we exit, otherwise we can't destroy properly.
     trainer->_memory = memory;
 
@@ -441,6 +445,10 @@ bool Trainer::GetEPOverlayMinSize() {
     return _memory->ReadData<byte>({_drawPatternManager}, 1)[0] == 0x44;
 }
 
+bool Trainer::IsAimingPhiClamped() {
+    return _memory->ReadData<byte>({_debugMode}, 1)[0] != 0x09;
+}
+
 void Trainer::SetNoclip(bool enable) {
     _memory->WriteData<byte>({_noclipEnabled}, {static_cast<byte>(enable)});
 }
@@ -474,7 +482,7 @@ void Trainer::SetFov(double fov) {
 }
 
 void Trainer::SetCanSave(bool canSave) {
-    _memory->WriteData<byte>({_campaignState, 0x50}, {canSave ? (byte) 0x00 : (byte) 0x01});
+    _memory->WriteData<byte>({_campaignState, 0x50}, {canSave ? (byte)0x00 : (byte)0x01});
 }
 
 void Trainer::SetSprintSpeed(float speed) {
@@ -618,4 +626,8 @@ void Trainer::SetEPOverlayMinSize(bool enable) {
         // This is overridding 4 instructions that are useless sanity checks.
         _memory->WriteData<byte>({_drawPatternManager}, {0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 });
     };
+}
+
+void Trainer::ClampAimingPhi(bool clamp) {
+    _memory->WriteData<byte>({_debugMode}, {clamp ? (byte)0x00 : (byte)0x09});
 }

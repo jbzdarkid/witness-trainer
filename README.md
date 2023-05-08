@@ -55,3 +55,5 @@ This program is Windows-only for the forseeable future.
   * If it is possible to start a panel or EP, it will have a circle -- otherwise, it will have a triangle.
     * Note that this does not account for collision -- just the angle of attack.
   * While solving, all valid (connected) points are shown with circles, and all covered points are shown with diamonds.
+- Disable vertical aim limit (idea taken from survivalizeed/TheWitnessTrainer)
+  * This will allow you to look all the way up and down (helpful for lining up with a pixel on the ground)

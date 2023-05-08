@@ -29,6 +29,7 @@
 #define SNAP_TO_PANEL       0x419
 #define DISTANCE_GATING     0x420
 #define EP_OVERLAY          0x421
+#define CLAMP_AIM           0x422
 
 // BUGS:
 // - Changing from old ver to new ver can set FOV = 0?
@@ -354,6 +355,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         else if (command == DOORS_PRACTICE)     ToggleOption(DOORS_PRACTICE, &Trainer::SetRandomDoorsPractice);
         else if (command == OPEN_CONSOLE)       ToggleOption(OPEN_CONSOLE, &Trainer::SetConsoleOpen);
         else if (command == EP_OVERLAY)         ToggleOption(EP_OVERLAY, &Trainer::SetEPOverlay);
+        else if (command == CLAMP_AIM)          ToggleOption(CLAMP_AIM, &Trainer::ClampAimingPhi);
         else if (command == CALLSTACK)          DebugUtils::RegenerateCallstack(GetWindowString(g_fovCurrent));
         else if (command == NOCLIP_ENABLED) {
             // Fix up the player position when exiting noclip
@@ -573,6 +575,9 @@ void CreateComponents() {
     CreateLabelAndCheckbox(x, y, 185, L"Open the Console", OPEN_CONSOLE, L"Tilde (~)", MASK_SHIFT | VK_OEM_3);
 
     CreateLabelAndCheckbox(x, y, 185, L"Show Entity Solvability", EP_OVERLAY, L"Alt-2", MASK_ALT | '2');
+
+    CreateLabelAndCheckbox(x, y, 185, L"Enable vertical aim limit", CLAMP_AIM);
+    CheckDlgButton(g_hwnd, CLAMP_AIM, true);
 
     CreateButton(x, y, 110, L"Save Position", SAVE_POS, L"Control-P", MASK_CONTROL | 'P');
     y -= 30;
