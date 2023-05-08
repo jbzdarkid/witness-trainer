@@ -31,7 +31,7 @@ public:
     Memory(const Memory& memory) = delete;
     Memory& operator=(const Memory& other) = delete;
 
-    // bytesToEOL is the number of bytes from the given index to the end of the opcode. Usually, the target address is last 4 bytes, since it's the destiation of the call.
+    // bytesToEOL is the number of bytes from the given index to the end of the opcode. Usually, the target address is last 4 bytes, since it's the destination of the call.
     static __int64 ReadStaticInt(__int64 offset, int index, const std::vector<byte>& data, size_t bytesToEOL = 4);
     using ScanFunc = std::function<void(__int64 offset, int index, const std::vector<byte>& data)>;
     using ScanFunc2 = std::function<bool(__int64 offset, int index, const std::vector<byte>& data)>;

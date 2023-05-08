@@ -55,30 +55,30 @@ public:
 private:
     std::shared_ptr<Memory> _memory;
 
-    __int64 _noclipEnabled = 0;
-    __int64 _noclipSpeed = 0;
-    __int64 _cameraPos = 0;
-    __int64 _cameraAng = 0;
-    __int64 _fovCurrent = 0;
-    __int64 _globals = 0;
-    __int64 _campaignState = 0;
-    __int64 _doorOpen = 0;
-    __int64 _doorClose = 0;
-    int _solvedTargetOffset = 0;
-    __int64 _powerOn = 0;
-    __int64 _walkAcceleration = 0;
-    __int64 _walkDeceleration = 0;
-    __int64 _runSpeed = 0;
-    __int64 _recordPlayerUpdate = 0;
-    std::vector<__int64> _activePanelOffsets;
-    __int64 _mainMenuColor = 0;
-    std::vector<__int64> _consoleOpenTarget;
-    std::vector<__int64> _consoleWindowYB;
-    __int64 _wantCampaignSave = 0;
-    int _epNameOffset = 0;
-    __int64 _menuOpenTarget = 0;
-    __int64 _showPatternStatus = 0;
-    __int64 _drawPatternManager = 0;
+    __int64 _noclipEnabled = 0; // globals.camera_mode
+    __int64 _noclipSpeed = 0; // globals.free_camera_speed
+    __int64 _cameraPos = 0; // camera_position
+    __int64 _cameraAng = 0; // aiming_theta, aiming_phi
+    __int64 _fovCurrent = 0; // Unnamed, but the scan lands somewhere in init_scripted_stuff()
+    __int64 _globals = 0; // globals
+    __int64 _campaignState = 0; // globals.campaign_state
+    __int64 _doorOpen = 0; // Entity_Door::open()
+    __int64 _doorClose = 0; // Entity_Door::close()
+    int _solvedTargetOffset = 0; // Entity_Machine_Panel.solved_t_target
+    __int64 _powerOn = 0; // Entity_Machine_Panel::power_on()
+    __int64 _walkAcceleration = 0; // globals.walk_acceleration
+    __int64 _walkDeceleration = 0; // globals.walk_deceleration
+    __int64 _runSpeed = 0; // RUN_SPEED
+    __int64 _recordPlayerUpdate = 0; // Entity_Record_Player.play_state
+    std::vector<__int64> _activePanelOffsets; // globals.gesture_handler.pattern_manager.gesture_id
+    __int64 _mainMenuColor = 0; // draw_menu_general()
+    std::vector<__int64> _consoleOpenTarget; // globals.console.open_t_target
+    std::vector<__int64> _consoleWindowYB; // globals.console.window_y_b
+    __int64 _wantCampaignSave = 0; // globals.want_campaign_save
+    int _epNameOffset = 0; // Entity_Pattern_Point.pattern_name
+    __int64 _menuOpenTarget = 0; // menu_open_t_target
+    __int64 _showPatternStatus = 0; // show_pattern_status
+    __int64 _drawPatternManager = 0; // draw_pattern_manager()
 
     std::shared_ptr<EntityData> GetPanelData(int id);
     std::shared_ptr<EntityData> GetEPData(int id);
