@@ -7,15 +7,19 @@ public:
 
     int GetActivePanel();
     struct EntityData {
+        std::vector<float> position;
+        std::vector<float> startPoint;
         std::string name;
         std::string type;
         std::string state;
+        __int64 entity;
+        int id;
         bool solved = false;
-        std::vector<float> startPoint;
     };
     std::shared_ptr<EntityData> GetEntityData(int id);
     void ShowMissingPanels();
     void ShowNearbyEntities();
+    std::vector<std::pair<double, std::shared_ptr<Trainer::EntityData>>> GetNearbyEntities(const std::string& typeFilter = "");
     void ExportEntities();
     void SnapToPoint(const std::vector<float>& point);
     void DisableDistanceGating();
