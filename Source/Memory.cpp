@@ -106,7 +106,7 @@ void Memory::Heartbeat(HWND window, UINT message) {
         constexpr int TITLE_SIZE = sizeof(L"The Witness") / sizeof(wchar_t);
         wchar_t title[TITLE_SIZE] = {L'\0'};
         GetWindowTextW(_hwnd, title, TITLE_SIZE);
-        if (wcsncmp(title, L"The Witness", TITLE_SIZE) == 0) _hwnd = GetProcessHwnd(_pid);
+        if (wcsncmp(title, L"The Witness", TITLE_SIZE) != 0) _hwnd = GetProcessHwnd(_pid);
     }
 
     if (_hwnd == NULL) {
