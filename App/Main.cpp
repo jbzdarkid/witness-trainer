@@ -35,6 +35,7 @@
 // - Changing from old ver to new ver can set FOV = 0?
 
 // Feature requests:
+// - Bug report can submit via google forms? Maybe also a 'help/about' which has a button for generic feedback?
 // - show solve collision
 //   The trick here is going to be immediate-mode UI, coupled with determining which entities are presenting collision.
 // - show player collision
