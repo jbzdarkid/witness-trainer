@@ -482,6 +482,7 @@ void Trainer::SetCameraAng(const std::vector<float>& ang) {
 }
 
 void Trainer::SetFov(double fov) {
+    if (_fovCurrent == 0) return;
     // This computation is called fov_vertical_from_horizontal.
     fov *= 0.00872664625997165;
     fov = tan(fov);
