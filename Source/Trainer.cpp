@@ -171,10 +171,18 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetEntityData(int id) {
     if (id != (readId - 1)) return nullptr; // Entity is no longer a valid object (or is not the entity we expected to read)
 
     std::string typeName = _memory->ReadString({_globals, 0x18, id * 8, 0x08, 0x08});
-    if (typeName == "Machine_Panel") return GetPanelData(id);
-    if (typeName == "Pattern_Point") return GetEPData(id);
-    // Unknown typeName, assume memory was freed.
-    return nullptr;
+    std::shared_ptr<EntityData> entityData = nullptr;
+
+    // Extra data for some types
+    if (typeName == "Machine_Panel")      entityData = GetPanelData(id);
+    else if (typeName == "Pattern_Point") entityData = GetEPData(id);
+    else                                  entityData = std::make_shared<EntityData>();
+
+    entityData->id = id;
+    entityData->type = typeName;
+    entityData->entity = entity;
+    entityData->position = _memory->ReadData<float>({_globals, 0x18, id * 8, 0x24}, 3);
+    return entityData;
 }
 
 struct Traced_Edge final {
@@ -200,7 +208,6 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetPanelData(int id) {
 
     auto data = std::make_shared<EntityData>();
     data->name = _memory->ReadString({_globals, 0x18, id * 8, nameOffset});
-    data->type = "panel";
     int state = _memory->ReadData<int>({_globals, 0x18, id * 8, stateOffset}, 1)[0];
     int hasEverBeenSolved = _memory->ReadData<int>({_globals, 0x18, id * 8, hasEverBeenSolvedOffset}, 1)[0];
     data->solved = hasEverBeenSolved;
@@ -234,7 +241,6 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetPanelData(int id) {
 std::shared_ptr<Trainer::EntityData> Trainer::GetEPData(int id) {
     auto data = std::make_shared<EntityData>();
     data->name = _memory->ReadString({_globals, 0x18, id * 8, _epNameOffset});
-    data->type = "ep";
     data->startPoint = _memory->ReadData<float>({_globals, 0x18, id * 8, 0x24}, 3);
     return data;
 }
@@ -267,35 +273,42 @@ void Trainer::ShowMissingPanels() {
     MessageBoxA(NULL, message.c_str(), title.c_str(), MB_OK);
 }
 
-void Trainer::ShowNearbyEntities() {
+std::vector<std::pair<double, std::shared_ptr<Trainer::EntityData>>> Trainer::GetNearbyEntities(const std::string& typeFilter) {
     int32_t maxId = _memory->ReadData<int>({_globals, 0x14}, 1)[0];
 
-    std::vector<std::pair<double, int32_t>> nearbyEntities(20, {99999.9f, 0});
+    std::vector<std::pair<double, std::shared_ptr<EntityData>>> nearbyEntities(20, {99999.9f, nullptr});
 
     auto basePos = GetCameraPos();
     for (int32_t id = 0; id < maxId; id++) {
         if (id == 0x1E465) continue; // Skip over Entity_Human
-        int32_t entity = _memory->ReadData<int>({_globals, 0x18, id * 8}, 1)[0];
-        if (entity == 0) continue;
-        std::vector<float> pos = _memory->ReadData<float>({_globals, 0x18, id * 8, 0x24}, 3);
+        std::shared_ptr<EntityData> entityData = GetEntityData(id);
+        if (entityData == nullptr) continue;
+        if (!typeFilter.empty() && entityData->type != typeFilter) continue;
+        const std::vector<float>& pos = entityData->position;
 
         double norm = std::pow(basePos[0] - pos[0], 2) + std::pow(basePos[1] - pos[1], 2) + std::pow(basePos[2] - pos[2], 2);
         for (int i = 0; i < nearbyEntities.size(); i++) {
             if (norm < nearbyEntities[i].first) {
-                nearbyEntities.insert(nearbyEntities.begin() + i, {norm, id});
+                nearbyEntities.insert(nearbyEntities.begin() + i, {norm, entityData});
                 nearbyEntities.resize(nearbyEntities.size() - 1);
                 break;
             }
         }
     }
 
+    return nearbyEntities;
+}
+
+void Trainer::ShowNearbyEntities() {
+    auto nearbyEntities = GetNearbyEntities();
+
     DebugPrint("Entity ID\tDistance\t     X\t     Y\t     Z\tType");
-    for (const auto& [norm, entityId] : nearbyEntities) {
-        std::vector<float> pos = _memory->ReadData<float>({_globals, 0x18, entityId * 8, 0x24}, 3);
-        std::string typeName = _memory->ReadString({_globals, 0x18, entityId * 8, 0x08, 0x08});
+    for (const auto& [norm, entityData] : nearbyEntities) {
+        std::vector<float> pos = entityData->position;
+        std::string typeName = entityData->type;
 
         std::stringstream message;
-        message << "0x" << std::hex << std::setfill('0') << std::setw(5) << entityId << '\t';
+        message << "0x" << std::hex << std::setfill('0') << std::setw(5) << entityData->id << '\t';
         message << std::sqrt(norm) << '\t';
         message << pos[0] << '\t' << pos[1] << '\t' << pos[2] << '\t' << typeName;
         DebugPrint(message.str());
@@ -373,13 +386,11 @@ void Trainer::DisableDistanceGating() {
     int32_t maxId = _memory->ReadData<int>({_globals, 0x14}, 1)[0];
 
     for (int32_t id = 1; id < maxId; id++) {
-        int64_t entity = _memory->ReadData<int64_t>({_globals, 0x18, id * 8}, 1)[0];
-        if (entity == 0) continue;
-        std::string typeName = _memory->ReadString({_globals, 0x18, id * 8, 0x08, 0x08});
-        if (typeName != "Machine_Panel") continue;
+        std::shared_ptr<EntityData> entityData = GetEntityData(id);
+        if (!entityData || entityData->type != "Machine_Panel") continue;
 
         assert(_globals == 0x62D0A0, "DisableDistanceGating is only supported on the latest version");
-        float distanceGated = _memory->ReadAbsoluteData<float>({entity, 0x3BC}, 1)[0];
+        float distanceGated = _memory->ReadAbsoluteData<float>({entityData->entity, 0x3BC}, 1)[0];
         if (distanceGated != 0.0f) _memory->WriteData<float>({_globals, 0x18, id * 8, 0x3BC}, {0.0f});
     }
 }
