@@ -9,6 +9,7 @@ public:
     struct EntityData {
         std::string name;
         std::string type;
+        std::vector<float> pos;
         std::string state;
         bool solved = false;
         std::vector<float> startPoint;
@@ -81,8 +82,8 @@ private:
     __int64 _unusedIdsPtr = 0;
     std::vector<int> _unusedIds;
 
-    std::shared_ptr<EntityData> GetPanelData(int id);
-    std::shared_ptr<EntityData> GetEPData(int id);
+    std::shared_ptr<EntityData> GetPanelData(int id, const std::shared_ptr<EntityData>& data);
+    std::shared_ptr<EntityData> GetEPData(int id, const std::shared_ptr<EntityData>& data);
     struct Traced_Edge {
         int index_a;
         int index_b;

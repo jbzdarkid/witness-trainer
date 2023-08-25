@@ -193,12 +193,13 @@
     <ClInclude Include="DebugUtils.h" />
     <ClInclude Include="Memory.h" />
     <ClInclude Include="pch.h" />
-    <ClInclude Include="Panels.h" />
+    <ClInclude Include="Entities.h" />
     <ClInclude Include="ThreadSafeAddressMap.h" />
     <ClInclude Include="Trainer.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="DebugUtils.cpp" />
+    <ClCompile Include="Entities.cpp" />
     <ClCompile Include="Memory.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>

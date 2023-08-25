@@ -29,6 +29,7 @@
 #define SNAP_TO_PANEL       0x419
 #define DISTANCE_GATING     0x420
 #define EP_OVERLAY          0x421
+#define TELEPORT            0x422
 
 // BUGS:
 // - Changing from old ver to new ver can set FOV = 0?
@@ -65,7 +66,7 @@ HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
 std::shared_ptr<Memory> g_witnessProc;
-HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelDist, g_panelName, g_panelState, g_panelPicture, g_activateGame, g_snapToPanel, g_snapToLabel, g_canSave, g_audioData;
+HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelDist, g_panelName, g_panelState, g_panelPicture, g_activateGame, g_snapToPanel, g_snapToLabel, g_canSave, g_audioData, g_entityTarget;
 
 std::vector<float> g_savedCameraPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> g_savedCameraAng = {0.0f, 0.0f};
@@ -337,7 +338,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     SetActivePanel(g_trainer->GetActivePanel());
                 }
 
-#if _DEBUG
+#if _DEBUG && 0
                 static std::string genericSoundData;
                 if (++update % 1000 == 0) genericSoundData = g_trainer->GetSoundData();
                 if (++update % 10 == 0) {
@@ -353,7 +354,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     }
 
     // All commands should execute on a background thread, to avoid hanging the UI.
-    std::thread t([trainer = g_trainer, wParam] {
+    std::thread t([trainer = g_trainer, hwnd, wParam] {
 #pragma warning (suppress: 4101)
         void* g_trainer; // Prevent access to the global variable in this scope
         SetCurrentThreadName(L"Command Helper");
@@ -428,6 +429,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 trainer->SetPlayerPos(playerPos);
                 SetPosAndAngText(g_currentPos, g_savedCameraPos, g_savedCameraAng);
             }
+        } else if (command == TELEPORT) {
+            trainer->SetNoclip(true);
+            CheckDlgButton(hwnd, NOCLIP_ENABLED, true);
+
+            std::wstring entity = GetWindowString(g_entityTarget);
+            long target = _wtol(entity.c_str());
+            if (target == 0) target = std::stol(entity, nullptr, 16); // try hex
+            auto data = trainer->GetEntityData(target);
+            if (data) trainer->SetCameraPos(data->pos);
         }
     });
     t.detach();
@@ -625,6 +635,8 @@ void CreateComponents() {
 #ifdef _DEBUG
     CreateButton(x, y, 200, L"Show nearby entities", SHOW_NEARBY);
     CreateButton(x, y, 200, L"Export all entities", EXPORT);
+    g_entityTarget = CreateText(x, y, 200, L"");
+    CreateButton(x, y, 200, L"Teleport to entity", TELEPORT);
 
     g_audioData = CreateLabel(x, y, 200, 50, L"");
 #endif

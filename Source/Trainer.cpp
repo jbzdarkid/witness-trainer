@@ -1,6 +1,6 @@
 #include "pch.h"
 #include "Trainer.h"
-#include "Panels.h"
+#include "Entities.h"
 
 std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) {
     auto trainer = std::make_shared<Trainer>();
@@ -160,11 +160,17 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetEntityData(int id) {
     int readId = _memory->ReadData<int>({_globals, 0x18, id * 8, 0x10}, 1)[0];
     if (id != (readId - 1)) return nullptr; // Entity is no longer a valid object (or is not the entity we expected to read)
 
+    std::vector<float> pos = _memory->ReadData<float>({_globals, 0x18, id * 8, 0x24}, 3);
     std::string typeName = _memory->ReadString({_globals, 0x18, id * 8, 0x08, 0x08});
-    if (typeName == "Machine_Panel") return GetPanelData(id);
-    if (typeName == "Pattern_Point") return GetEPData(id);
-    // Unknown typeName, assume memory was freed.
-    return nullptr;
+    auto data = std::make_shared<EntityData>();
+    data->pos = pos;
+
+    if (typeName == "Machine_Panel") return GetPanelData(id, data);
+    if (typeName == "Pattern_Point") return GetEPData(id, data);
+
+    // Fallback
+    data->type = typeName;
+    return data;
 }
 
 struct Traced_Edge final {
@@ -182,13 +188,12 @@ struct Traced_Edge final {
     bool padding;
 };
 
-std::shared_ptr<Trainer::EntityData> Trainer::GetPanelData(int id) {
+std::shared_ptr<Trainer::EntityData> Trainer::GetPanelData(int id, const std::shared_ptr<EntityData>& data) {
     int nameOffset = _solvedTargetOffset - 0x7C;
     int tracedEdgesOffset = _solvedTargetOffset - 0x6C;
     int stateOffset = _solvedTargetOffset - 0x14;
     int hasEverBeenSolvedOffset = _solvedTargetOffset + 0x04;
 
-    auto data = std::make_shared<EntityData>();
     data->name = _memory->ReadString({_globals, 0x18, id * 8, nameOffset});
     data->type = "panel";
     int state = _memory->ReadData<int>({_globals, 0x18, id * 8, stateOffset}, 1)[0];
@@ -221,8 +226,7 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetPanelData(int id) {
     return data;
 }
 
-std::shared_ptr<Trainer::EntityData> Trainer::GetEPData(int id) {
-    auto data = std::make_shared<EntityData>();
+std::shared_ptr<Trainer::EntityData> Trainer::GetEPData(int id, const std::shared_ptr<EntityData>& data) {
     data->name = _memory->ReadString({_globals, 0x18, id * 8, _epNameOffset});
     data->type = "ep";
     data->startPoint = _memory->ReadData<float>({_globals, 0x18, id * 8, 0x24}, 3);
@@ -231,7 +235,7 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetEPData(int id) {
 
 void Trainer::ShowMissingPanels() {
     std::vector<std::string> missingPanels;
-    for (const auto& [id, panelName] : PANELS) {
+    for (const auto& [id, panelName] : Entities::COUNTED_PANELS) {
         std::shared_ptr<EntityData> data = GetEntityData(id);
         // Treat non-existent panels as unsolved until we know better.
         if (!data || !data->solved) missingPanels.push_back(panelName);
@@ -300,37 +304,32 @@ void Trainer::ExportEntities() {
         int32_t entity = _memory->ReadData<int>({_globals, 0x18, id * 8}, 1)[0];
         if (entity == 0) continue;
         std::string typeName = _memory->ReadString({_globals, 0x18, id * 8, 0x08, 0x08});
-        std::string entityName = _memory->ReadString({_globals, 0x18, id * 8, 0x58});
-        std::vector<float> pos = _memory->ReadData<float>({_globals, 0x18, id * 8, 0x24}, 3);
 
-        if (typeName != "Power_Cable") continue;
+        if (typeName != "Machine_Panel") continue;
 
-        std::vector<int> ids = _memory->ReadData<int>({_globals, 0x18, id * 8, 0xD4}, 4);
-        std::string textureName = _memory->ReadString({_globals, 0x18, id * 8, 0x140});
-        std::string materialName = _memory->ReadString({_globals, 0x18, id * 8, 0x148});
-        std::vector<float> colorData = _memory->ReadData<float>({_globals, 0x18, id * 8, 0x150}, 8);
-        std::string meshName = _memory->ReadString({_globals, 0x18, id * 8, 0x188});
-        std::string poweredOnTexture = _memory->ReadString({_globals, 0x18, id * 8, 0x190});
-        std::string powered_on_sound_name = _memory->ReadString({_globals, 0x18, id * 8, 0x198});
-        std::string powered_off_sound_name = _memory->ReadString({_globals, 0x18, id * 8, 0x1A0});
-        std::string ambient_sound_name = _memory->ReadString({_globals, 0x18, id * 8, 0x1A8});
-        std::string powered_on_texture_name = _memory->ReadString({_globals, 0x18, id * 8, 0x1B0});
+        std::string name = Entities::NameOf(id);
+
+        int id_to_power = _memory->ReadData<int>({_globals, 0x18, id * 8, 0x2B4}, 1)[0] - 1;
+        int my_multipanel = _memory->ReadData<int>({_globals, 0x18, id * 8, 0x2BC}, 1)[0] - 1;
+        int powered_by = _memory->ReadData<int>({_globals, 0x18, id * 8, 0x2C8}, 1)[0] - 1;
+        int manual_prev_id = _memory->ReadData<int>({_globals, 0x18, id * 8, 0x2CC}, 1)[0] - 1;
+        int manual_next_id = _memory->ReadData<int>({_globals, 0x18, id * 8, 0x2D0}, 1)[0] - 1;
 
         std::stringstream message;
-        message << "0x" << std::hex << std::setfill('0') << std::setw(5) << id << '\t';
+#define HEX(x) "0x" << std::hex << std::setfill('0') << std::setw(5) << (x)
+        message << HEX(id) << '\t';
         message << typeName << '\t';
-        message << entityName << '\t';
-        message << pos[0] << '\t' << pos[1] << '\t' << pos[2] << '\t';
-        for (int i : ids) message << "0x" << std::hex << std::setfill('0') << std::setw(5) << i << '\t';
-        message << textureName << '\t';
-        message << materialName << '\t';
-        for (float c : colorData) message << c << '\t';
-        message << meshName << '\t';
-        message << poweredOnTexture << '\t';
-        message << powered_on_sound_name << '\t';
-        message << powered_off_sound_name << '\t';
-        message << ambient_sound_name << '\t';
-        message << powered_on_texture_name << '\t';
+        message << name << '\t';
+        message << HEX(id_to_power) << '\t';
+        message << HEX(my_multipanel) << '\t';
+        message << HEX(powered_by) << '\t';
+        message << HEX(manual_prev_id) << '\t';
+        message << HEX(manual_next_id) << '\t';
+        message << Entities::NameOf(id_to_power) << '\t';
+        message << Entities::NameOf(my_multipanel) << '\t';
+        message << Entities::NameOf(powered_by) << '\t';
+        message << Entities::NameOf(manual_prev_id) << '\t';
+        message << Entities::NameOf(manual_next_id) << '\t';
         DebugPrint(message.str());
     }
     DebugPrint("------ Done ------");
