@@ -57,7 +57,7 @@ public:
 
     template <class T>
     inline void WriteData(const std::vector<__int64>& offsets, const std::vector<T>& data) {
-        WriteDataInternal(&data[0], offsets, sizeof(T) * data.size());
+        WriteDataInternal(&data[0], ComputeOffset(offsets), sizeof(T) * data.size());
     }
 
 
@@ -66,7 +66,7 @@ private:
     void Initialize();
 
     void ReadDataInternal(void* buffer, const uintptr_t computedOffset, size_t bufferSize);
-    void WriteDataInternal(const void* buffer, const std::vector<__int64>& offsets, size_t bufferSize);
+    void WriteDataInternal(const void* buffer, uintptr_t computedOffset, size_t bufferSize);
     uintptr_t ComputeOffset(std::vector<__int64> offsets, bool absolute = false);
 
     // Parts of the constructor / StartHeartbeat
