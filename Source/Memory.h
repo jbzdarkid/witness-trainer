@@ -60,6 +60,14 @@ public:
         WriteDataInternal(&data[0], ComputeOffset(offsets), sizeof(T) * data.size());
     }
 
+    // This is the fully typed function -- you mostly won't need to call this.
+    int CallFunction(__int64 address,
+        const __int64 rcx, const __int64 rdx, const __int64 r8, const __int64 r9,
+        const float xmm0, const float xmm1, const float xmm2, const float xmm3);
+    int CallFunction(__int64 address, __int64 rcx) { return CallFunction(address, rcx, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.0f); }
+    int CallFunction(__int64 address, __int64 rcx, __int64 rdx, __int64 r8, __int64 r9) { return CallFunction(address, rcx, rdx, r8, r9, 0.0f, 0.0f, 0.0f, 0.0f); }
+    int CallFunction(__int64 address, __int64 rcx, const float xmm1) { return CallFunction(address, rcx, 0, 0, 0, 0.0f, xmm1, 0.0f, 0.0f); }
+    int CallFunction(__int64 address, const std::string& str);
 
 private:
     void Heartbeat(HWND window, UINT message);
@@ -68,6 +76,7 @@ private:
     void ReadDataInternal(void* buffer, const uintptr_t computedOffset, size_t bufferSize);
     void WriteDataInternal(const void* buffer, uintptr_t computedOffset, size_t bufferSize);
     uintptr_t ComputeOffset(std::vector<__int64> offsets, bool absolute = false);
+    uintptr_t AllocateArray(__int64 size);
 
     // Parts of the constructor / StartHeartbeat
     std::wstring _processName;
@@ -94,7 +103,8 @@ private:
 #endif
 
 
-    // Parts of Read / Write / Sigscan
+    // Parts of Read / Write / Sigscan / etc
+    uintptr_t _functionPrimitive = 0;
     ThreadSafeAddressMap _computedAddresses;
 
     struct SigScan {

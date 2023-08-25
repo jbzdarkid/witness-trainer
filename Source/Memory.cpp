@@ -292,6 +292,83 @@ std::string Memory::ReadString(std::vector<__int64> offsets) {
     return std::string(tmp.begin(), nullTerminator);
 }
 
+int32_t Memory::CallFunction(int64_t relativeAddress,
+    const int64_t rcx, const int64_t rdx, const int64_t r8, const int64_t r9,
+    const float xmm0, const float xmm1, const float xmm2, const float xmm3) {
+    struct Arguments {
+        uintptr_t address;
+        int64_t rcx;
+        int64_t rdx;
+        int64_t r8;
+        int64_t r9;
+        float xmm0;
+        float xmm1;
+        float xmm2;
+        float xmm3;
+    };
+    Arguments args = {
+        ComputeOffset({relativeAddress}),
+        rcx, rdx, r8, r9,
+        xmm0, xmm1, xmm2, xmm3,
+    };
+
+    // Note: Assuming little endian
+    #define LONG_TO_BYTES(val) \
+        static_cast<uint8_t>((val & 0x00000000000000FF) >> 0x00), \
+        static_cast<uint8_t>((val & 0x000000000000FF00) >> 0x08), \
+        static_cast<uint8_t>((val & 0x0000000000FF0000) >> 0x10), \
+        static_cast<uint8_t>((val & 0x00000000FF000000) >> 0x18), \
+        static_cast<uint8_t>((val & 0x000000FF00000000) >> 0x20), \
+        static_cast<uint8_t>((val & 0x0000FF0000000000) >> 0x28), \
+        static_cast<uint8_t>((val & 0x00FF000000000000) >> 0x30), \
+        static_cast<uint8_t>((val & 0xFF00000000000000) >> 0x38)
+
+    #define OFFSET_OF(field) \
+        static_cast<uint8_t>(((uint64_t)&args.##field - (uint64_t)&args.address) & 0x00000000000000FF)
+
+	const uint8_t instructions[] = {
+        0x48, 0xBB, LONG_TO_BYTES(0),               // mov rbx,  placeholder ; placeholder will be replaced by the address of the arguments struct
+        0x48, 0x8B, 0x4B, OFFSET_OF(rcx),           // mov rcx,  args.rcx
+        0x48, 0x8B, 0x53, OFFSET_OF(rdx),           // mov rdx,  args.rdx
+        0x4C, 0x8B, 0x43, OFFSET_OF(r8),            // mov r8,   args.r8
+        0x4C, 0x8B, 0x4B, OFFSET_OF(r9),            // mov r9,   args.r9
+        0xF3, 0x0F, 0x7E, 0x43, OFFSET_OF(xmm0),    // mov xmm0, args.xmm0
+        0xF3, 0x0F, 0x7E, 0x4B, OFFSET_OF(xmm1),    // mov xmm1, args.xmm1
+        0xF3, 0x0F, 0x7E, 0x53, OFFSET_OF(xmm2),    // mov xmm2, args.xmm2
+        0xF3, 0x0F, 0x7E, 0x5B, OFFSET_OF(xmm3),    // mov xmm3, args.xmm3
+        0x48, 0x83, 0xEC, 0x48,                     // sub rsp,48 ; align the stack pointer for movss opcodes
+        0xFF, 0x13,                                 // call [rbx]
+        0x48, 0x83, 0xC4, 0x48,                     // add rsp,48
+        0xC3,                                       // ret
+    };
+
+    if (!_functionPrimitive) {
+        _functionPrimitive = AllocateArray(sizeof(instructions) + sizeof(Arguments));
+        WriteDataInternal(instructions, _functionPrimitive, sizeof(instructions));
+
+        uint8_t argsAddress[] = {LONG_TO_BYTES(_functionPrimitive + sizeof(instructions))};
+        WriteDataInternal(argsAddress, _functionPrimitive + 2, sizeof(argsAddress));
+    }
+
+    WriteDataInternal(&args, _functionPrimitive + sizeof(instructions), sizeof(args));
+
+    // Argument 5 (lpParameter) is passed to the target thread in rcx, but just as a value.
+    // If it points to data, it will continue to point to data in the wrong process.
+    HANDLE thread = CreateRemoteThread(_handle, NULL, 0, (LPTHREAD_START_ROUTINE)_functionPrimitive, 0, 0, 0);
+	DWORD result = WaitForSingleObject(thread, INFINITE);
+
+    int32_t exitCode = 0;
+    static_assert(sizeof(DWORD) == sizeof(exitCode));
+    GetExitCodeThread(thread, reinterpret_cast<LPDWORD>(&exitCode));
+    return exitCode;
+}
+
+int32_t Memory::CallFunction(int64_t address, const std::string& str) {
+    uintptr_t addr = AllocateArray(str.size());
+    WriteDataInternal(&str[0], addr, str.size());
+    return CallFunction(address, addr);
+}
+
 void Memory::ReadDataInternal(void* buffer, uintptr_t computedOffset, size_t bufferSize) {
     assert(bufferSize > 0, "[Internal error] Attempting to read 0 bytes");
     if (!_handle) return;
@@ -356,4 +433,8 @@ uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets, bool absolute) {
         return 0;
     }
     return cumulativeAddress + final_offset;
+}
+
+uintptr_t Memory::AllocateArray(__int64 size) {
+    return (uintptr_t)VirtualAllocEx(_handle, 0, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 }
