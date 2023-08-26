@@ -90,8 +90,9 @@ private:
     __int64 _mainMenuColor = 0; // draw_menu_general()
     __int64 _drawPatternManager = 0; // draw_pattern_manager()
 
-    std::shared_ptr<EntityData> GetPanelData(int id);
-    std::shared_ptr<EntityData> GetEPData(int id);
+    void GetPanelData(const std::shared_ptr<Trainer::EntityData>& data);
+    void GetEPData(const std::shared_ptr<Trainer::EntityData>& data);
+    void GetDoorData(const std::shared_ptr<Trainer::EntityData>& data);
     struct Traced_Edge {
         int index_a;
         int index_b;

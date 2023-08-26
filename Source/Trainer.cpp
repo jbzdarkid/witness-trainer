@@ -171,17 +171,16 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetEntityData(int id) {
     if (id != (readId - 1)) return nullptr; // Entity is no longer a valid object (or is not the entity we expected to read)
 
     std::string typeName = _memory->ReadString({_globals, 0x18, id * 8, 0x08, 0x08});
-    std::shared_ptr<EntityData> entityData = nullptr;
-
-    // Extra data for some types
-    if (typeName == "Machine_Panel")      entityData = GetPanelData(id);
-    else if (typeName == "Pattern_Point") entityData = GetEPData(id);
-    else                                  entityData = std::make_shared<EntityData>();
-
+    auto entityData = std::make_shared<EntityData>();
     entityData->id = id;
     entityData->type = typeName;
     entityData->entity = entity;
     entityData->position = _memory->ReadData<float>({_globals, 0x18, id * 8, 0x24}, 3);
+
+    // Look up extra data for some types
+    if (typeName == "Machine_Panel")      GetPanelData(entityData);
+    else if (typeName == "Pattern_Point") GetEPData(entityData);
+    else if (typeName == "Door")          GetDoorData(entityData);
     return entityData;
 }
 
@@ -200,16 +199,15 @@ struct Traced_Edge final {
     bool padding;
 };
 
-std::shared_ptr<Trainer::EntityData> Trainer::GetPanelData(int id) {
+void Trainer::GetPanelData(const std::shared_ptr<Trainer::EntityData>& data) {
     int nameOffset = _solvedTargetOffset - 0x7C;
     int tracedEdgesOffset = _solvedTargetOffset - 0x6C;
     int stateOffset = _solvedTargetOffset - 0x14;
     int hasEverBeenSolvedOffset = _solvedTargetOffset + 0x04;
 
-    auto data = std::make_shared<EntityData>();
-    data->name = _memory->ReadString({_globals, 0x18, id * 8, nameOffset});
-    int state = _memory->ReadData<int>({_globals, 0x18, id * 8, stateOffset}, 1)[0];
-    int hasEverBeenSolved = _memory->ReadData<int>({_globals, 0x18, id * 8, hasEverBeenSolvedOffset}, 1)[0];
+    data->name = _memory->ReadString({_globals, 0x18, data->id * 8, nameOffset});
+    int state = _memory->ReadData<int>({_globals, 0x18, data->id * 8, stateOffset}, 1)[0];
+    int hasEverBeenSolved = _memory->ReadData<int>({_globals, 0x18, data->id * 8, hasEverBeenSolvedOffset}, 1)[0];
     data->solved = hasEverBeenSolved;
     if (state == 0 && hasEverBeenSolved == 0) data->state = "Has never been solved";
     else if (state == 0 && hasEverBeenSolved == 1) data->state = "Was previously solved";
@@ -219,10 +217,10 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetPanelData(int id) {
     else if (state == 4) data->state = "Negation pending";
     else data->state = "Unknown";
 
-    auto numEdges = _memory->ReadData<int>({_globals, 0x18, id * 8, tracedEdgesOffset}, 1)[0];
+    auto numEdges = _memory->ReadData<int>({_globals, 0x18, data->id * 8, tracedEdgesOffset}, 1)[0];
     if (numEdges > 0) {
         // Explicitly computing this as an intermediate, since the edges array might have re-allocated.
-        auto edgeDataPtr = _memory->ReadData<__int64>({_globals, 0x18, id * 8, tracedEdgesOffset + 8}, 1)[0];
+        auto edgeDataPtr = _memory->ReadData<__int64>({_globals, 0x18, data->id * 8, tracedEdgesOffset + 8}, 1)[0];
         if (edgeDataPtr != 0) {
             static_assert(sizeof(Traced_Edge) == 0x34);
             // However, we only need the first edge -- since all we care about is the startpoint.
@@ -234,15 +232,17 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetPanelData(int id) {
             };
         }
     }
-
-    return data;
 }
 
-std::shared_ptr<Trainer::EntityData> Trainer::GetEPData(int id) {
-    auto data = std::make_shared<EntityData>();
-    data->name = _memory->ReadString({_globals, 0x18, id * 8, _epNameOffset});
-    data->startPoint = _memory->ReadData<float>({_globals, 0x18, id * 8, 0x24}, 3);
-    return data;
+void Trainer::GetEPData(const std::shared_ptr<Trainer::EntityData>& data) {
+    data->name = _memory->ReadString({_globals, 0x18, data->id * 8, _epNameOffset});
+    data->startPoint = _memory->ReadData<float>({_globals, 0x18, data->id * 8, 0x24}, 3);
+}
+
+void Trainer::GetDoorData(const std::shared_ptr<Trainer::EntityData>& data) {
+    if (_globals != 0x5B28C0) return; // I'm lazy and don't care to find real sigscans
+    // data->name = _memory->ReadString({_globals, 0x18, data->id * 8, 0x58}); // entity_name
+    data->name = _memory->ReadString({_globals, 0x18, data->id * 8, 0x168}); // start_opening_sound
 }
 
 void Trainer::ShowMissingPanels() {
@@ -280,7 +280,7 @@ std::vector<std::pair<double, std::shared_ptr<Trainer::EntityData>>> Trainer::Ge
 
     auto basePos = GetCameraPos();
     for (int32_t id = 0; id < maxId; id++) {
-        if (id == 0x1E465) continue; // Skip over Entity_Human
+        if (id == 0x1E465) continue; // Skip over ourselves (Entity_Human)
         std::shared_ptr<EntityData> entityData = GetEntityData(id);
         if (entityData == nullptr) continue;
         if (!typeFilter.empty() && entityData->type != typeFilter) continue;
