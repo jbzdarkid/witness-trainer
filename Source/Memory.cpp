@@ -306,67 +306,69 @@ int32_t Memory::CallFunction(int64_t relativeAddress,
         float xmm2;
         float xmm3;
     };
+    assert((uint64_t)relativeAddress < _baseAddress, "[Internal error] CallFunction must be called with an address *relative to* the base pointer.");
     Arguments args = {
         ComputeOffset({relativeAddress}),
         rcx, rdx, r8, r9,
         xmm0, xmm1, xmm2, xmm3,
     };
 
-    // Note: Assuming little endian
-    #define LONG_TO_BYTES(val) \
-        static_cast<uint8_t>((val & 0x00000000000000FF) >> 0x00), \
-        static_cast<uint8_t>((val & 0x000000000000FF00) >> 0x08), \
-        static_cast<uint8_t>((val & 0x0000000000FF0000) >> 0x10), \
-        static_cast<uint8_t>((val & 0x00000000FF000000) >> 0x18), \
-        static_cast<uint8_t>((val & 0x000000FF00000000) >> 0x20), \
-        static_cast<uint8_t>((val & 0x0000FF0000000000) >> 0x28), \
-        static_cast<uint8_t>((val & 0x00FF000000000000) >> 0x30), \
-        static_cast<uint8_t>((val & 0xFF00000000000000) >> 0x38)
-
-    #define OFFSET_OF(field) \
-        static_cast<uint8_t>(((uint64_t)&args.##field - (uint64_t)&args.address) & 0x00000000000000FF)
-
-	const uint8_t instructions[] = {
-        0x48, 0xBB, LONG_TO_BYTES(0),               // mov rbx,  placeholder ; placeholder will be replaced by the address of the arguments struct
-        0x48, 0x8B, 0x4B, OFFSET_OF(rcx),           // mov rcx,  args.rcx
-        0x48, 0x8B, 0x53, OFFSET_OF(rdx),           // mov rdx,  args.rdx
-        0x4C, 0x8B, 0x43, OFFSET_OF(r8),            // mov r8,   args.r8
-        0x4C, 0x8B, 0x4B, OFFSET_OF(r9),            // mov r9,   args.r9
-        0xF3, 0x0F, 0x7E, 0x43, OFFSET_OF(xmm0),    // mov xmm0, args.xmm0
-        0xF3, 0x0F, 0x7E, 0x4B, OFFSET_OF(xmm1),    // mov xmm1, args.xmm1
-        0xF3, 0x0F, 0x7E, 0x53, OFFSET_OF(xmm2),    // mov xmm2, args.xmm2
-        0xF3, 0x0F, 0x7E, 0x5B, OFFSET_OF(xmm3),    // mov xmm3, args.xmm3
-        0x48, 0x83, 0xEC, 0x48,                     // sub rsp,48 ; align the stack pointer for movss opcodes
-        0xFF, 0x13,                                 // call [rbx]
-        0x48, 0x83, 0xC4, 0x48,                     // add rsp,48
-        0xC3,                                       // ret
-    };
+#define INSTRUCTION_SIZE 57
 
     if (!_functionPrimitive) {
-        _functionPrimitive = AllocateArray(sizeof(instructions) + sizeof(Arguments));
-        WriteDataInternal(instructions, _functionPrimitive, sizeof(instructions));
+        // Some C++ macro magic to look up the member offset of a given field.
+        // For example, args.rcx is 8 bits from the start of the struct, so this would result in 0x08.
+        #define OFFSET_OF(field) \
+            static_cast<uint8_t>(((uint64_t)&args.##field - (uint64_t)&args.address) & 0x00000000000000FF)
 
-        uint8_t argsAddress[] = {LONG_TO_BYTES(_functionPrimitive + sizeof(instructions))};
-        WriteDataInternal(argsAddress, _functionPrimitive + 2, sizeof(argsAddress));
+        // This primitive contains both a series of instructions and a buffer for arguments.
+        // This allows us to write the instructions once, and then just write our new arguments
+        // whenever we need to make another call.
+	    const uint8_t instructions[] = {
+            0x48, 0xBB,                                 // mov rbx,  0 ; 0 will be replaced by the address of the arguments struct
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x48, 0x8B, 0x4B, OFFSET_OF(rcx),           // mov rcx,  args.rcx
+            0x48, 0x8B, 0x53, OFFSET_OF(rdx),           // mov rdx,  args.rdx
+            0x4C, 0x8B, 0x43, OFFSET_OF(r8),            // mov r8,   args.r8
+            0x4C, 0x8B, 0x4B, OFFSET_OF(r9),            // mov r9,   args.r9
+            0xF3, 0x0F, 0x7E, 0x43, OFFSET_OF(xmm0),    // mov xmm0, args.xmm0
+            0xF3, 0x0F, 0x7E, 0x4B, OFFSET_OF(xmm1),    // mov xmm1, args.xmm1
+            0xF3, 0x0F, 0x7E, 0x53, OFFSET_OF(xmm2),    // mov xmm2, args.xmm2
+            0xF3, 0x0F, 0x7E, 0x5B, OFFSET_OF(xmm3),    // mov xmm3, args.xmm3
+            0x48, 0x83, 0xEC, 0x48,                     // sub rsp,48 ; align the stack pointer for movss opcodes
+            0xFF, 0x13,                                 // call [rbx]
+            0x48, 0x83, 0xC4, 0x48,                     // add rsp,48
+            0xC3,                                       // ret
+        };
+        static_assert(sizeof(instructions) == INSTRUCTION_SIZE, "The instruction size is required to be static for argument writing purposes.");
+
+        // Allocate space for the instructions and arguments buffer,
+        _functionPrimitive = AllocateArray(sizeof(instructions) + sizeof(Arguments));
+        // Then update the instructions to load from the arguments buffer (assuming LE),
+        *(uint64_t*)&instructions[2] = (_functionPrimitive + sizeof(instructions));
+        // and finally write the completed instructions into the target process.
+        WriteDataInternal(instructions, _functionPrimitive, sizeof(instructions));
     }
 
-    WriteDataInternal(&args, _functionPrimitive + sizeof(instructions), sizeof(args));
+    // Then, we can write the arguments into the buffer, to be copied by the instructions.
+    WriteDataInternal(&args, _functionPrimitive + INSTRUCTION_SIZE, sizeof(args));
 
-    // Argument 5 (lpParameter) is passed to the target thread in rcx, but just as a value.
-    // If it points to data, it will continue to point to data in the wrong process.
+    // Although I don't use it here, argument 5 (lpParameter) can be used to pass a single 8-byte integer to the target process.
+    // Note that you cannot transfer data this way; if you pass a pointer it will point to memory in this process, not the target.
     HANDLE thread = CreateRemoteThread(_handle, NULL, 0, (LPTHREAD_START_ROUTINE)_functionPrimitive, 0, 0, 0);
 	DWORD result = WaitForSingleObject(thread, INFINITE);
 
+    // This will be the return value of the called function.
     int32_t exitCode = 0;
     static_assert(sizeof(DWORD) == sizeof(exitCode));
     GetExitCodeThread(thread, reinterpret_cast<LPDWORD>(&exitCode));
     return exitCode;
 }
 
-int32_t Memory::CallFunction(int64_t address, const std::string& str) {
+int32_t Memory::CallFunction(__int64 address, const std::string& str, __int64 rdx) {
     uintptr_t addr = AllocateArray(str.size());
     WriteDataInternal(&str[0], addr, str.size());
-    return CallFunction(address, addr);
+    return CallFunction(address, addr, rdx, 0, 0);
 }
 
 void Memory::ReadDataInternal(void* buffer, uintptr_t computedOffset, size_t bufferSize) {

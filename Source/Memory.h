@@ -67,7 +67,7 @@ public:
     int CallFunction(__int64 address, __int64 rcx) { return CallFunction(address, rcx, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.0f); }
     int CallFunction(__int64 address, __int64 rcx, __int64 rdx, __int64 r8, __int64 r9) { return CallFunction(address, rcx, rdx, r8, r9, 0.0f, 0.0f, 0.0f, 0.0f); }
     int CallFunction(__int64 address, __int64 rcx, const float xmm1) { return CallFunction(address, rcx, 0, 0, 0, 0.0f, xmm1, 0.0f, 0.0f); }
-    int CallFunction(__int64 address, const std::string& str);
+    int CallFunction(__int64 address, const std::string& str, __int64 rdx);
 
 private:
     void Heartbeat(HWND window, UINT message);
