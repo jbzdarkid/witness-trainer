@@ -57,3 +57,5 @@ This program is Windows-only for the forseeable future.
   * While solving, all valid (connected) points are shown with circles, and all covered points are shown with diamonds.
 - Disable vertical aim limit (idea taken from survivalizeed/TheWitnessTrainer)
   * This will allow you to look all the way up and down (helpful for lining up with a pixel on the ground)
+- Open nearby doors
+  * This will search for nearby Entity_Door objects, and open any nearby ones. I'm not too sure why you'd need this, but it's here anyways.

@@ -12,18 +12,18 @@ public:
         std::string name;
         std::string type;
         std::string state;
-        __int64 entity;
-        int id;
+        __int64 entity = 0;
+        int id = 0;
         bool solved = false;
     };
     std::shared_ptr<EntityData> GetEntityData(int id);
     void ShowMissingPanels();
     void ShowNearbyEntities();
-    std::vector<std::pair<double, std::shared_ptr<Trainer::EntityData>>> GetNearbyEntities(const std::string& typeFilter = "");
+    std::vector<std::shared_ptr<Trainer::EntityData>> GetNearbyEntities(float distance = 4.0f);
     void ExportEntities();
     void SnapToPoint(const std::vector<float>& point);
     void DisableDistanceGating();
-    void OpenNearestDoor();
+    void OpenNearbyDoors();
 
     bool GetNoclip();
     float GetNoclipSpeed();

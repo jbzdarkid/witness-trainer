@@ -277,43 +277,38 @@ void Trainer::ShowMissingPanels() {
     MessageBoxA(NULL, message.c_str(), title.c_str(), MB_OK);
 }
 
-std::vector<std::pair<double, std::shared_ptr<Trainer::EntityData>>> Trainer::GetNearbyEntities(const std::string& typeFilter) {
-    int32_t maxId = _memory->ReadData<int>({_globals, 0x14}, 1)[0];
-
-    std::vector<std::pair<double, std::shared_ptr<EntityData>>> nearbyEntities(20, {99999.9f, nullptr});
-
+std::vector<std::shared_ptr<Trainer::EntityData>> Trainer::GetNearbyEntities(float distance) {
+    float maxNorm = distance * distance;
     auto basePos = GetCameraPos();
+    std::vector<std::shared_ptr<EntityData>> nearbyEntities = {};
+
+    int32_t maxId = _memory->ReadData<int>({_globals, 0x14}, 1)[0];
     for (int32_t id = 0; id < maxId; id++) {
         if (id == 0x1E465) continue; // Skip over ourselves (Entity_Human)
         std::shared_ptr<EntityData> entityData = GetEntityData(id);
         if (entityData == nullptr) continue;
-        if (!typeFilter.empty() && entityData->type != typeFilter) continue;
         const std::vector<float>& pos = entityData->position;
 
         double norm = std::pow(basePos[0] - pos[0], 2) + std::pow(basePos[1] - pos[1], 2) + std::pow(basePos[2] - pos[2], 2);
-        for (int i = 0; i < nearbyEntities.size(); i++) {
-            if (norm < nearbyEntities[i].first) {
-                nearbyEntities.insert(nearbyEntities.begin() + i, {norm, entityData});
-                nearbyEntities.resize(nearbyEntities.size() - 1);
-                break;
-            }
-        }
+        if (norm <= maxNorm) nearbyEntities.push_back(entityData);
     }
 
     return nearbyEntities;
 }
 
 void Trainer::ShowNearbyEntities() {
+    auto basePos = GetCameraPos();
     auto nearbyEntities = GetNearbyEntities();
 
     DebugPrint("Entity ID\tDistance\t     X\t     Y\t     Z\tType");
-    for (const auto& [norm, entityData] : nearbyEntities) {
+    for (const auto& entityData : nearbyEntities) {
         std::vector<float> pos = entityData->position;
         std::string typeName = entityData->type;
 
         std::stringstream message;
         message << "0x" << std::hex << std::setfill('0') << std::setw(5) << entityData->id << '\t';
-        message << std::sqrt(norm) << '\t';
+        double distance = std::sqrt(std::pow(basePos[0] - pos[0], 2) + std::pow(basePos[1] - pos[1], 2) + std::pow(basePos[2] - pos[2], 2));
+        message << distance << '\t';
         message << pos[0] << '\t' << pos[1] << '\t' << pos[2] << '\t' << typeName;
         DebugPrint(message.str());
     }
@@ -399,12 +394,12 @@ void Trainer::DisableDistanceGating() {
     }
 }
 
-void Trainer::OpenNearestDoor() {
-    auto nearbyEntities = GetNearbyEntities("Door");
-    for (const auto& [_, entityData] : nearbyEntities) {
-        volatile int id = entityData->id;
-        _memory->CallFunction(_doorOpenStart, entityData->entity, 1.0);
-        break;
+void Trainer::OpenNearbyDoors() {
+    auto nearbyEntities = GetNearbyEntities();
+    for (const auto& entityData : nearbyEntities) {
+        if (entityData && entityData->type == "Door") {
+            _memory->CallFunction(_doorOpenStart, entityData->entity, 1.0);
+        }
     }
 }
 
