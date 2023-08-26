@@ -30,6 +30,7 @@
 #define DISTANCE_GATING     0x420
 #define EP_OVERLAY          0x421
 #define CLAMP_AIM           0x422
+#define OPEN_DOOR           0x423
 
 // BUGS:
 // - Changing from old ver to new ver can set FOV = 0?
@@ -407,6 +408,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         else if (command == SHOW_NEARBY)     trainer->ShowNearbyEntities();
         else if (command == EXPORT)          trainer->ExportEntities();
         else if (command == DISTANCE_GATING) trainer->DisableDistanceGating();
+        else if (command == OPEN_DOOR)       trainer->OpenNearestDoor();
         else if (command == SAVE_POS) {
             g_savedCameraPos = trainer->GetCameraPos();
             g_savedCameraAng = trainer->GetCameraAng();
@@ -615,6 +617,8 @@ void CreateComponents() {
     CreateButton(x, y, 200, L"Show unsolved panels", SHOW_PANELS);
 
     CreateButton(x, y, 200, L"Disable distance gating", DISTANCE_GATING);
+
+    CreateButton(x, y, 200, L"Open nearest door", OPEN_DOOR, L"Control-O", MASK_CONTROL | 'O');
 
     // Hotkey for debug purposes, to get addresses based on a reported callstack
     hotkeyCodes[MASK_CONTROL | MASK_SHIFT | MASK_ALT | VK_OEM_PLUS] = CALLSTACK;

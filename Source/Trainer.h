@@ -23,6 +23,7 @@ public:
     void ExportEntities();
     void SnapToPoint(const std::vector<float>& point);
     void DisableDistanceGating();
+    void OpenNearestDoor();
 
     bool GetNoclip();
     float GetNoclipSpeed();
@@ -84,7 +85,8 @@ private:
     __int64 _recordPlayerUpdate = 0; // Entity_Record_Player.play_state
     int _epNameOffset = 0; // Entity_Pattern_Point.pattern_name
 
-    __int64 _doorOpen = 0; // Entity_Door::open()
+    __int64 _doorOpen = 0; // Entity_Door::open(), somewhere in the middle
+    __int64 _doorOpenStart = 0; // Entity_Door::open()
     __int64 _doorClose = 0; // Entity_Door::close()
     __int64 _powerOn = 0; // Entity_Machine_Panel::power_on()
     __int64 _mainMenuColor = 0; // draw_menu_general()

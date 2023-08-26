@@ -133,6 +133,10 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         trainer->_debugMode = Memory::ReadStaticInt(offset, index - 4, data);
     });
 
+    memory->AddSigScan({0xF2, 0x0F, 0x10, 0x41, 0x24, 0x48, 0x89, 0x68, 0x10}, [trainer](int64_t offset, int index, const std::vector<uint8_t>& data) {
+        trainer->_doorOpenStart = offset + index - 15;
+    });
+
     // We need to save _memory before we exit, otherwise we can't destroy properly.
     trainer->_memory = memory;
 
@@ -392,6 +396,15 @@ void Trainer::DisableDistanceGating() {
         assert(_globals == 0x62D0A0, "DisableDistanceGating is only supported on the latest version");
         float distanceGated = _memory->ReadAbsoluteData<float>({entityData->entity, 0x3BC}, 1)[0];
         if (distanceGated != 0.0f) _memory->WriteData<float>({_globals, 0x18, id * 8, 0x3BC}, {0.0f});
+    }
+}
+
+void Trainer::OpenNearestDoor() {
+    auto nearbyEntities = GetNearbyEntities("Door");
+    for (const auto& [_, entityData] : nearbyEntities) {
+        volatile int id = entityData->id;
+        _memory->CallFunction(_doorOpenStart, entityData->entity, 1.0);
+        break;
     }
 }
 
