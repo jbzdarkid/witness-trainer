@@ -25,13 +25,17 @@ public:
     void BringToFront();
     bool IsForeground();
 
+    static HWND GetProcessHwnd(DWORD pid);
+
     Memory(const Memory& memory) = delete;
     Memory& operator=(const Memory& other) = delete;
 
     // lineLength is the number of bytes from the given index to the end of the instruction. Usually, it's 4.
     static int64_t ReadStaticInt(__int64 offset, int index, const std::vector<byte>& data, size_t lineLength = 4);
     using ScanFunc = std::function<void(__int64 offset, int index, const std::vector<byte>& data)>;
+    using ScanFunc2 = std::function<bool(__int64 offset, int index, const std::vector<byte>& data)>;
     void AddSigScan(const std::vector<byte>& scanBytes, const ScanFunc& scanFunc);
+    void AddSigScan2(const std::vector<byte>& scanBytes, const ScanFunc2& scanFunc);
     [[nodiscard]] size_t ExecuteSigScans();
 
     void Unprotect(int64_t relative);
@@ -81,13 +85,21 @@ private:
     __int64 _previousEntityManager = 0;
     int _previousLoadCount = 0;
     ProcStatus _nextStatus = ProcStatus::Running;
+    bool _trainerHasStarted = false;
+
+#ifdef NDEBUG
+    static constexpr std::chrono::milliseconds s_heartbeat = std::chrono::milliseconds(100);
+#else // Induce more stress in debug, to catch errors more easily.
+    static constexpr std::chrono::milliseconds s_heartbeat = std::chrono::milliseconds(10);
+#endif
+
 
     // Parts of Read / Write / Sigscan
     ThreadSafeAddressMap _computedAddresses;
 
     struct SigScan {
         bool found = false;
-        ScanFunc scanFunc;
+        ScanFunc2 scanFunc;
     };
     std::map<std::vector<byte>, SigScan> _sigScans;
 };

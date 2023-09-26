@@ -21,9 +21,14 @@ void Memory::StartHeartbeat(HWND window, UINT message) {
     _threadActive = true;
     _thread = std::thread([sharedThis = shared_from_this(), window, message]{
         SetCurrentThreadName(L"Heartbeat");
+
+        // Run the first heartbeat before setting trainerHasStarted, to detect if we are attaching to a game already in progress.
+        sharedThis->Heartbeat(window, message);
+        sharedThis->_trainerHasStarted = true;
+
         while (sharedThis->_threadActive) {
+            std::this_thread::sleep_for(s_heartbeat);
             sharedThis->Heartbeat(window, message);
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     });
     _thread.detach();
@@ -35,6 +40,27 @@ void Memory::BringToFront() {
 
 bool Memory::IsForeground() {
     return GetForegroundWindow() == _hwnd;
+}
+
+HWND Memory::GetProcessHwnd(DWORD pid) {
+    struct Data {
+        DWORD pid;
+        HWND hwnd;
+    };
+    Data data = Data{pid, NULL};
+
+    BOOL result = EnumWindows([](HWND hwnd, LPARAM data) {
+        DWORD pid;
+        GetWindowThreadProcessId(hwnd, &pid);
+        DWORD targetPid = reinterpret_cast<Data*>(data)->pid;
+        if (pid == targetPid) {
+            reinterpret_cast<Data*>(data)->hwnd = hwnd;
+            return FALSE; // Stop enumerating
+        }
+        return TRUE; // Continue enumerating
+    }, (LPARAM)&data);
+
+    return data.hwnd;
 }
 
 void Memory::Heartbeat(HWND window, UINT message) {
@@ -54,6 +80,7 @@ void Memory::Heartbeat(HWND window, UINT message) {
         _computedAddresses.Clear();
         _handle = nullptr;
 
+        _nextStatus = ProcStatus::Started;
         PostMessage(window, message, ProcStatus::Stopped, NULL);
         // Wait for the process to fully close; otherwise we might accidentally re-attach to it.
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -67,24 +94,22 @@ void Memory::Heartbeat(HWND window, UINT message) {
         return;
     }
 
-    // To avoid obtaining the HWND for the launcher, we wait to determine HWND until the game is loaded.
-    if (_hwnd == 0) {
-        EnumWindows([](HWND hwnd, LPARAM memory){
-            DWORD pid;
-            GetWindowThreadProcessId(hwnd, &pid);
-            DWORD targetPid = reinterpret_cast<Memory*>(memory)->_pid;
-            if (pid == targetPid) {
-                reinterpret_cast<Memory*>(memory)->_hwnd = hwnd;
-                return FALSE; // Stop enumerating
-            }
-            return TRUE; // Continue enumerating
-        }, (LPARAM)this);
-        if (_hwnd == 0) {
-            DebugPrint("Couldn't find the HWND for the game");
-            assert(false);
-            return;
-        }
+    // To avoid obtaining the HWND for the launcher, we wait to determine HWND until after the entity manager is allocated (the main game has started).
+    if (_hwnd == NULL) {
+        _hwnd = GetProcessHwnd(_pid);
+    } else {
+        // Under some circumstances the window can expire? Or the game re-allocates it? I have no idea.
+        // Anyways, we check to see if the title is wrong, and if so, search for the window again.
+        static std::wstring title(12, L'\0');
+        GetWindowTextW(_hwnd, &title[0], 12);
+        if (title != L"The Witness") _hwnd = GetProcessHwnd(_pid);
     }
+
+    if (_hwnd == NULL) {
+        DebugPrint("Couldn't find the HWND for the game");
+        assert(false);
+        return;
+     }
 
     // New game causes the entity manager to re-allocate
     if (entityManager != _previousEntityManager) {
@@ -113,7 +138,13 @@ void Memory::Heartbeat(HWND window, UINT message) {
         return;
     }
 
-    PostMessage(window, message, _nextStatus, NULL);
+    if (_trainerHasStarted == false) {
+        // If it's the first time we started, and the game appears to be running, return "Running" instead of "Started".
+        PostMessage(window, message, ProcStatus::Running, NULL);
+    } else {
+        // Else, report whatever status we last encountered.
+        PostMessage(window, message, _nextStatus, NULL);
+    }
     _nextStatus = ProcStatus::Running;
 }
 
@@ -157,14 +188,12 @@ void Memory::Initialize() {
         _loadCountOffset = *(int*)&data[index-1];
     });
 
+    // This little song-and-dance is because we need _handle in order to execute sigscans.
+    // But, we use _handle to indicate success, so we need to reset it.
+    // Note that these sigscans are very lightweight -- they are *only* the scans required to handle loading.
     _handle = handle;
     size_t failedScans = ExecuteSigScans(); // Will DebugPrint the failed scans.
-    if (failedScans > 0) {
-        // This little song-and-dance is because we need _handle in order to execute sigscans.
-        // But, we use _handle to indicate success, so we need to reset it.
-        _handle = nullptr;
-        return;
-    }
+    if (failedScans > 0) _handle = nullptr;
 }
 
 // These functions are much more generic than this witness-specific implementation. As such, I'm keeping them somewhat separated.
@@ -174,21 +203,34 @@ int64_t Memory::ReadStaticInt(__int64 offset, int index, const std::vector<byte>
     return offset + index + lineLength + *(int*)&data[index];
 }
 
+// Small wrapper for non-failing scan functions
 void Memory::AddSigScan(const std::vector<byte>& scanBytes, const ScanFunc& scanFunc) {
+    _sigScans[scanBytes] = {false, [scanFunc](__int64 offset, int index, const std::vector<byte>& data) {
+        scanFunc(offset, index, data);
+        return true;
+    }};
+}
+
+void Memory::AddSigScan2(const std::vector<byte>& scanBytes, const ScanFunc2& scanFunc) {
     _sigScans[scanBytes] = {false, scanFunc};
 }
 
-int find(const std::vector<byte> &data, const std::vector<byte>& search, size_t startIndex = 0) {
-    for (size_t i=startIndex; i<data.size() - search.size(); i++) {
+int find(const std::vector<byte>& data, const std::vector<byte>& search) {
+    const byte* dataBegin = &data[0];
+    const byte* searchBegin = &search[0];
+    size_t maxI = data.size() - search.size();
+    size_t maxJ = search.size();
+
+    for (int i=0; i<maxI; i++) {
         bool match = true;
-        for (size_t j=0; j<search.size(); j++) {
-            if (data[i+j] == search[j]) {
+        for (size_t j=0; j<maxJ; j++) {
+            if (*(dataBegin + i + j) == *(searchBegin + j)) {
                 continue;
             }
             match = false;
             break;
         }
-        if (match) return static_cast<int>(i);
+        if (match) return i;
     }
     return -1;
 }
@@ -208,9 +250,8 @@ size_t Memory::ExecuteSigScans() {
             if (sigScan.found) continue;
             int index = find(buff, scanBytes);
             if (index == -1) continue;
-            sigScan.scanFunc(i, index, buff); // We're expecting i to be relative to the base address here.
-            sigScan.found = true;
-            notFound--;
+            sigScan.found = sigScan.scanFunc(i, index, buff); // We're expecting i to be relative to the base address here.
+            if (sigScan.found) notFound--;
         }
         if (notFound == 0) break;
     }
@@ -270,6 +311,7 @@ void Memory::ReadDataInternal(void* buffer, uintptr_t computedOffset, size_t buf
 void Memory::WriteDataInternal(const void* buffer, const std::vector<__int64>& offsets, size_t bufferSize) {
     assert(bufferSize > 0);
     if (!_handle) return;
+    if (offsets.empty() || offsets[0] == 0) return; // Empty offset path passed in.
     if (!WriteProcessMemory(_handle, (void*)ComputeOffset(offsets), buffer, bufferSize, nullptr)) {
         DebugPrint("Failed to write process memory.");
         assert(false);

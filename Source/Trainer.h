@@ -20,6 +20,8 @@ public:
     bool Init();
 
     void SetPlayerPos(const std::vector<float>& pos);
+    void SetMainMenuColor(bool enable);
+    void SetMainMenuState(bool open);
 
     bool GetInfiniteChallenge();
     void SetInfiniteChallenge(bool enable);
@@ -59,6 +61,7 @@ private:
     int32_t _recordPlayerUpdate2 = 0;
     int32_t _doSuccessSideEffects = 0;
     int64_t _rng2 = 0;
+    int64_t _menuOpenTarget = 0;
 
     std::vector<int32_t> _challengePanels = {
         0x0A332, // Challenge Record Start

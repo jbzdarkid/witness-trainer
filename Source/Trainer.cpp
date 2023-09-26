@@ -21,6 +21,7 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
     if (numFailedScans != 0) return nullptr; // Sigscans failed, we'll try again later.
 
     // TODO: Why are these not in Init()?
+    // TODO: This has diverged significantly. Fix before releasing.
 
     // do_success_side_effects
     memory->AddSigScan({0xFF, 0xC8, 0x99, 0x2B, 0xC2, 0xD1, 0xF8, 0x8B, 0xD0}, [trainer](int64_t offset, int index, const std::vector<byte>& data) {
@@ -33,22 +34,24 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         trainer->_doSuccessSideEffects = LongToInt(offset + index);
     });
 
-    memory->AddSigScan({0x41, 0xB8, 0x61, 0x00, 0x00, 0x00, 0x48, 0x8B, 0xD3}, [trainer, memory](__int64 offset, int index, const std::vector<byte>& data) {
-        if (trainer->_globals == 0x5B28C0) { // Version differences.
-            index -= 0x42;
-        } else {
-            assert(trainer->_globals == 0x62D0A0);
-            index -= 0x45;
+    // This scan intentionally fails if the injection has been applied. It makes this a bit unstable for development, but adds safety in case another trainer is attached.
+    memory->AddSigScan2({0x41, 0xB8, 0x61, 0x00, 0x00, 0x00, 0x48, 0x8B, 0xD3}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
+        for (; index > 0; index--) {
+            if (data[index] == 0x44 && data[index + 8] == 0x74 && data[index + 9] == 0x10) {
+                memory->WriteData<byte>({offset + index}, {0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00}); // 8-byte NOP
+                return true;
+            }
         }
-
-        // Set the main menu to red by *not* setting the green or blue component.
-        memory->WriteData<byte>({offset + index}, {0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00}); // 8-byte NOP
+        return false;
     });
-
 
     memory->AddSigScan({0xF3, 0x0F, 0x10, 0x82, INT_TO_BYTES(trainer->GetOffset(DurationTotal))}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
         // TODO: ... is this relative to _recordPlayerUpdate?
         trainer->_recordPlayerUpdate2 = LongToInt(offset + index);
+    });
+
+    memory->AddSigScan({0x74, 0x0B, 0x0F, 0x28, 0xD0}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
+        trainer->_menuOpenTarget = Memory::ReadStaticInt(offset, index + 0x19, data);
     });
 
     numFailedScans = memory->ExecuteSigScans();

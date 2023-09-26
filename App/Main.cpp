@@ -77,7 +77,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             // Get rid of the gross gray background. https://stackoverflow.com/a/4495814
             SetTextColor((HDC)wParam, RGB(0, 0, 0));
             SetBkColor((HDC)wParam, RGB(255, 255, 255));
-            return (LRESULT)CreateSolidBrush(RGB(255, 255, 255));
+            static HBRUSH s_solidBrush = CreateSolidBrush(RGB(255, 255, 255));
+            return (LRESULT)s_solidBrush;
         case HEARTBEAT:
             switch ((ProcStatus)wParam) {
             case ProcStatus::Stopped:
@@ -93,9 +94,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             case ProcStatus::Started:
                 if (!g_trainer) {
                     // Process just started (we were already alive), enforce our settings.
+                    SetStringText(g_hwnd, L"Attaching to The Witness...");
                     g_trainer = Trainer::Create(g_witnessProc);
                 }
                 if (!g_trainer) break;
+                SetStringText(g_hwnd, L"Witness Challenge Randomizer");
                 // Or, we started a new game / loaded a save, in which case some of the entity data might have been reset.
                 g_trainer->SetInfiniteChallenge(IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE));
                 g_trainer->SetMkChallenge(IsDlgButtonChecked(hwnd, MK_CHALLENGE));
@@ -105,12 +108,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             case ProcStatus::Running:
                 if (!g_trainer) {
                     // Process was already running, and we just started. Load settings from the game.
+                    SetStringText(g_hwnd, L"Attaching to The Witness...");
                     g_trainer = Trainer::Create(g_witnessProc);
                     if (!g_trainer) break;
+                    SetStringText(g_hwnd, L"Witness Challenge Randomizer");
                     CheckDlgButton(hwnd, INFINITE_CHALLENGE, g_trainer->GetInfiniteChallenge());
                     CheckDlgButton(hwnd, MK_CHALLENGE, g_trainer->GetMkChallenge());
                     PostMessage(hwnd, WM_COMMAND, SHOW_SEED, 0); // Load seed from Game -> Randomizer
                     SetWindowString(g_activateGame, L"Switch to game");
+                    g_trainer->SetMainMenuState(true); // TODO: I know I turned this into an "always forced on" but it's smarter to just always run it during the enable block. Fix this.
                 } else {
                     // Process was already running, and so were we (this recurs every heartbeat). Enforce settings and apply repeated actions.
                     ChallengeState newState = g_trainer->GetChallengeState();
