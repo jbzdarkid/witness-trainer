@@ -93,7 +93,7 @@ void Memory::Heartbeat(HWND window, UINT message) {
     }
 
     // Loading a game causes entities to be shuffled
-    int loadCount = ReadData<int>({_globals, 0x0, _loadCountOffset}, 1)[0];
+    int loadCount = ReadAbsoluteData<int>({entityManager, _loadCountOffset}, 1)[0];
     if (_previousLoadCount != loadCount) {
         _previousLoadCount = loadCount;
         _computedAddresses.Clear();
@@ -106,7 +106,7 @@ void Memory::Heartbeat(HWND window, UINT message) {
         return;
     }
 
-    byte isLoading = ReadData<byte>({_globals, 0x0, _loadCountOffset - 0x4}, 1)[0];
+    byte isLoading = ReadAbsoluteData<byte>({entityManager, _loadCountOffset - 0x4}, 1)[0];
     if (isLoading == 0x01) {
         // Saved game is currently loading, do not take any actions.
         _nextStatus = ProcStatus::Reload;
@@ -278,7 +278,7 @@ void Memory::WriteDataInternal(const void* buffer, const std::vector<__int64>& o
     }
 }
 
-uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets) {
+uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets, bool absolute) {
     assert(offsets.size() > 0);
     assert(offsets.front() != 0);
 
@@ -286,7 +286,7 @@ uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets) {
     const __int64 final_offset = offsets.back();
     offsets.pop_back();
 
-    uintptr_t cumulativeAddress = _baseAddress;
+    uintptr_t cumulativeAddress = (absolute ? 0 : _baseAddress);
     for (const __int64 offset : offsets) {
         cumulativeAddress += offset;
 
