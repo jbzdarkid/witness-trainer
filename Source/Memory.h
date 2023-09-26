@@ -38,8 +38,15 @@ public:
 
     template<class T>
     inline std::vector<T> ReadData(const std::vector<__int64>& offsets, size_t numItems) {
-        std::vector<T> data(numItems, 0);
-        ReadDataInternal(&data[0], offsets, numItems * sizeof(T));
+        std::vector<T> data(numItems);
+        if (!_handle) return data;
+        ReadDataInternal(&data[0], ComputeOffset(offsets), numItems * sizeof(T));
+        return data;
+    }
+    template<class T>
+    inline std::vector<T> ReadDataAbsolute(uintptr_t address, size_t numItems) {
+        std::vector<T> data(numItems);
+        ReadDataInternal(&data[0], address, numItems * sizeof(T));
         return data;
     }
     std::string ReadString(std::vector<__int64> offsets);
@@ -54,7 +61,7 @@ private:
     void Heartbeat(HWND window, UINT message);
     void Initialize();
 
-    void ReadDataInternal(void* buffer, const std::vector<__int64>& offsets, size_t bufferSize);
+    void ReadDataInternal(void* buffer, const uintptr_t computedOffset, size_t bufferSize);
     void WriteDataInternal(const void* buffer, const std::vector<__int64>& offsets, size_t bufferSize);
     uintptr_t ComputeOffset(std::vector<__int64> offsets);
 

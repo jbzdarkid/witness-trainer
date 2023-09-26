@@ -75,8 +75,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             break; // LOWORD(wParam) contains the command
         case WM_CTLCOLORSTATIC:
             // Get rid of the gross gray background. https://stackoverflow.com/a/4495814
+            SetTextColor((HDC)wParam, RGB(0, 0, 0));
             SetBkColor((HDC)wParam, RGB(255, 255, 255));
-            return 0;
+            return (LRESULT)CreateSolidBrush(RGB(255, 255, 255));
         case HEARTBEAT:
             switch ((ProcStatus)wParam) {
             case ProcStatus::Stopped:

@@ -256,10 +256,9 @@ std::string Memory::ReadString(std::vector<__int64> offsets) {
     return name;
 }
 
-void Memory::ReadDataInternal(void* buffer, const std::vector<__int64>& offsets, size_t bufferSize) {
+void Memory::ReadDataInternal(void* buffer, uintptr_t computedOffset, size_t bufferSize) {
     assert(bufferSize > 0);
     if (!_handle) return;
-    uintptr_t computedOffset = ComputeOffset(offsets);
     // Ensure that the buffer size does not cause a read across a page boundary.
     if (bufferSize > 0x1000 - (computedOffset & 0x0000FFF)) {
         bufferSize = 0x1000 - (computedOffset & 0x0000FFF);
