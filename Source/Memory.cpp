@@ -238,22 +238,20 @@ void Memory::Unprotect(int64_t relative) {
     ::VirtualProtectEx(_handle, address, 1, PAGE_EXECUTE_READWRITE, &unused);
 }
 
-#define MAX_STRING 100
 // Technically this is ReadChar*, but this name makes more sense with the return type.
 std::string Memory::ReadString(std::vector<__int64> offsets) {
     __int64 charAddr = ReadData<__int64>(offsets, 1)[0];
     if (charAddr == 0) return ""; // Handle nullptr for strings
 
-    offsets.push_back(0L); // Dereference the char* to a char[]
-    std::vector<char> tmp = ReadData<char>(offsets, MAX_STRING);
-    std::string name(tmp.begin(), tmp.end());
-    // Remove garbage past the null terminator (we read 100 chars, but the string was probably shorter)
-    name.resize(strnlen_s(tmp.data(), tmp.size()));
-    if (name.size() == tmp.size()) {
-        DebugPrint("Buffer did not get shrunk, ergo this string is longer than 100 chars. Please change MAX_STRING.");
-        assert(false);
+    std::vector<char> tmp;
+    auto nullTerminator = tmp.begin(); // Value is only for type information.
+    for (size_t maxLength = (1 << 6); maxLength < (1 << 10); maxLength *= 2) {
+        tmp = ReadAbsoluteData<char>({charAddr}, maxLength);
+        nullTerminator = std::find(tmp.begin(), tmp.end(), '\0');
+        // If a null terminator is found, we will strip any trailing data after it.
+        if (nullTerminator != tmp.end()) break;
     }
-    return name;
+    return std::string(tmp.begin(), nullTerminator);
 }
 
 void Memory::ReadDataInternal(void* buffer, uintptr_t computedOffset, size_t bufferSize) {
