@@ -22,7 +22,7 @@ HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
 HWND g_activateGame, g_seed, g_eventLog;
-auto g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
+std::shared_ptr<Memory> g_witnessProc;
 ChallengeState g_challengeState = ChallengeState::Off;
 
 void SetWindowString(HWND hwnd, const std::string& text) {
@@ -69,14 +69,25 @@ void AddEvent(const std::wstring& event) {
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_DESTROY:
+            // Since the challenge derandomization isn't reversible anyways, don't worry about cleaning up the trainer/etc on close.
             PostQuitMessage(0);
             return 0;
         case WM_COMMAND:
             break; // LOWORD(wParam) contains the command
+		    case WM_ERASEBKGND:
+		    {
+			      RECT rc;
+			      ::GetClientRect(hwnd, &rc);
+			      HBRUSH brush = CreateSolidBrush(RGB(255,255,255));
+			      FillRect((HDC)wParam, &rc, brush);
+			      DeleteObject(brush);
+			      return TRUE;
+		    }
         case WM_CTLCOLORSTATIC:
             // Get rid of the gross gray background. https://stackoverflow.com/a/4495814
             SetTextColor((HDC)wParam, RGB(0, 0, 0));
             SetBkColor((HDC)wParam, RGB(255, 255, 255));
+            SetBkMode((HDC)wParam, OPAQUE);
             static HBRUSH s_solidBrush = CreateSolidBrush(RGB(255, 255, 255));
             return (LRESULT)s_solidBrush;
         case HEARTBEAT:
@@ -84,10 +95,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             case ProcStatus::Stopped:
             case ProcStatus::NotRunning:
                 // Don't discard any settings, just free the trainer.
-                if (g_trainer) {
-                    g_trainer = nullptr;
-                    SetWindowString(g_activateGame, L"Launch game");
-                }
+                if (g_trainer) g_trainer = nullptr;
+                SetStringText(g_hwnd, L"Witness Challenge Randomizer");
+                SetWindowString(g_activateGame, L"Launch game");
                 break;
             case ProcStatus::Reload:
             case ProcStatus::NewGame:
@@ -209,15 +219,15 @@ HWND CreateTooltip(HWND target, LPCWSTR hoverText) {
     return tooltip;
 }
 
-HWND CreateLabel(int x, int y, int width, int height, LPCWSTR text = L"") {
+HWND CreateLabel(int x, int y, int width, int height, LPCWSTR text = L"", __int64 message = 0) {
     return CreateWindow(L"STATIC", text,
-        WS_TABSTOP | WS_VISIBLE | WS_CHILD | SS_LEFT,
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | SS_LEFT | SS_NOTIFY,
         x, y, width, height,
-        g_hwnd, NULL, g_hInstance, NULL);
+        g_hwnd, (HMENU)message, g_hInstance, NULL);
 }
 
-HWND CreateLabel(int x, int y, int width, LPCWSTR text) {
-    return CreateLabel(x, y, width, 16, text);
+HWND CreateLabel(int x, int y, int width, LPCWSTR text, __int64 message = 0) {
+    return CreateLabel(x, y, width, 16, text, message);
 }
 
 HWND CreateButton(int x, int& y, int width, LPCWSTR text, __int64 message) {
@@ -236,6 +246,21 @@ HWND CreateCheckbox(int x, int& y, __int64 message) {
         g_hwnd, (HMENU)message, g_hInstance, NULL);
     y += 20;
     return checkbox;
+}
+
+// The same arguments as Button.
+std::pair<HWND, HWND> CreateLabelAndCheckbox(int x, int& y, int width, LPCWSTR text, __int64 message, LPCWSTR hoverText, int32_t hotkey) {
+    // We need a distinct message (HMENU) for the label so that when we call CheckDlgButton it targets the checkbox, not the label.
+    // However, we only use the low word (bottom 2 bytes) for logic, so we can safely modify the high word to make it distinct.
+    auto label = CreateLabel(x + 20, y, width, text, message + 0x10000);
+    CreateTooltip(label, hoverText);
+    auto checkbox = CreateCheckbox(x, y, message, hoverText, hotkey);
+    return {label, checkbox};
+}
+
+// Also the same arguments as Button.
+std::pair<HWND, HWND> CreateLabelAndCheckbox(int x, int& y, int width, LPCWSTR text, __int64 message) {
+    return CreateLabelAndCheckbox(x, y, width, text, message, L"", 0);
 }
 
 HWND CreateText(int x, int& y, int width, LPCWSTR defaultText = L"", __int64 message = NULL) {
@@ -263,14 +288,11 @@ void CreateComponents() {
     CreateButton(x, y, 200, L"Set seed", SET_SEED);
     CreateButton(x, y, 200, L"Generate new seed", RANDOM_SEED);
 
-    CreateLabel(x, y, 185, L"Disable time limit");
-    CreateCheckbox(200, y, INFINITE_CHALLENGE);
+    CreateLabelAndCheckbox(x, y, 185, L"Disable time limit", INFINITE_CHALLENGE);
 
-    CreateLabel(x, y, 185, L"First Song Only");
-    CreateCheckbox(200, y, MK_CHALLENGE);
+    CreateLabelAndCheckbox(x, y, 185, L"First Song Only", MK_CHALLENGE);
 
-    CreateLabel(x, y, 185, L"Reroll RNG after victory");
-    CreateCheckbox(200, y, CHALLENGE_REROLL);
+    CreateLabelAndCheckbox(x, y, 185, L"Reroll RNG after victory", CHALLENGE_REROLL);
 
     g_eventLog = CreateLabel(x, y, 200, 300);
 }
@@ -286,7 +308,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         0,
         hInstance,
         NULL,
-        NULL, // LoadCursor(nullptr, IDC_ARROW),
+        NULL,
         NULL,
         WINDOW_CLASS,
         WINDOW_CLASS,
@@ -306,6 +328,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     CreateComponents();
     DebugUtils::version = VERSION_STR;
 
+    g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
     g_witnessProc->StartHeartbeat(g_hwnd, HEARTBEAT);
 
     MSG msg;
@@ -313,7 +336,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
+    // Since the challenge derandomization isn't reversible anyways, don't worry about cleaning up the trainer/etc on close.
 
     CoUninitialize();
-    return (int) msg.wParam;
+    return (int)msg.wParam;
 }

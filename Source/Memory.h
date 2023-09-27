@@ -22,6 +22,7 @@ public:
     Memory(const std::wstring& processName);
     ~Memory();
     void StartHeartbeat(HWND window, UINT message);
+    void StopHeartbeat();
     void BringToFront();
     bool IsForeground();
 
@@ -30,7 +31,7 @@ public:
     Memory(const Memory& memory) = delete;
     Memory& operator=(const Memory& other) = delete;
 
-    // lineLength is the number of bytes from the given index to the end of the instruction. Usually, it's 4.
+    // bytesToEOL is the number of bytes from the given index to the end of the opcode. Usually, the target address is last 4 bytes, since it's the destination of the call.
     static int64_t ReadStaticInt(__int64 offset, int index, const std::vector<byte>& data, size_t lineLength = 4);
     using ScanFunc = std::function<void(__int64 offset, int index, const std::vector<byte>& data)>;
     using ScanFunc2 = std::function<bool(__int64 offset, int index, const std::vector<byte>& data)>;
@@ -58,7 +59,7 @@ public:
 
     template <class T>
     inline void WriteData(const std::vector<__int64>& offsets, const std::vector<T>& data) {
-        WriteDataInternal(&data[0], offsets, sizeof(T) * data.size());
+        WriteDataInternal(&data[0], ComputeOffset(offsets), sizeof(T) * data.size());
     }
 
 
@@ -67,7 +68,7 @@ private:
     void Initialize();
 
     void ReadDataInternal(void* buffer, const uintptr_t computedOffset, size_t bufferSize);
-    void WriteDataInternal(const void* buffer, const std::vector<__int64>& offsets, size_t bufferSize);
+    void WriteDataInternal(const void* buffer, uintptr_t computedOffset, size_t bufferSize);
     uintptr_t ComputeOffset(std::vector<__int64> offsets, bool absolute = false);
 
     // Parts of the constructor / StartHeartbeat
@@ -80,6 +81,7 @@ private:
     DWORD _pid = 0;
     HWND _hwnd = NULL;
     uintptr_t _baseAddress = 0;
+    uintptr_t _endOfModule = 0;
     __int64 _globals = 0;
     int _loadCountOffset = 0;
     __int64 _previousEntityManager = 0;

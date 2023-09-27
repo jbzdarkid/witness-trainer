@@ -1,30 +1,29 @@
 #include "pch.h"
+#include <iostream>
 #include <ImageHlp.h>
 #include <Psapi.h>
 #include "DebugUtils.h"
-#include <iostream>
 
-void DebugPrint(const std::string& text) {
-#ifdef _DEBUG
+#pragma push_macro("DebugPrint")
+#undef DebugPrint
+void DebugUtils::DebugPrint(const std::string& text) {
     OutputDebugStringA(text.c_str());
     std::cout << text;
     if (text[text.size()-1] != '\n') {
         OutputDebugStringA("\n");
         std::cout << std::endl;
     }
-#endif
 }
 
-void DebugPrint(const std::wstring& text) {
-#ifdef _DEBUG
+void DebugUtils::DebugPrint(const std::wstring& text) {
     OutputDebugStringW(text.c_str());
     std::wcout << text;
     if (text[text.size()-1] != '\n') {
         OutputDebugStringW(L"\n");
         std::wcout << std::endl;
     }
-#endif
 }
+#pragma pop_macro("DebugPrint")
 
 void SetCurrentThreadName(const wchar_t* name) {
     HMODULE module = GetModuleHandleA("Kernel32.dll");
@@ -54,7 +53,7 @@ std::wstring DebugUtils::GetStackTrace() {
     std::wstringstream ss;
     ss << std::hex << std::showbase << std::nouppercase;
 
-    uint64_t baseAddress = GetBaseAddress(process);
+    uint64_t baseAddress = GetModuleBounds(process).first;
     BOOL result = FALSE;
     do {
         ss << (stackFrame.AddrPC.Offset - baseAddress) << L' '; // Normalize offsets relative to the base address
@@ -65,29 +64,33 @@ std::wstring DebugUtils::GetStackTrace() {
 
 std::wstring DebugUtils::version = L"(unknown)"; // Slight hack. Will be overwritten by main during startup.
 time_t lastShownAssert = ~0ULL; // MAXINT
-void DebugUtils::ShowAssertDialogue() {
+void DebugUtils::ShowAssertDialogue(const wchar_t* message) {
     // Only show an assert every 30 seconds. This prevents assert loops inside the WndProc, as well as adding a grace period after an assert fires.
     if (time(nullptr) - lastShownAssert < 30) return;
     lastShownAssert = time(nullptr);
     std::wstring msg = L"ChallengeRandomizer version " + version + L" has encountered an error.\n";
     msg += L"Please press Control C to copy this error, and paste it to darkid.\n";
+    msg += message;
     msg += GetStackTrace();
     MessageBox(NULL, msg.c_str(), L"ChallengeRandomizer encountered an error.", MB_TASKMODAL | MB_ICONHAND | MB_OK | MB_SETFOREGROUND);
 }
 
-uint64_t DebugUtils::GetBaseAddress(HANDLE process) {
+std::pair<uint64_t, uint64_t> DebugUtils::GetModuleBounds(HANDLE process) {
     DWORD unused;
     HMODULE modules[1];
     EnumProcessModules(process, &modules[0], sizeof(HMODULE), &unused);
     MODULEINFO moduleInfo;
     GetModuleInformation(process, modules[0], &moduleInfo, sizeof(moduleInfo));
-    return reinterpret_cast<uint64_t>(moduleInfo.lpBaseOfDll);
+
+    uint64_t startOfModule = reinterpret_cast<uint64_t>(moduleInfo.lpBaseOfDll);
+    uint64_t endOfModule = startOfModule + moduleInfo.SizeOfImage;
+    return {startOfModule, endOfModule};
 }
 
 // Note: This function must work properly even in release mode, since we will need to generate callbacks for release exes.
 void DebugUtils::RegenerateCallstack(const std::wstring& callstack) {
     if (callstack.empty()) return;
-    uint64_t baseAddress = GetBaseAddress(GetCurrentProcess());
+    uint64_t baseAddress = GetModuleBounds(GetCurrentProcess()).first;
     std::vector<uint64_t> addrs;
     std::wstring buffer;
     for (const wchar_t c : callstack) {

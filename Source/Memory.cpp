@@ -6,10 +6,8 @@
 Memory::Memory(const std::wstring& processName) : _processName(processName) {}
 
 Memory::~Memory() {
-    if (_threadActive) {
-        _threadActive = false;
-        _thread.join();
-    }
+    StopHeartbeat();
+    if (_thread.joinable()) _thread.join();
 
     if (_handle != nullptr) {
         CloseHandle(_handle);
@@ -34,8 +32,13 @@ void Memory::StartHeartbeat(HWND window, UINT message) {
     _thread.detach();
 }
 
+void Memory::StopHeartbeat() {
+    _threadActive = false;
+}
+
 void Memory::BringToFront() {
-    SetForegroundWindow(_hwnd);
+    ShowWindow(_hwnd, SW_RESTORE); // This handles fullscreen mode
+    SetForegroundWindow(_hwnd); // This handles windowed mode
 }
 
 bool Memory::IsForeground() {
@@ -100,14 +103,14 @@ void Memory::Heartbeat(HWND window, UINT message) {
     } else {
         // Under some circumstances the window can expire? Or the game re-allocates it? I have no idea.
         // Anyways, we check to see if the title is wrong, and if so, search for the window again.
-        static std::wstring title(12, L'\0');
-        GetWindowTextW(_hwnd, &title[0], 12);
-        if (title != L"The Witness") _hwnd = GetProcessHwnd(_pid);
+        constexpr int TITLE_SIZE = sizeof(L"The Witness") / sizeof(wchar_t);
+        wchar_t title[TITLE_SIZE] = {L'\0'};
+        GetWindowTextW(_hwnd, title, TITLE_SIZE);
+        if (wcsncmp(title, L"The Witness", TITLE_SIZE) != 0) _hwnd = GetProcessHwnd(_pid);
     }
 
     if (_hwnd == NULL) {
-        DebugPrint("Couldn't find the HWND for the game");
-        assert(false);
+        assert(false, "Couldn't find the HWND for the game");
         return;
      }
 
@@ -170,14 +173,13 @@ void Memory::Initialize() {
 
     _hwnd = NULL; // Will be populated later.
 
-    _baseAddress = DebugUtils::GetBaseAddress(handle);
+    std::tie(_baseAddress, _endOfModule) = DebugUtils::GetModuleBounds(handle);
     if (_baseAddress == 0) {
         DebugPrint("Couldn't locate base address");
         return;
     }
 
-    // Clear sigscans to avoid duplication (or leftover sigscans from the trainer)
-    assert(_sigScans.size() == 0);
+    // Clear out any leftover sigscans from consumers (e.g. the trainer)
     _sigScans.clear();
 
     AddSigScan({0x74, 0x41, 0x48, 0x85, 0xC0, 0x74, 0x04, 0x48, 0x8B, 0x48, 0x10}, [&](__int64 offset, int index, const std::vector<byte>& data) {
@@ -198,9 +200,9 @@ void Memory::Initialize() {
 
 // These functions are much more generic than this witness-specific implementation. As such, I'm keeping them somewhat separated.
 
-int64_t Memory::ReadStaticInt(__int64 offset, int index, const std::vector<byte>& data, size_t lineLength) {
+int64_t Memory::ReadStaticInt(__int64 offset, int index, const std::vector<byte>& data, size_t bytesToEOL) {
     // (address of next line) + (index interpreted as 4byte int)
-    return offset + index + lineLength + *(int*)&data[index];
+    return offset + index + bytesToEOL + *(int*)&data[index];
 }
 
 // Small wrapper for non-failing scan functions
@@ -242,15 +244,15 @@ size_t Memory::ExecuteSigScans() {
     std::vector<byte> buff;
     buff.resize(BUFFER_SIZE + 0x100); // padding in case the sigscan is past the end of the buffer
 
-    for (uintptr_t i = 0; i < 0x300000; i += BUFFER_SIZE) {
+    for (uintptr_t i = _baseAddress; i < _endOfModule; i += BUFFER_SIZE) {
         SIZE_T numBytesWritten;
-        if (!ReadProcessMemory(_handle, reinterpret_cast<void*>(_baseAddress + i), &buff[0], buff.size(), &numBytesWritten)) continue;
+        if (!ReadProcessMemory(_handle, reinterpret_cast<void*>(i), &buff[0], buff.size(), &numBytesWritten)) continue;
         buff.resize(numBytesWritten);
         for (auto& [scanBytes, sigScan] : _sigScans) {
             if (sigScan.found) continue;
             int index = find(buff, scanBytes);
             if (index == -1) continue;
-            sigScan.found = sigScan.scanFunc(i, index, buff); // We're expecting i to be relative to the base address here.
+            sigScan.found = sigScan.scanFunc(i - _baseAddress, index, buff); // We're expecting i to be relative to the base address here.
             if (sigScan.found) notFound--;
         }
         if (notFound == 0) break;
@@ -266,6 +268,8 @@ size_t Memory::ExecuteSigScans() {
             }
             DebugPrint(ss.str());
         }
+    } else {
+        DebugPrint("Found all sigscans!");
     }
 
     _sigScans.clear();
@@ -296,31 +300,31 @@ std::string Memory::ReadString(std::vector<__int64> offsets) {
 }
 
 void Memory::ReadDataInternal(void* buffer, uintptr_t computedOffset, size_t bufferSize) {
-    assert(bufferSize > 0);
+    assert(bufferSize > 0, "[Internal error] Attempting to read 0 bytes");
     if (!_handle) return;
     // Ensure that the buffer size does not cause a read across a page boundary.
     if (bufferSize > 0x1000 - (computedOffset & 0x0000FFF)) {
         bufferSize = 0x1000 - (computedOffset & 0x0000FFF);
     }
     if (!ReadProcessMemory(_handle, (void*)computedOffset, buffer, bufferSize, nullptr)) {
-        DebugPrint("Failed to read process memory.");
-        assert(false);
+        assert(false, "Failed to read process memory.");
     }
 }
 
-void Memory::WriteDataInternal(const void* buffer, const std::vector<__int64>& offsets, size_t bufferSize) {
-    assert(bufferSize > 0);
+void Memory::WriteDataInternal(const void* buffer, uintptr_t computedOffset, size_t bufferSize) {
+    assert(bufferSize > 0, "[Internal error] Attempting to write 0 bytes");
     if (!_handle) return;
-    if (offsets.empty() || offsets[0] == 0) return; // Empty offset path passed in.
-    if (!WriteProcessMemory(_handle, (void*)ComputeOffset(offsets), buffer, bufferSize, nullptr)) {
-        DebugPrint("Failed to write process memory.");
-        assert(false);
+    if (bufferSize > 0x1000 - (computedOffset & 0x0000FFF)) {
+        bufferSize = 0x1000 - (computedOffset & 0x0000FFF);
+    }
+    if (!WriteProcessMemory(_handle, (void*)computedOffset, buffer, bufferSize, nullptr)) {
+        assert(false, "Failed to write process memory.");
     }
 }
 
 uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets, bool absolute) {
-    assert(offsets.size() > 0);
-    assert(offsets.front() != 0);
+    assert(offsets.size() > 0, "[Internal error] Attempting to compute 0 offsets");
+    assert(offsets.front() != 0, "[Internal error] First offset to compute was 0");
 
     // Leave off the last offset, since it will be either read/write, and may not be of type uintptr_t.
     const __int64 final_offset = offsets.back();
@@ -340,18 +344,23 @@ uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets, bool absolute) {
         // If the address was not yet computed, read it from memory.
         uintptr_t computedAddress = 0;
         if (!_handle) return 0;
-        if (!ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(cumulativeAddress), &computedAddress, sizeof(computedAddress), NULL)) {
-            DebugPrint("Failed to read process memory.");
-            assert(false);
-            return 0;
-        } else if (computedAddress == 0) {
-            DebugPrint("Attempted to dereference NULL!");
-            assert(false);
-            return 0;
+        if (ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(cumulativeAddress), &computedAddress, sizeof(computedAddress), NULL) && computedAddress != 0) {
+            // Success!
+            _computedAddresses.Set(cumulativeAddress, computedAddress);
+            cumulativeAddress = computedAddress;
+            continue;
         }
 
-        _computedAddresses.Set(cumulativeAddress, computedAddress);
-        cumulativeAddress = computedAddress;
+        MEMORY_BASIC_INFORMATION info;
+        assert(computedAddress != 0, "Attempted to dereference NULL!");
+        if (!VirtualQuery(reinterpret_cast<LPVOID>(cumulativeAddress), &info, sizeof(info))) {
+            assert(false, "Failed to read process memory, possibly because cumulativeAddress was too large.");
+        } else {
+            assert(info.State == MEM_COMMIT, "Attempted to read unallocated memory.");
+            assert(info.AllocationProtect & 0xC4, "Attempted to read unreadable memory."); // 0xC4 = PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY | PAGE_READWRITE
+            assert(false, "Failed to read memory for some as-yet unknown reason."); // Won't fire an assert dialogue if a previous one did, because that would be within 30s.
+        }
+        return 0;
     }
     return cumulativeAddress + final_offset;
 }

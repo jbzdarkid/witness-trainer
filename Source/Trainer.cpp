@@ -3,7 +3,7 @@
 #include "Panels.h"
 
 std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) {
-    auto trainer = std::shared_ptr<Trainer>(new Trainer());
+    auto trainer = std::make_shared<Trainer>();
 
     memory->AddSigScan({0x74, 0x41, 0x48, 0x85, 0xC0, 0x74, 0x04, 0x48, 0x8B, 0x48, 0x10}, [trainer](int64_t offset, int index, const std::vector<byte>& data) {
         int64_t globals = Memory::ReadStaticInt(offset, index + 0x14, data);
