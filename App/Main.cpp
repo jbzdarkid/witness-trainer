@@ -96,7 +96,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             case ProcStatus::NotRunning:
                 // Don't discard any settings, just free the trainer.
                 if (g_trainer) g_trainer = nullptr;
-                SetStringText(g_hwnd, L"Witness Challenge Randomizer");
+                SetWindowString(g_hwnd, L"Witness Challenge Randomizer");
                 SetWindowString(g_activateGame, L"Launch game");
                 break;
             case ProcStatus::Reload:
@@ -104,11 +104,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             case ProcStatus::Started:
                 if (!g_trainer) {
                     // Process just started (we were already alive), enforce our settings.
-                    SetStringText(g_hwnd, L"Attaching to The Witness...");
+                    SetWindowString(g_hwnd, L"Attaching to The Witness...");
                     g_trainer = Trainer::Create(g_witnessProc);
                 }
                 if (!g_trainer) break;
-                SetStringText(g_hwnd, L"Witness Challenge Randomizer");
+                SetWindowString(g_hwnd, L"Witness Challenge Randomizer");
                 // Or, we started a new game / loaded a save, in which case some of the entity data might have been reset.
                 g_trainer->SetInfiniteChallenge(IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE));
                 g_trainer->SetMkChallenge(IsDlgButtonChecked(hwnd, MK_CHALLENGE));
@@ -118,10 +118,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             case ProcStatus::Running:
                 if (!g_trainer) {
                     // Process was already running, and we just started. Load settings from the game.
-                    SetStringText(g_hwnd, L"Attaching to The Witness...");
+                    SetWindowString(g_hwnd, L"Attaching to The Witness...");
                     g_trainer = Trainer::Create(g_witnessProc);
                     if (!g_trainer) break;
-                    SetStringText(g_hwnd, L"Witness Challenge Randomizer");
+                    SetWindowString(g_hwnd, L"Witness Challenge Randomizer");
                     CheckDlgButton(hwnd, INFINITE_CHALLENGE, g_trainer->GetInfiniteChallenge());
                     CheckDlgButton(hwnd, MK_CHALLENGE, g_trainer->GetMkChallenge());
                     PostMessage(hwnd, WM_COMMAND, SHOW_SEED, 0); // Load seed from Game -> Randomizer
@@ -249,18 +249,12 @@ HWND CreateCheckbox(int x, int& y, __int64 message) {
 }
 
 // The same arguments as Button.
-std::pair<HWND, HWND> CreateLabelAndCheckbox(int x, int& y, int width, LPCWSTR text, __int64 message, LPCWSTR hoverText, int32_t hotkey) {
+std::pair<HWND, HWND> CreateLabelAndCheckbox(int x, int& y, int width, LPCWSTR text, __int64 message) {
     // We need a distinct message (HMENU) for the label so that when we call CheckDlgButton it targets the checkbox, not the label.
     // However, we only use the low word (bottom 2 bytes) for logic, so we can safely modify the high word to make it distinct.
     auto label = CreateLabel(x + 20, y, width, text, message + 0x10000);
-    CreateTooltip(label, hoverText);
-    auto checkbox = CreateCheckbox(x, y, message, hoverText, hotkey);
+    auto checkbox = CreateCheckbox(x, y, message);
     return {label, checkbox};
-}
-
-// Also the same arguments as Button.
-std::pair<HWND, HWND> CreateLabelAndCheckbox(int x, int& y, int width, LPCWSTR text, __int64 message) {
-    return CreateLabelAndCheckbox(x, y, width, text, message, L"", 0);
 }
 
 HWND CreateText(int x, int& y, int width, LPCWSTR defaultText = L"", __int64 message = NULL) {

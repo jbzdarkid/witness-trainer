@@ -6,55 +6,43 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
     auto trainer = std::make_shared<Trainer>();
 
     memory->AddSigScan({0x74, 0x41, 0x48, 0x85, 0xC0, 0x74, 0x04, 0x48, 0x8B, 0x48, 0x10}, [trainer](int64_t offset, int index, const std::vector<byte>& data) {
-        int64_t globals = Memory::ReadStaticInt(offset, index + 0x14, data);
-        trainer->_globals = LongToInt(globals);
+        trainer->_globals = Memory::ReadStaticInt(offset, index + 0x14, data);
     });
 
     memory->AddSigScan({0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00, 0xE9, 0xB3}, [trainer](int64_t offset, int index, const std::vector<byte>& data) {
-        trainer->_recordPlayerUpdate = LongToInt(offset + index - 0x0C);
+        trainer->_infiniteChallenge = offset + index - 0x0C;
     });
 
-    // We need to save _memory before we exit, otherwise we can't destroy properly.
-    trainer->_memory = memory;
-
-    size_t numFailedScans = memory->ExecuteSigScans();
-    if (numFailedScans != 0) return nullptr; // Sigscans failed, we'll try again later.
-
-    // TODO: Why are these not in Init()?
-    // TODO: This has diverged significantly. Fix before releasing.
-
     // do_success_side_effects
-    memory->AddSigScan({0xFF, 0xC8, 0x99, 0x2B, 0xC2, 0xD1, 0xF8, 0x8B, 0xD0}, [trainer](int64_t offset, int index, const std::vector<byte>& data) {
-        if (trainer->_globals == 0x5B28C0) { // Version differences.
-            index += 0x3E;
-        } else {
-            assert(trainer->_globals == 0x62D0A0);
-            index += 0x42;
-        }
-        trainer->_doSuccessSideEffects = LongToInt(offset + index);
+    memory->AddSigScan({0x83, 0x7C, 0x01, 0xD0, 0x02}, [trainer](int64_t offset, int index, const std::vector<byte>& data) {
+        trainer->_challengeSeed = offset + index - 0xF;
     });
 
     // This scan intentionally fails if the injection has been applied. It makes this a bit unstable for development, but adds safety in case another trainer is attached.
     memory->AddSigScan2({0x41, 0xB8, 0x61, 0x00, 0x00, 0x00, 0x48, 0x8B, 0xD3}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
         for (; index > 0; index--) {
             if (data[index] == 0x44 && data[index + 8] == 0x74 && data[index + 9] == 0x10) {
-                memory->WriteData<byte>({offset + index}, {0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00}); // 8-byte NOP
+                trainer->_mainMenuColor = offset + index;
                 return true;
             }
         }
         return false;
     });
 
-    memory->AddSigScan({0xF3, 0x0F, 0x10, 0x82, INT_TO_BYTES(trainer->GetOffset(DurationTotal))}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
-        // TODO: ... is this relative to _recordPlayerUpdate?
-        trainer->_recordPlayerUpdate2 = LongToInt(offset + index);
+    // 0F2E C6 74 3B
+    memory->AddSigScan({0x0F, 0x2E, 0xC6, 0x74, 0x3B}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
+        trainer->_durationTotal = *(int32_t*)&data[offset + index - 4];
+        trainer->_mkChallenge = offset + index - 8;
     });
 
     memory->AddSigScan({0x74, 0x0B, 0x0F, 0x28, 0xD0}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
         trainer->_menuOpenTarget = Memory::ReadStaticInt(offset, index + 0x19, data);
     });
 
-    numFailedScans = memory->ExecuteSigScans();
+    // We need to save _memory before we exit, otherwise we can't destroy properly.
+    trainer->_memory = memory;
+
+    size_t numFailedScans = memory->ExecuteSigScans();
     if (numFailedScans != 0) return nullptr; // Sigscans failed, we'll try again later.
 
     if (!trainer->Init()) return nullptr; // Initialization failed
@@ -146,7 +134,7 @@ bool Trainer::Init() {
 
     // finish_speed_clock
     _memory->AddSigScan({0xC7, 0x80, INT_TO_BYTES(GetOffset(ElapsedTime)), 0x00, 0x00, 0x80, 0xBF}, [&](int64_t offset, int index, const std::vector<byte>& data) {
-        // Do not clear elapsed time when completing the challenge
+        // Do not clear elapsed time when completing the challenge (why tho)
         _memory->WriteData<byte>({offset + index}, {
             0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, // nops
         });
@@ -155,12 +143,12 @@ bool Trainer::Init() {
     size_t numFailedScans = _memory->ExecuteSigScans();
     if (numFailedScans != 0) return false; // Sigscans failed, we'll try again later.
 
-    int32_t relativeRng2 = (_globals + 0x30) - (_doSuccessSideEffects + 0x6); // +6 is for the length of the line
+    int32_t relativeRng2 = (_globals + 0x30) - (_challengeSeed + 0x6); // +6 is for the length of the line
     uint32_t seed = static_cast<uint32_t>(time(nullptr)); // Seed from the time in milliseconds
 
     // Overwritten bytes start just after the movsxd rax, dword ptr ds:[rdi + 0x230]
     // aka test eax, eax; jle 2C; imul rcx, rax, 34
-    _memory->WriteData<byte>({_doSuccessSideEffects}, {
+    _memory->WriteData<byte>({_challengeSeed}, {
         0x8B, 0x0D, INT_TO_BYTES(relativeRng2),     // mov ecx, [_rng2]
         0x67, 0xC7, 0x01, INT_TO_BYTES(seed),       // mov dword ptr ds:[ecx], seed
         0x48, 0x83, 0xF8, 0x02,                     // cmp rax, 0x2 ; Shortened version of the original code. This checks if the record player was short-solved.
@@ -176,48 +164,48 @@ void Trainer::SetPlayerPos(const std::vector<float>& pos) {
 }
 
 bool Trainer::GetInfiniteChallenge() {
-    return _memory->ReadData<byte>({_recordPlayerUpdate}, 1)[0] == 0xEB;
+    return _memory->ReadData<byte>({_infiniteChallenge}, 1)[0] == 0xEB;
 }
 
 void Trainer::SetInfiniteChallenge(bool enable) {
     if (enable) {
-        _memory->WriteData<byte>({_recordPlayerUpdate}, {
+        _memory->WriteData<byte>({_infiniteChallenge}, {
             0xEB, 0x07, // Jump past abort_speed_run
             0x90, 0x90  // nop nop
         });
     } else {
         // (original code) Load entity_manager into rcx
-        _memory->WriteData<byte>({_recordPlayerUpdate}, {0x48, 0x8B, 0x4B, 0x18});
+        _memory->WriteData<byte>({_infiniteChallenge}, {0x48, 0x8B, 0x4B, 0x18});
     }
 }
 
 bool Trainer::GetMkChallenge() {
-    return _memory->ReadData<byte>({_recordPlayerUpdate2}, 1)[0] == 0xB8;
+    return _memory->ReadData<byte>({_mkChallenge}, 1)[0] == 0xB8;
 }
 
 void Trainer::SetMkChallenge(bool enable) {
     if (enable) {
-        _memory->WriteData<byte>({_recordPlayerUpdate2}, {
+        _memory->WriteData<byte>({_mkChallenge}, {
             0xB8, INT_TO_BYTES(277), // mov eax, 277        ; New duration in seconds
             0xF3, 0x0F, 0x2A, 0xC0,  // cvtsi2ss xmm0, eax  ; We cannot directly write to float registers, so we convert from eax
             0x90, 0x90, 0x90, 0x90,  // nop nop nop
         });
     } else {
         // Original code
-        _memory->WriteData<byte>({_recordPlayerUpdate2}, {
-            0xF3, 0x0F, 0x10, 0x82, INT_TO_BYTES(GetOffset(DurationTotal)),
-            0x0F, 0x2E, 0xC6,
-            0x74, 0x3B,
+        _memory->WriteData<byte>({_mkChallenge}, {
+            0xF3, 0x0F, 0x10, 0x82, INT_TO_BYTES(GetOffset(DurationTotal)), // movss xmm0, [rdx + offset]
+            0x0F, 0x2E, 0xC6,                                               // ucomiss xmm0, xmm6
+            0x74, 0x3B,                                                     // je +0x3B
         });
     }
 }
 
 void Trainer::SetSeed(uint32_t seed) {
-    _memory->WriteData<uint32_t>({_doSuccessSideEffects + 9}, {seed});
+    _memory->WriteData<uint32_t>({_challengeSeed + 9}, {seed});
 }
 
 uint32_t Trainer::GetSeed() {
-    return _memory->ReadData<uint32_t>({_doSuccessSideEffects + 9}, 1)[0];
+    return _memory->ReadData<uint32_t>({_challengeSeed + 9}, 1)[0];
 }
 
 // Generate a new random number using an LCG. Constants from https://arxiv.org/pdf/2001.05304.pdf
@@ -251,13 +239,13 @@ int32_t Trainer::GetOffset(Offset offset) {
         if (offset == SolvedTarget) return 0x29C;
         if (offset == DurationTotal) return 0xDC;
     } else {
-        assert(_globals == 0x62D0A0);
+        assert(_globals == 0x62D0A0, "This only supports two versions");
         if (offset == PowerOffOnFail) return 0x2B8;
         if (offset == ElapsedTime) return 0x21C;
         if (offset == SolvedTarget) return 0x294;
         if (offset == DurationTotal) return 0xD4;
     }
 
-    assert(false);
+    assert(false, "[Internal error] Unknown offset");
     return 0;
 }

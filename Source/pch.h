@@ -1,13 +1,12 @@
 #pragma once
 
-+#define W(x)    W_(x)
-+#define W_(x)   L ## x
+#define W(x)   L ## x
 
 #undef assert
 #define assert(expr, message) \
     if (!(expr)) { \
         void ShowAssertDialogue(const wchar_t*); \
-        ShowAssertDialogue(W_(message)); \
+        ShowAssertDialogue(W(message)); \
     }
 
 #define _HAS_EXCEPTIONS 0

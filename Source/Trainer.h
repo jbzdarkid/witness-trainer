@@ -46,22 +46,21 @@ private:
     };
     int32_t GetOffset(Offset offset);
 
-    static inline int32_t LongToInt(int64_t orig) {
-        assert(orig < std::numeric_limits<int32_t>::max());
-        assert(orig > std::numeric_limits<int32_t>::min());
-        return static_cast<int32_t>(orig);
-    }
-
     void AdjustRng(const std::vector<byte>& data, int64_t offset, int index);
 
     std::shared_ptr<Memory> _memory;
 
-    int32_t _globals = 0;
-    int32_t _recordPlayerUpdate = 0;
-    int32_t _recordPlayerUpdate2 = 0;
-    int32_t _doSuccessSideEffects = 0;
+    int64_t _globals = 0;
+    int64_t _infiniteChallenge = 0;
+    int64_t _challengeSeed = 0;
+    int64_t _mainMenuColor = 0;
+    int32_t _durationTotal = 0;
+    int64_t _mkChallenge = 0;
+
+
     int64_t _rng2 = 0;
     int64_t _menuOpenTarget = 0;
+
 
     std::vector<int32_t> _challengePanels = {
         0x0A332, // Challenge Record Start
