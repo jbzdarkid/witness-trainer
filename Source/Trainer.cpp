@@ -29,7 +29,6 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         return false;
     });
 
-    // 0F2E C6 74 3B
     memory->AddSigScan({0x0F, 0x2E, 0xC6, 0x74, 0x3B}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
         trainer->_durationTotal = *(int32_t*)&data[index - 4];
         trainer->_mkChallenge = offset + index - 8;
@@ -116,6 +115,10 @@ bool Trainer::Init() {
     _memory->AddSigScan({0xB8, 0xAB, 0xAA, 0xAA, 0xAA, 0x41, 0xC1, 0xE8}, [&](int64_t offset, int index, const std::vector<byte>& data) {
         AdjustRng(data, offset, index - 0x13);
         AdjustRng(data, offset, index + 0x34);
+    });
+    // position_decoy
+    _memory->AddSigScan({}, [&](int64_t offset, int index, const std::vector<byte>& data) {
+        #error TODO: Check that all of these are editing an actual RNG load, not just an RNG::get() call.
     });
 
     // These disable the random locations on timer panels, which would otherwise increment the RNG.
