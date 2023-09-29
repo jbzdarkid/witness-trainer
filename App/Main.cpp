@@ -126,7 +126,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     CheckDlgButton(hwnd, MK_CHALLENGE, g_trainer->GetMkChallenge());
                     PostMessage(hwnd, WM_COMMAND, SHOW_SEED, 0); // Load seed from Game -> Randomizer
                     SetWindowString(g_activateGame, L"Switch to game");
-                    g_trainer->SetMainMenuState(true); // TODO: I know I turned this into an "always forced on" but it's smarter to just always run it during the enable block. Fix this.
+                    g_trainer->SetMainMenuState(true);
                 } else {
                     // Process was already running, and so were we (this recurs every heartbeat). Enforce settings and apply repeated actions.
                     ChallengeState newState = g_trainer->GetChallengeState();

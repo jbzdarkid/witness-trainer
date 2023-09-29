@@ -31,7 +31,7 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
 
     // 0F2E C6 74 3B
     memory->AddSigScan({0x0F, 0x2E, 0xC6, 0x74, 0x3B}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
-        trainer->_durationTotal = *(int32_t*)&data[offset + index - 4];
+        trainer->_durationTotal = *(int32_t*)&data[index - 4];
         trainer->_mkChallenge = offset + index - 8;
     });
 
@@ -46,6 +46,8 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
     if (numFailedScans != 0) return nullptr; // Sigscans failed, we'll try again later.
 
     if (!trainer->Init()) return nullptr; // Initialization failed
+
+    trainer->SetMainMenuColor(true); // Recolor the menu
 
     return trainer;
 }
@@ -143,7 +145,7 @@ bool Trainer::Init() {
     size_t numFailedScans = _memory->ExecuteSigScans();
     if (numFailedScans != 0) return false; // Sigscans failed, we'll try again later.
 
-    int32_t relativeRng2 = (_globals + 0x30) - (_challengeSeed + 0x6); // +6 is for the length of the line
+    int32_t relativeRng2 = static_cast<int32_t>((_globals + 0x30) - (_challengeSeed + 0x6)); // +6 is for the length of the line
     uint32_t seed = static_cast<uint32_t>(time(nullptr)); // Seed from the time in milliseconds
 
     // Overwritten bytes start just after the movsxd rax, dword ptr ds:[rdi + 0x230]
@@ -161,6 +163,19 @@ bool Trainer::Init() {
 
 void Trainer::SetPlayerPos(const std::vector<float>& pos) {
     _memory->WriteData<float>({_globals, 0x18, 0x1E465 * 8, 0x24}, pos);
+}
+
+void Trainer::SetMainMenuColor(bool enable) {
+    if (enable) { // Set the main menu to red by *not* setting the green or blue component.
+        _memory->WriteData<byte>({_mainMenuColor}, {0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00}); // 8-byte NOP
+    } else { // Restore the original setting by copy/pasting from the block below.
+        std::vector<byte> code = _memory->ReadData<byte>({_mainMenuColor + 0x12}, 8);
+        _memory->WriteData<byte>({_mainMenuColor}, code);
+    }
+}
+
+void Trainer::SetMainMenuState(bool open) {
+    _memory->WriteData<float>({_menuOpenTarget}, {open ? 1.0f : 0.0f});
 }
 
 bool Trainer::GetInfiniteChallenge() {
