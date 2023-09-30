@@ -38,29 +38,69 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         trainer->_menuOpenTarget = Memory::ReadStaticInt(offset, index + 0x19, data);
     });
 
+    // get_panel_color_cycle_factors
+    memory->AddSigScan({0x83, 0xFA, 0x02, 0x7F, 0x3B, 0xF2, 0x0F, 0x10, 0x05}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
+        trainer->_gameTime = Memory::ReadStaticInt(offset, index + 9, data);
+    });
+
     // We need to save _memory before we exit, otherwise we can't destroy properly.
     trainer->_memory = memory;
 
     size_t numFailedScans = memory->ExecuteSigScans();
     if (numFailedScans != 0) return nullptr; // Sigscans failed, we'll try again later.
 
+    // TODO: Sigscans
+    if (trainer->_globals == 0x5B28C0) {
+        trainer->_powerOffOnFail = 0x2C0;
+        trainer->_solvedOffset = 0x29C;
+        trainer->_elapsedTimeOffset = 0x224;
+    } else if (trainer->_globals == 0x62D0A0) {
+        trainer->_powerOffOnFail = 0x2B8;
+        trainer->_solvedOffset = 0x294;
+        trainer->_elapsedTimeOffset = 0xD4;
+    }
+
     if (!trainer->Init()) return nullptr; // Initialization failed
 
     trainer->SetMainMenuColor(true); // Recolor the menu
-
     return trainer;
 }
 
 // Modify an instruction to use RNG2 instead of main RNG
 void Trainer::AdjustRng(const std::vector<byte>& data, int64_t offset, int index) {
+#if _DEBUG
+    auto bytes = _memory->ReadData<byte>({offset + index - 1}, 5);
+    __debugbreak();
+#endif
     int32_t currentRngPtr = *(int32_t*)&data[index]; // Not a ReadStaticInt because it's a relative ptr.
     _memory->WriteData<int32_t>({offset + index}, {currentRngPtr + 0x20});
 }
 
+static std::vector<int32_t> CHALLENGE_PANELS = {
+    0x0088E, // Easy Maze
+    0x00BAF, // Hard Maze
+    0x00BF3, // Stones Maze
+    0x00C09, // Pedestal
+    0x0051F, // Column Bottom Left
+    0x00524, // Column Top Right
+    0x00CDB, // Column Top Left
+    0x00CD4, // Column Far Panel
+    0x00C80, // Triple 1 Left
+    0x00CA1, // Triple 1 Center
+    0x00CB9, // Triple 1 Right
+    0x00C22, // Triple 2 Left
+    0x00C59, // Triple 2 Center
+    0x00C68, // Triple 2 Right
+    0x034EC, // Triangle 6
+    0x034F4, // Triangle 8
+    0x1C31A, // Left Pillar
+    0x1C319, // Right Pillar
+};
+
 bool Trainer::Init() {
     // Prevent challenge panels from turning off on failure. Otherwise, rerolling a panel could cause an RNG change.
-    for (int32_t panel : _challengePanels) {
-        _memory->WriteData<int32_t>({_globals, 0x18, panel * 8, GetOffset(PowerOffOnFail)}, {0});
+    for (int32_t panel : CHALLENGE_PANELS) {
+        _memory->WriteData<int32_t>({_globals, 0x18, panel * 8, _powerOffOnFail}, {0});
     }
 
     int64_t rng = _memory->ReadData<int64_t>({_globals + 0x10}, 1)[0];
@@ -137,6 +177,7 @@ bool Trainer::Init() {
         _memory->WriteData<byte>({offset + index + 0x1AE}, {0x31, 0xC0, 0x90, 0x90, 0x90});
     });
 
+    /*
     // finish_speed_clock
     _memory->AddSigScan({0xC7, 0x80, INT_TO_BYTES(GetOffset(ElapsedTime)), 0x00, 0x00, 0x80, 0xBF}, [&](int64_t offset, int index, const std::vector<byte>& data) {
         // Do not clear elapsed time when completing the challenge (why tho)
@@ -144,6 +185,7 @@ bool Trainer::Init() {
             0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, // nops
         });
     });
+    */
 
     size_t numFailedScans = _memory->ExecuteSigScans();
     if (numFailedScans != 0) return false; // Sigscans failed, we'll try again later.
@@ -211,19 +253,19 @@ void Trainer::SetMkChallenge(bool enable) {
     } else {
         // Original code
         _memory->WriteData<byte>({_mkChallenge}, {
-            0xF3, 0x0F, 0x10, 0x82, INT_TO_BYTES(GetOffset(DurationTotal)), // movss xmm0, [rdx + offset]
-            0x0F, 0x2E, 0xC6,                                               // ucomiss xmm0, xmm6
-            0x74, 0x3B,                                                     // je +0x3B
+            0xF3, 0x0F, 0x10, 0x82, INT_TO_BYTES(_durationTotal), // movss xmm0, [rdx + offset]
+            0x0F, 0x2E, 0xC6,                                     // ucomiss xmm0, xmm6
+            0x74, 0x3B,                                           // je +0x3B
         });
     }
 }
 
-void Trainer::SetSeed(uint32_t seed) {
-    _memory->WriteData<uint32_t>({_challengeSeed + 9}, {seed});
-}
-
 uint32_t Trainer::GetSeed() {
     return _memory->ReadData<uint32_t>({_challengeSeed + 9}, 1)[0];
+}
+
+void Trainer::SetSeed(uint32_t seed) {
+    _memory->WriteData<uint32_t>({_challengeSeed + 9}, {seed});
 }
 
 // Generate a new random number using an LCG. Constants from https://arxiv.org/pdf/2001.05304.pdf
@@ -233,37 +275,19 @@ void Trainer::RandomizeSeed() {
     SetSeed(seed);
 }
 
-float Trainer::GetChallengeTimer() {
-    // Inspect the multipanel that is the speed clock. Elapsed time is usually cleared, but we injected to replace that.
-    return _memory->ReadData<float>({_globals, 0x18, 0x03B33 * 8, GetOffset(ElapsedTime)}, 1)[0];
+double Trainer::GetGameTime() {
+    return _memory->ReadData<double>({_gameTime}, 1)[0];
 }
 
 ChallengeState Trainer::GetChallengeState() {
     // Inspect the solved_t_target property of the challenge timer panel.
     // If it is solved, the challenge was beaten; else it was not.
-    bool isChallengeSolved =  _memory->ReadData<float>({_globals, 0x18, 0x04CB3 * 8, GetOffset(SolvedTarget)}, 1)[0] == 1;
+    bool isChallengeSolved =  _memory->ReadData<float>({_globals, 0x18, 0x04CB3 * 8, _solvedOffset}, 1)[0] == 1;
     if (isChallengeSolved) return ChallengeState::Finished;
 
-    float challengeTime = GetChallengeTimer();
+    // Inspect the multipanel that is the speed clock.
+    float challengeTime = _memory->ReadData<float>({_globals, 0x18, 0x03B33 * 8, _elapsedTimeOffset}, 1)[0];
     if (challengeTime == -1.0f) return ChallengeState::Aborted;
-    if (challengeTime > 0) return ChallengeState::Started;
-    return ChallengeState::Off;
-}
-
-int32_t Trainer::GetOffset(Offset offset) {
-    if (_globals == 0x5B28C0) {
-        if (offset == PowerOffOnFail) return 0x2C0;
-        if (offset == ElapsedTime) return 0x224;
-        if (offset == SolvedTarget) return 0x29C;
-        if (offset == DurationTotal) return 0xDC;
-    } else {
-        assert(_globals == 0x62D0A0, "This only supports two versions");
-        if (offset == PowerOffOnFail) return 0x2B8;
-        if (offset == ElapsedTime) return 0x21C;
-        if (offset == SolvedTarget) return 0x294;
-        if (offset == DurationTotal) return 0xD4;
-    }
-
-    assert(false, "[Internal error] Unknown offset");
-    return 0;
+    if (challengeTime == 0) return ChallengeState::Off;
+    return ChallengeState::Started;
 }

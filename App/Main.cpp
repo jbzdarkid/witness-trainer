@@ -24,6 +24,7 @@ std::shared_ptr<Trainer> g_trainer;
 HWND g_activateGame, g_seed, g_eventLog;
 std::shared_ptr<Memory> g_witnessProc;
 ChallengeState g_challengeState = ChallengeState::Off;
+double g_startTime = 0.0;
 
 void SetWindowString(HWND hwnd, const std::string& text) {
     static std::unordered_map<HWND, std::string> hwndText;
@@ -130,28 +131,32 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 } else {
                     // Process was already running, and so were we (this recurs every heartbeat). Enforce settings and apply repeated actions.
                     ChallengeState newState = g_trainer->GetChallengeState();
-                    if (g_challengeState != ChallengeState::Finished && newState == ChallengeState::Finished) {
-                        int32_t seconds = static_cast<int>(g_trainer->GetChallengeTimer());
-                        int32_t minutes = seconds / 60;
-                        seconds -= minutes * 60;
-                        std::wstring buffer(128, L'\0');
-                        swprintf(&buffer[0], buffer.size(), L"Completed seed %u in %02d:%02d", g_trainer->GetSeed(), minutes, seconds);
-                        AddEvent(buffer);
-                        if (IsDlgButtonChecked(hwnd, CHALLENGE_REROLL)) {
-                            bool seedWasHidden = (GetWindowString(g_seed) == SEED_HIDDEN);
-                            PostMessage(hwnd, WM_COMMAND, RANDOM_SEED, 0);
-                            if (!seedWasHidden) PostMessage(hwnd, WM_COMMAND, SHOW_SEED, 0);
+                    if (g_challengeState != newState)
+                    {
+                        if (newState == ChallengeState::Finished) {
+                            double duration = g_trainer->GetGameTime() - g_startTime;
+                            int32_t seconds = static_cast<int>(duration);
+                            int32_t minutes = seconds / 60;
+                            int32_t milliseconds = static_cast<int>(1000 * (duration - seconds));
+                            seconds -= minutes * 60;
+                            std::wstring buffer(128, L'\0');
+                            swprintf(&buffer[0], buffer.size(), L"Completed seed %u in %02d:%02d.%03d", g_trainer->GetSeed(), minutes, seconds, milliseconds);
+                            AddEvent(buffer);
+                            if (IsDlgButtonChecked(hwnd, CHALLENGE_REROLL)) {
+                                bool seedWasHidden = (GetWindowString(g_seed) == SEED_HIDDEN);
+                                PostMessage(hwnd, WM_COMMAND, RANDOM_SEED, 0);
+                                if (!seedWasHidden) PostMessage(hwnd, WM_COMMAND, SHOW_SEED, 0);
+                            }
+                        } else if (newState == ChallengeState::Started) {
+                            g_startTime = g_trainer->GetGameTime();
+                            if (GetWindowString(g_seed) == SEED_HIDDEN) {
+                                AddEvent(L"Started challenge with a hidden seed");
+                            } else {
+                                AddEvent(L"Started challenge with seed " + GetWindowString(g_seed));
+                            }
                         }
-                    } else if (g_challengeState != ChallengeState::Started && newState == ChallengeState::Started) {
-                        // TODO: The challenge timer keeps running! So how do I know if it's a new challenge...?
-                        // Probably I should look at the sound thing I found.
-                        if (GetWindowString(g_seed) == SEED_HIDDEN) {
-                            // AddEvent(L"Started challenge with a hidden seed");
-                        } else {
-                            // AddEvent(L"Started challenge with seed " + GetWindowString(g_seed));
-                        }
+                        g_challengeState = newState;
                     }
-                    g_challengeState = newState;
                 }
 
                 break;
