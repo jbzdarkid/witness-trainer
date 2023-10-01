@@ -63,7 +63,7 @@ public:
     }
 
 
-private:
+//private:
     void Heartbeat(HWND window, UINT message);
     void Initialize();
 

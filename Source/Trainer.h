@@ -8,10 +8,9 @@
     static_cast<byte>((val & 0xFF000000) >> 0x18)
 
 enum class ChallengeState {
-    Aborted,
-    Off,
-    Started,
-    Finished,
+    Stopped,
+    Running,
+    Solved,
 };
 
 class Trainer final {
@@ -52,6 +51,7 @@ private:
     int32_t _powerOffOnFail = 0;
     int32_t _solvedOffset = 0;
     int32_t _elapsedTimeOffset = 0;
+    int32_t _recordPowerOffset = 0;
 
     int64_t _rng2 = 0;
 };

@@ -14,7 +14,7 @@
 #define SET_SEED            0x406
 #define RANDOM_SEED         0x407
 #define SHOW_SEED           0x0000000001000408
-#define TELE_TO_CHALLENGE   0x409
+#define TELEPORT            0x409
 #define SEED_HIDDEN         L"(click to show)"
 
 // Globals
@@ -23,7 +23,7 @@ HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
 HWND g_activateGame, g_seed, g_eventLog;
 std::shared_ptr<Memory> g_witnessProc;
-ChallengeState g_challengeState = ChallengeState::Off;
+ChallengeState g_challengeState = ChallengeState::Stopped;
 double g_startTime = 0.0;
 
 void SetWindowString(HWND hwnd, const std::string& text) {
@@ -62,9 +62,14 @@ std::wstring GetWindowString(HWND hwnd) {
 }
 
 void AddEvent(const std::wstring& event) {
-    std::wstring text = GetWindowString(g_eventLog);
-    text = event + L'\n' + text;
-    SetWindowString(g_eventLog, text);
+    static std::vector<std::wstring> logs;
+    logs.insert(logs.begin(), event);
+
+    std::wstringstream text;
+    for (int i = 0; i < 10 && i < logs.size(); i++) {
+        text << logs[i] << L'\n';
+    }
+    SetWindowString(g_eventLog, text.str());
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -133,7 +138,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     ChallengeState newState = g_trainer->GetChallengeState();
                     if (g_challengeState != newState)
                     {
-                        if (newState == ChallengeState::Finished) {
+                        if (newState == ChallengeState::Solved) {
                             double duration = g_trainer->GetGameTime() - g_startTime;
                             int32_t seconds = static_cast<int>(duration);
                             int32_t minutes = seconds / 60;
@@ -147,18 +152,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                                 PostMessage(hwnd, WM_COMMAND, RANDOM_SEED, 0);
                                 if (!seedWasHidden) PostMessage(hwnd, WM_COMMAND, SHOW_SEED, 0);
                             }
-                        } else if (newState == ChallengeState::Started) {
+                        } else if (newState == ChallengeState::Running) {
                             g_startTime = g_trainer->GetGameTime();
                             if (GetWindowString(g_seed) == SEED_HIDDEN) {
                                 AddEvent(L"Started challenge with a hidden seed");
                             } else {
                                 AddEvent(L"Started challenge with seed " + GetWindowString(g_seed));
                             }
+                        } else if (newState == ChallengeState::Stopped) {
+                            AddEvent(L"Challenge stopped");
                         }
                         g_challengeState = newState;
                     }
                 }
-
                 break;
             }
             return 0;
@@ -183,7 +189,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     } else if (command == CHALLENGE_REROLL) {
         bool enabled = !IsDlgButtonChecked(g_hwnd, CHALLENGE_REROLL);
         CheckDlgButton(g_hwnd, CHALLENGE_REROLL, enabled);
-    } else if (!g_trainer && HIWORD(wParam) == 0) { // Message was triggered by the user
+    } else if (!g_trainer && command != 0 && HIWORD(wParam) == 0) { // Message was triggered by the user
         MessageBox(g_hwnd, L"The Witness must be running in order to use this button", L"", MB_OK);
     }
 
@@ -200,7 +206,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     } else if (wParam == SHOW_SEED) { // Using wParam instead of command because we need to check the high bits.
         uint32_t seed = g_trainer->GetSeed();
         SetWindowString(g_seed, std::to_wstring(seed).c_str());
-    } else if (command == TELE_TO_CHALLENGE) {
+    } else if (command == TELEPORT) {
         g_trainer->SetPlayerPos({-39.0f, -31.4f, -11.7f});
     }
 
@@ -278,7 +284,7 @@ void CreateComponents() {
 
     g_activateGame = CreateButton(x, y, 200, L"Launch game", ACTIVATE_GAME);
 
-    CreateButton(x, y, 200, L"Teleport to Challenge", TELE_TO_CHALLENGE);
+    CreateButton(x, y, 200, L"Teleport to Challenge", TELEPORT);
 
     CreateLabel(x, y + 5, 100, L"Seed:");
     uint32_t seed = 0x8664f205 * static_cast<uint32_t>(time(nullptr)) + 5; // Seeded from time & randomized once.

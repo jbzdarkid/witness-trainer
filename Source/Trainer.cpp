@@ -14,11 +14,13 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
     });
 
     // do_success_side_effects
+    // ??? why is this breaking, ah I need to be *before* the data otherwise it's not gonna work
     memory->AddSigScan({0x83, 0x7C, 0x01, 0xD0, 0x02}, [trainer](int64_t offset, int index, const std::vector<byte>& data) {
         trainer->_challengeSeed = offset + index - 0xF;
     });
 
     // This scan intentionally fails if the injection has been applied. It makes this a bit unstable for development, but adds safety in case another trainer is attached.
+    // No. Fix this.
     memory->AddSigScan2({0x41, 0xB8, 0x61, 0x00, 0x00, 0x00, 0x48, 0x8B, 0xD3}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
         for (; index > 0; index--) {
             if (data[index] == 0x44 && data[index + 8] == 0x74 && data[index + 9] == 0x10) {
@@ -30,7 +32,7 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
     });
 
     memory->AddSigScan({0x0F, 0x2E, 0xC6, 0x74, 0x3B}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
-        trainer->_durationTotal = *(int32_t*)&data[index - 4];
+        trainer->_durationTotal = *(int32_t*)&data[index - 0x4];
         trainer->_mkChallenge = offset + index - 8;
     });
 
@@ -43,22 +45,30 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         trainer->_gameTime = Memory::ReadStaticInt(offset, index + 9, data);
     });
 
+    // Entity_Multipanel::update
+    memory->AddSigScan({0xE8, 0x68, 0x00, 0x00, 0x00, 0x83, 0xBB}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
+        trainer->_elapsedTimeOffset = *(int32_t*)&data[index - 0x4];
+    });
+    
+    // Entity_Record_Player::power_on
+    memory->AddSigScan({0x48, 0x8B, 0x4B, 0x18, 0xE8, 0x2B, 0x00, 0x00, 0x00}, [trainer](int64_t offset, int index, const std::vector<byte>& data) {
+        trainer->_recordPowerOffset = *(int32_t*)&data[index + 0x15];
+    });
+
+    // judge_panel
+    memory->AddSigScan({0x74, 0x06, 0x80, 0x7D, 0x11, 0x00}, [trainer](int64_t offset, int index, const std::vector<byte>& data) {
+        trainer->_powerOffOnFail = *(int32_t*)&data[index - 0xE];
+    });
+
+    memory->AddSigScan({0x44, 0x0F, 0x28, 0x44, 0x24, 0x70, 0x0F, 0x84, 0x9B, 0x00, 0x00, 0x00}, [trainer](int64_t offset, int index, const std::vector<byte>& data) {
+        trainer->_solvedOffset = *(int32_t*)&data[index - 0x4];
+    });
+    
     // We need to save _memory before we exit, otherwise we can't destroy properly.
     trainer->_memory = memory;
 
     size_t numFailedScans = memory->ExecuteSigScans();
     if (numFailedScans != 0) return nullptr; // Sigscans failed, we'll try again later.
-
-    // TODO: Sigscans
-    if (trainer->_globals == 0x5B28C0) {
-        trainer->_powerOffOnFail = 0x2C0;
-        trainer->_solvedOffset = 0x29C;
-        trainer->_elapsedTimeOffset = 0x224;
-    } else if (trainer->_globals == 0x62D0A0) {
-        trainer->_powerOffOnFail = 0x2B8;
-        trainer->_solvedOffset = 0x294;
-        trainer->_elapsedTimeOffset = 0xD4;
-    }
 
     if (!trainer->Init()) return nullptr; // Initialization failed
 
@@ -68,11 +78,10 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
 
 // Modify an instruction to use RNG2 instead of main RNG
 void Trainer::AdjustRng(const std::vector<byte>& data, int64_t offset, int index) {
-#if _DEBUG
-    auto bytes = _memory->ReadData<byte>({offset + index - 1}, 5);
-    __debugbreak();
-#endif
-    int32_t currentRngPtr = *(int32_t*)&data[index]; // Not a ReadStaticInt because it's a relative ptr.
+    assert(Memory::ReadStaticInt(offset, index, data) == _globals + 0x10, "[Internal error] Attempted to adjust RNG for a non-RNG address");
+
+    // We need to write a relative pointer here, so we just read the current value and add 0x20 (rng2 - rng) to avoid doing math.
+    int32_t currentRngPtr = *(int32_t*)&data[index];
     _memory->WriteData<int32_t>({offset + index}, {currentRngPtr + 0x20});
 }
 
@@ -157,8 +166,8 @@ bool Trainer::Init() {
         AdjustRng(data, offset, index + 0x34);
     });
     // position_decoy
-    _memory->AddSigScan({}, [&](int64_t offset, int index, const std::vector<byte>& data) {
-        #error TODO: Check that all of these are editing an actual RNG load, not just an RNG::get() call.
+    _memory->AddSigScan({0x41, 0x0F, 0x29, 0x7B, 0xD8, 0x48, 0x8B, 0xD9}, [&](int64_t offset, int index, const std::vector<byte>& data) {
+        AdjustRng(data, offset, index + 0x0B);
     });
 
     // These disable the random locations on timer panels, which would otherwise increment the RNG.
@@ -177,19 +186,10 @@ bool Trainer::Init() {
         _memory->WriteData<byte>({offset + index + 0x1AE}, {0x31, 0xC0, 0x90, 0x90, 0x90});
     });
 
-    /*
-    // finish_speed_clock
-    _memory->AddSigScan({0xC7, 0x80, INT_TO_BYTES(GetOffset(ElapsedTime)), 0x00, 0x00, 0x80, 0xBF}, [&](int64_t offset, int index, const std::vector<byte>& data) {
-        // Do not clear elapsed time when completing the challenge (why tho)
-        _memory->WriteData<byte>({offset + index}, {
-            0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, // nops
-        });
-    });
-    */
-
     size_t numFailedScans = _memory->ExecuteSigScans();
     if (numFailedScans != 0) return false; // Sigscans failed, we'll try again later.
 
+    // Adjust the code so that we reset RNG to the the current set seed whenever the user starts the challenge.
     int32_t relativeRng2 = static_cast<int32_t>((_globals + 0x30) - (_challengeSeed + 0x6)); // +6 is for the length of the line
     uint32_t seed = static_cast<uint32_t>(time(nullptr)); // Seed from the time in milliseconds
 
@@ -280,14 +280,18 @@ double Trainer::GetGameTime() {
 }
 
 ChallengeState Trainer::GetChallengeState() {
-    // Inspect the solved_t_target property of the challenge timer panel.
-    // If it is solved, the challenge was beaten; else it was not.
-    bool isChallengeSolved =  _memory->ReadData<float>({_globals, 0x18, 0x04CB3 * 8, _solvedOffset}, 1)[0] == 1;
-    if (isChallengeSolved) return ChallengeState::Finished;
+    // Inspect one of the challenge timer panels: If it is solved, the challenge was beaten.
+    bool isChallengeSolved =  _memory->ReadData<float>({_globals, 0x18, 0x04CB3 * 8, _solvedOffset}, 1)[0] == 1.0f;
+    if (isChallengeSolved) return ChallengeState::Solved;
 
-    // Inspect the multipanel that is the speed clock.
-    float challengeTime = _memory->ReadData<float>({_globals, 0x18, 0x03B33 * 8, _elapsedTimeOffset}, 1)[0];
-    if (challengeTime == -1.0f) return ChallengeState::Aborted;
-    if (challengeTime == 0) return ChallengeState::Off;
-    return ChallengeState::Started;
+    // Inspect the record player: If it is powered on, the challenge is live.
+    bool isChallengeStarted = _memory->ReadData<float>({_globals, 0x18, 0x00BFF * 8, _recordPowerOffset}, 1)[0] == 1.0f;
+    if (isChallengeStarted) return ChallengeState::Running;
+
+    // Inspect the speed clock (internal timer): If the time is set to -1, the challenge has been stopped.
+    bool isChallengeStopped = _memory->ReadData<float>({_globals, 0x18, 0x03B33 * 8, _elapsedTimeOffset}, 1)[0] == -1.0f;
+    if (isChallengeStopped) return ChallengeState::Stopped;
+
+    assert(false, "Unknown challenge state");
+    return ChallengeState::Stopped;
 }

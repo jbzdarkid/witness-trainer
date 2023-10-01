@@ -6,7 +6,7 @@
 #define assert(expr, message) \
     if (!(expr)) { \
         void ShowAssertDialogue(const wchar_t*); \
-        ShowAssertDialogue(W(message)); \
+        ShowAssertDialogue(W(message L"\n")); \
     }
 
 #define _HAS_EXCEPTIONS 0

@@ -202,7 +202,7 @@ void Memory::Initialize() {
 
 int64_t Memory::ReadStaticInt(__int64 offset, int index, const std::vector<byte>& data, size_t bytesToEOL) {
     // (address of next line) + (index interpreted as 4byte int)
-    return offset + index + bytesToEOL + *(int*)&data[index];
+    return offset + index + bytesToEOL + *(int32_t*)&data[index];
 }
 
 // Small wrapper for non-failing scan functions
