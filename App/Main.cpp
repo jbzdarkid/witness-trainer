@@ -136,17 +136,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 } else {
                     // Process was already running, and so were we (this recurs every heartbeat). Enforce settings and apply repeated actions.
                     ChallengeState newState = g_trainer->GetChallengeState();
-                    if (g_challengeState != newState)
-                    {
+                    if (g_challengeState != newState) {
                         if (newState == ChallengeState::Solved) {
                             double duration = g_trainer->GetGameTime() - g_startTime;
                             int32_t seconds = static_cast<int>(duration);
                             int32_t minutes = seconds / 60;
                             int32_t milliseconds = static_cast<int>(1000 * (duration - seconds));
                             seconds -= minutes * 60;
+
                             std::wstring buffer(128, L'\0');
-                            swprintf(&buffer[0], buffer.size(), L"Completed seed %u in %02d:%02d.%03d", g_trainer->GetSeed(), minutes, seconds, milliseconds);
+                            if (GetWindowString(g_seed) == SEED_HIDDEN) {
+                                swprintf(&buffer[0], buffer.size(), L"Completed (hidden seed) in %02d:%02d.%03d", minutes, seconds, milliseconds);
+                            } else {
+                                swprintf(&buffer[0], buffer.size(), L"Completed seed %s in %02d:%02d.%03d", GetWindowString(g_seed).c_str(), minutes, seconds, milliseconds);
+                            }
                             AddEvent(buffer);
+
                             if (IsDlgButtonChecked(hwnd, CHALLENGE_REROLL)) {
                                 bool seedWasHidden = (GetWindowString(g_seed) == SEED_HIDDEN);
                                 PostMessage(hwnd, WM_COMMAND, RANDOM_SEED, 0);
@@ -299,7 +304,7 @@ void CreateComponents() {
 
     CreateLabelAndCheckbox(x, y, 185, L"Reroll RNG after victory", CHALLENGE_REROLL);
 
-    g_eventLog = CreateLabel(x, y, 200, 300);
+    g_eventLog = CreateLabel(x, y, 200, 1500);
 }
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow) {

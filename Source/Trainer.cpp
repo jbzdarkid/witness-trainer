@@ -5,22 +5,22 @@
 std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) {
     auto trainer = std::make_shared<Trainer>();
 
-    memory->AddSigScan({0x74, 0x41, 0x48, 0x85, 0xC0, 0x74, 0x04, 0x48, 0x8B, 0x48, 0x10}, [trainer](int64_t offset, int index, const std::vector<byte>& data) {
+    memory->AddSigScan({0x74, 0x41, 0x48, 0x85, 0xC0, 0x74, 0x04}, [trainer](int64_t offset, int index, const std::vector<byte>& data) {
         trainer->_globals = Memory::ReadStaticInt(offset, index + 0x14, data);
     });
 
+    // Entity_Record_Player::update
     memory->AddSigScan({0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00, 0xE9, 0xB3}, [trainer](int64_t offset, int index, const std::vector<byte>& data) {
         trainer->_infiniteChallenge = offset + index - 0x0C;
     });
 
     // do_success_side_effects
-    // ??? why is this breaking, ah I need to be *before* the data otherwise it's not gonna work
-    memory->AddSigScan({0x83, 0x7C, 0x01, 0xD0, 0x02}, [trainer](int64_t offset, int index, const std::vector<byte>& data) {
-        trainer->_challengeSeed = offset + index - 0xF;
+    memory->AddSigScan({0x49, 0x8B, 0xC8, 0x75}, [trainer](int64_t offset, int index, const std::vector<byte>& data) {
+        trainer->_challengeSeed = offset + index - 0x14;
     });
 
     // This scan intentionally fails if the injection has been applied. It makes this a bit unstable for development, but adds safety in case another trainer is attached.
-    // No. Fix this.
+    // draw_menu_general
     memory->AddSigScan2({0x41, 0xB8, 0x61, 0x00, 0x00, 0x00, 0x48, 0x8B, 0xD3}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
         for (; index > 0; index--) {
             if (data[index] == 0x44 && data[index + 8] == 0x74 && data[index + 9] == 0x10) {
@@ -31,11 +31,13 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         return false;
     });
 
+    // Entity_Record_Player::update
     memory->AddSigScan({0x0F, 0x2E, 0xC6, 0x74, 0x3B}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
         trainer->_durationTotal = *(int32_t*)&data[index - 0x4];
         trainer->_mkChallenge = offset + index - 8;
     });
 
+    // update_main_menu
     memory->AddSigScan({0x74, 0x0B, 0x0F, 0x28, 0xD0}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
         trainer->_menuOpenTarget = Memory::ReadStaticInt(offset, index + 0x19, data);
     });
@@ -60,6 +62,7 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         trainer->_powerOffOnFail = *(int32_t*)&data[index - 0xE];
     });
 
+    // Entity_Machine_Panel::update
     memory->AddSigScan({0x44, 0x0F, 0x28, 0x44, 0x24, 0x70, 0x0F, 0x84, 0x9B, 0x00, 0x00, 0x00}, [trainer](int64_t offset, int index, const std::vector<byte>& data) {
         trainer->_solvedOffset = *(int32_t*)&data[index - 0x4];
     });
@@ -193,8 +196,14 @@ bool Trainer::Init() {
     int32_t relativeRng2 = static_cast<int32_t>((_globals + 0x30) - (_challengeSeed + 0x6)); // +6 is for the length of the line
     uint32_t seed = static_cast<uint32_t>(time(nullptr)); // Seed from the time in milliseconds
 
-    // Overwritten bytes start just after the movsxd rax, dword ptr ds:[rdi + 0x230]
-    // aka test eax, eax; jle 2C; imul rcx, rax, 34
+    // Overwrites 20 bytes:
+    // movsxd rax, dword ptr ds:[rdi + 0x230] ; Not overwritten
+    // test eax, eax                          ; Overwitten
+    // jle 2C                                 ; Overwritten
+    // imul rcx, rax, 34                      ; Overwitten
+    // mov rax, [rdi + offset]                ; Overwritten
+    // cmp [rcx + rax - 30], 02               ; Overwritten
+    // mov rcx, r8                            ; Not overwritten
     _memory->WriteData<byte>({_challengeSeed}, {
         0x8B, 0x0D, INT_TO_BYTES(relativeRng2),     // mov ecx, [_rng2]
         0x67, 0xC7, 0x01, INT_TO_BYTES(seed),       // mov dword ptr ds:[ecx], seed
