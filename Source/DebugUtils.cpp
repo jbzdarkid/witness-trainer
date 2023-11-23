@@ -71,6 +71,7 @@ void DebugUtils::ShowAssertDialogue(const wchar_t* message) {
     std::wstring msg = L"WitnessTrainer version " + version + L" has encountered an error.\n";
     msg += L"Please press Control C to copy this error, and paste it to darkid.\n";
     msg += message;
+    msg += L"\n";
     msg += GetStackTrace();
     MessageBox(NULL, msg.c_str(), L"WitnessTrainer encountered an error.", MB_TASKMODAL | MB_ICONHAND | MB_OK | MB_SETFOREGROUND);
 }

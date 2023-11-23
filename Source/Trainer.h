@@ -62,6 +62,7 @@ public:
 private:
     std::shared_ptr<Memory> _memory;
 
+    // Relative to globals
     __int64 _globals = 0; // globals
     __int64 _noclipSpeed = 0; // globals.free_camera_speed
     __int64 _debugMode = 0; // globals.debug_mode
@@ -74,6 +75,7 @@ private:
     __int64 _noclipEnabled = 0; // globals.camera_mode
     __int64 _wantCampaignSave = 0; // globals.want_campaign_save
 
+    // Other global statics
     __int64 _cameraPos = 0; // camera_position
     __int64 _cameraAng = 0; // aiming_theta, aiming_phi
     __int64 _fovCurrent = 0; // Unnamed global, the scan targets init_scripted_stuff()
@@ -81,10 +83,12 @@ private:
     __int64 _showPatternStatus = 0; // show_pattern_status
     __int64 _menuOpenTarget = 0; // menu_open_t_target
 
+    // Entity offsets
     int _solvedTargetOffset = 0; // Entity_Machine_Panel.solved_t_target
     __int64 _recordPlayerUpdate = 0; // Entity_Record_Player.play_state
     int _epNameOffset = 0; // Entity_Pattern_Point.pattern_name
 
+    // Function pointers
     __int64 _doorOpen = 0; // Entity_Door::open(), somewhere in the middle
     __int64 _doorOpenStart = 0; // Entity_Door::open()
     __int64 _doorClose = 0; // Entity_Door::close()
