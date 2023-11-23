@@ -17,6 +17,16 @@ public:
         bool solved = false;
     };
     std::shared_ptr<EntityData> GetEntityData(int id);
+    struct VideoData {
+        std::string fileName;
+        int nextUnusedIdIdx = 0;
+        int numUnusedIds = 0;
+        int videoDrySoundId = 0;
+        int videoDrySoundIdIdx = 0;
+        int currentFrame = 0;
+        int totalFrames = 0;
+    };
+    VideoData GetVideoData();
     void ShowMissingPanels();
     void ShowNearbyEntities();
     std::vector<std::shared_ptr<Trainer::EntityData>> GetNearbyEntities(float distance = 4.0f);
@@ -82,11 +92,13 @@ private:
     __int64 _runSpeed = 0; // RUN_SPEED
     __int64 _showPatternStatus = 0; // show_pattern_status
     __int64 _menuOpenTarget = 0; // menu_open_t_target
+    __int64 _binkInfoData = 0; // all_bink_infos
 
     // Entity offsets
     int _solvedTargetOffset = 0; // Entity_Machine_Panel.solved_t_target
     __int64 _recordPlayerUpdate = 0; // Entity_Record_Player.play_state
     int _epNameOffset = 0; // Entity_Pattern_Point.pattern_name
+    int _unusedIdsOffset = 0; // Entity_Manager.unused_ids
 
     // Function pointers
     __int64 _doorOpen = 0; // Entity_Door::open(), somewhere in the middle

@@ -68,7 +68,7 @@ HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
 std::shared_ptr<Memory> g_witnessProc;
-HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelDist, g_panelName, g_panelState, g_panelPicture, g_activateGame, g_snapToPanel, g_snapToLabel, g_canSave;
+HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelDist, g_panelName, g_panelState, g_panelPicture, g_activateGame, g_snapToPanel, g_snapToLabel, g_canSave, g_videoData;
 
 std::vector<float> g_savedCameraPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> g_savedCameraAng = {0.0f, 0.0f};
@@ -146,6 +146,21 @@ std::wstring GetWindowString(HWND hwnd) {
 
 float GetWindowFloat(HWND hwnd) {
     return wcstof(GetWindowString(hwnd).c_str(), nullptr);
+}
+
+void SetVideoData(const Trainer::VideoData& videoData) {
+#if _DEBUG
+    std::string text(1024, '\0');
+    sprintf_s(text.data(), text.size(), "Next sound index: %d\nMax sound index: %d\nDry sound ID: 0x%05X (index: %d)\nVideo: %s\nFrame: %05d / %05d\n",
+        videoData.nextUnusedIdIdx,
+        videoData.numUnusedIds,
+        videoData.videoDrySoundId,
+        videoData.videoDrySoundIdIdx,
+        videoData.fileName.c_str(),
+        videoData.currentFrame,
+        videoData.totalFrames);
+    SetStringText(g_videoData, text);
+#endif
 }
 
 // We can do 3 different things in this function:
@@ -335,6 +350,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 if (++update % 10 == 0) {
                     SetPosAndAngText(g_currentPos, g_trainer->GetCameraPos(), g_trainer->GetCameraAng());
                     SetActivePanel(g_trainer->GetActivePanel());
+                    SetVideoData(g_trainer->GetVideoData());
                 }
                 break;
             }
@@ -588,6 +604,9 @@ void CreateComponents() {
     SetPosAndAngText(g_savedPos,   { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f });
     y += 90;
 
+#if _DEBUG
+    g_videoData = CreateLabel(x, y, 250, 100);
+#endif
 
     // Column 2
     x = 270;

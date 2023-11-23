@@ -137,6 +137,17 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         trainer->_doorOpenStart = offset + index - 15;
     });
 
+#if _DEBUG
+    memory->AddSigScan({0x8B, 0xDD, 0x8B, 0xF5, 0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00}, [trainer](int64_t offset, int index, const std::vector<uint8_t>& data) {
+        __int64 allBinkInfos = Memory::ReadStaticInt(offset, index + 0x0F, data);
+        trainer->_binkInfoData = allBinkInfos + 0x8;
+    });
+
+    memory->AddSigScan({0x48, 0x8B, 0xFA, 0x48, 0x8B, 0xD9, 0x85, 0xC0, 0x74, 0x08}, [trainer](int64_t offset, int index, const std::vector<uint8_t>& data) {
+        trainer->_unusedIdsOffset = *(int*)&data[index + 0x21];
+    });
+#endif
+
     // We need to save _memory before we exit, otherwise we can't destroy properly.
     trainer->_memory = memory;
 
@@ -247,6 +258,31 @@ void Trainer::GetDoorData(const std::shared_ptr<Trainer::EntityData>& data) {
     if (_globals != 0x5B28C0) return; // I'm lazy and don't care to find real sigscans
     // data->name = _memory->ReadString({_globals, 0x18, data->id * 8, 0x58}); // entity_name
     data->name = _memory->ReadString({_globals, 0x18, data->id * 8, 0x168}); // start_opening_sound
+}
+
+Trainer::VideoData Trainer::GetVideoData() {
+    VideoData videoData;
+    videoData.fileName = _memory->ReadString({_binkInfoData, 0x0, 0x18});
+    if (!videoData.fileName.empty()) {
+        videoData.totalFrames = _memory->ReadData<int>({_binkInfoData, 0x0, 0x0, 0x8}, 1)[0];
+        videoData.currentFrame = _memory->ReadData<int>({_binkInfoData, 0x0, 0x0, 0xC}, 1)[0];
+    }
+
+    videoData.numUnusedIds = _memory->ReadData<int>({_globals, _unusedIdsOffset + 0x8}, 1)[0];
+    videoData.nextUnusedIdIdx = _memory->ReadData<int>({_globals, _unusedIdsOffset + 0xC}, 1)[0];
+    std::vector<int> unusedIds = _memory->ReadData<int>({_globals, _unusedIdsOffset, 0x0}, videoData.numUnusedIds);
+
+    videoData.videoDrySoundId = _memory->ReadData<int>({_binkInfoData, 0x0, 0x48}, 1)[0];
+
+    videoData.videoDrySoundIdIdx = -1;
+    for (int i = 0; i < unusedIds.size(); i++) {
+        if (unusedIds[i] == videoData.videoDrySoundId) {
+            videoData.videoDrySoundIdIdx = i;
+            break;
+        }
+    }
+
+    return videoData;
 }
 
 void Trainer::ShowMissingPanels() {

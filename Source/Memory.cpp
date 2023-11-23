@@ -277,7 +277,7 @@ size_t Memory::ExecuteSigScans() {
 }
 
 // Technically this is ReadChar*, but this name makes more sense with the return type.
-std::string Memory::ReadString(std::vector<__int64> offsets) {
+std::string Memory::ReadString(const std::vector<__int64>& offsets) {
     __int64 charAddr = ReadData<__int64>(offsets, 1)[0];
     if (charAddr == 0) return ""; // Handle nullptr for strings
     

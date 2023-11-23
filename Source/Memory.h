@@ -53,7 +53,7 @@ public:
         ReadDataInternal(&data[0], ComputeOffset(offsets, true), numItems * sizeof(T));
         return data;
     }
-    std::string ReadString(std::vector<__int64> offsets);
+    std::string ReadString(const std::vector<__int64>& offsets);
 
     template <class T>
     inline void WriteData(const std::vector<__int64>& offsets, const std::vector<T>& data) {
