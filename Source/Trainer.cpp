@@ -223,7 +223,12 @@ void Trainer::GetPanelData(const std::shared_ptr<Trainer::EntityData>& data) {
     data->name = _memory->ReadString({_globals, 0x18, data->id * 8, nameOffset});
     int state = _memory->ReadData<int>({_globals, 0x18, data->id * 8, stateOffset}, 1)[0];
     int hasEverBeenSolved = _memory->ReadData<int>({_globals, 0x18, data->id * 8, hasEverBeenSolvedOffset}, 1)[0];
-    data->solved = hasEverBeenSolved;
+    if (hasEverBeenSolved) {
+        data->solved = true;
+    } else {
+        float solvedTarget = _memory->ReadData<float>({_globals, 0x18, data->id * 8, _solvedTargetOffset}, 1)[0];
+        data->solved = (solvedTarget == 1.0f);
+    }
     if (state == 0 && hasEverBeenSolved == 0) data->state = "Has never been solved";
     else if (state == 0 && hasEverBeenSolved == 1) data->state = "Was previously solved";
     else if (state == 1) data->state = "Solved";
