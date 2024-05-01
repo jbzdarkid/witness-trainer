@@ -266,6 +266,8 @@ void Trainer::GetDoorData(const std::shared_ptr<Trainer::EntityData>& data) {
 }
 
 Trainer::VideoData Trainer::GetVideoData() {
+    if (_binkInfoData == 0) return {};
+
     VideoData videoData;
     videoData.fileName = _memory->ReadString({_binkInfoData, 0x0, 0x18});
     if (!videoData.fileName.empty()) {

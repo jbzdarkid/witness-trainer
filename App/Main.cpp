@@ -350,7 +350,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 if (++update % 10 == 0) {
                     SetPosAndAngText(g_currentPos, g_trainer->GetCameraPos(), g_trainer->GetCameraAng());
                     SetActivePanel(g_trainer->GetActivePanel());
+#if _DEBUG
                     SetVideoData(g_trainer->GetVideoData());
+#endif
                 }
                 break;
             }
