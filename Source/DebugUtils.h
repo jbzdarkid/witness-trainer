@@ -12,6 +12,7 @@ public:
     static std::pair<uint64_t, uint64_t> GetModuleBounds(HANDLE process);
     static void DebugPrint(const std::string& text);
     static void DebugPrint(const std::wstring& text);
+    static std::string ToString(int64_t address);
 
 private:
     static std::wstring GetStackTrace();

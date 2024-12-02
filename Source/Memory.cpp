@@ -3,37 +3,59 @@
 #include <psapi.h>
 #include <tlhelp32.h>
 
-Memory::Memory(const std::wstring& processName) : _processName(processName) {}
+std::shared_ptr<Memory> Memory::Create(const std::wstring& processName) {
+    auto memory = std::make_shared<Memory>();
+
+    // First, get the handle of the process
+    if (!memory->_handle || !memory->_pid) {
+        PROCESSENTRY32W entry;
+        entry.dwSize = sizeof(entry);
+        HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        while (Process32NextW(snapshot, &entry)) {
+            if (processName == entry.szExeFile) {
+                memory->_pid = entry.th32ProcessID;
+                memory->_handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, memory->_pid);
+                break;
+            }
+        }
+    }
+
+    if (!memory->_handle || !memory->_pid) return nullptr;
+
+    EnumWindows([](HWND hwnd, LPARAM data) {
+        DWORD pid;
+        GetWindowThreadProcessId(hwnd, &pid);
+        Memory* self = reinterpret_cast<Memory*>(data);
+        if (pid == self->_pid) {
+            self->_hwnd = hwnd;
+            return FALSE; // Stop enumerating
+        }
+        return TRUE; // Continue enumerating
+    }, (LPARAM)memory.get());
+
+    if (!memory->_hwnd) return nullptr;
+
+    DebugPrint(L"Found " + processName + L": PID " + std::to_wstring(memory->_pid));
+
+    std::tie(memory->_baseAddress, memory->_endOfModule) = DebugUtils::GetModuleBounds(memory->_handle);
+    if (memory->_baseAddress == 0) {
+        DebugPrint("Couldn't locate base address");
+        return nullptr;
+    }
+
+    // Clear out any leftover sigscans from consumers (e.g. the trainer)
+    memory->_sigScans.clear();
+    return memory; // If we got here, we've got all the data we need.
+}
 
 Memory::~Memory() {
-    StopHeartbeat();
-    if (_thread.joinable()) _thread.join();
-
     if (_handle != nullptr) {
+        for (const auto& interception : _interceptions) Unintercept(interception);
+        for (void* addr : _allocations) {
+            if (addr != nullptr) VirtualFreeEx(_handle, addr, 0, MEM_RELEASE);
+        }
         CloseHandle(_handle);
     }
-}
-
-void Memory::StartHeartbeat(HWND window, UINT message) {
-    if (_threadActive) return;
-    _threadActive = true;
-    _thread = std::thread([sharedThis = shared_from_this(), window, message]{
-        SetCurrentThreadName(L"Heartbeat");
-
-        // Run the first heartbeat before setting trainerHasStarted, to detect if we are attaching to a game already in progress.
-        sharedThis->Heartbeat(window, message);
-        sharedThis->_trainerHasStarted = true;
-
-        while (sharedThis->_threadActive) {
-            std::this_thread::sleep_for(s_heartbeat);
-            sharedThis->Heartbeat(window, message);
-        }
-    });
-    _thread.detach();
-}
-
-void Memory::StopHeartbeat() {
-    _threadActive = false;
 }
 
 void Memory::BringToFront() {
@@ -41,173 +63,16 @@ void Memory::BringToFront() {
     SetForegroundWindow(_hwnd); // This handles windowed mode
 }
 
-bool Memory::IsForeground() {
-    return GetForegroundWindow() == _hwnd;
-}
-
-HWND Memory::GetProcessHwnd(DWORD pid) {
-    struct Data {
-        DWORD pid;
-        HWND hwnd;
-    };
-    Data data = Data{pid, NULL};
-
-    BOOL result = EnumWindows([](HWND hwnd, LPARAM data) {
-        DWORD pid;
-        GetWindowThreadProcessId(hwnd, &pid);
-        DWORD targetPid = reinterpret_cast<Data*>(data)->pid;
-        if (pid == targetPid) {
-            reinterpret_cast<Data*>(data)->hwnd = hwnd;
-            return FALSE; // Stop enumerating
-        }
-        return TRUE; // Continue enumerating
-    }, (LPARAM)&data);
-
-    return data.hwnd;
-}
-
-void Memory::Heartbeat(HWND window, UINT message) {
-    if (!_handle) {
-        Initialize(); // Initialize promises to set _handle only on success
-        if (!_handle) {
-            // Couldn't initialize, definitely not running
-            PostMessage(window, message, ProcStatus::NotRunning, NULL);
-            return;
-        }
-    }
-
-    DWORD exitCode = 0;
-    GetExitCodeProcess(_handle, &exitCode);
-    if (exitCode != STILL_ACTIVE) {
-        // Process has exited, clean up. We only need to reset _handle here -- its validity is linked to all other class members.
-        _computedAddresses.Clear();
-        _handle = nullptr;
-
-        _nextStatus = ProcStatus::Started;
-        PostMessage(window, message, ProcStatus::Stopped, NULL);
-        // Wait for the process to fully close; otherwise we might accidentally re-attach to it.
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-        return;
-    }
-
-    __int64 entityManager = ReadData<__int64>({_globals}, 1)[0];
-    if (entityManager == 0) {
-        // Game hasn't loaded yet, we're still sitting on the launcher
-        PostMessage(window, message, ProcStatus::NotRunning, NULL);
-        return;
-    }
-
-    // To avoid obtaining the HWND for the launcher, we wait to determine HWND until after the entity manager is allocated (the main game has started).
-    if (_hwnd == NULL) {
-        _hwnd = GetProcessHwnd(_pid);
-    } else {
-        // Under some circumstances the window can expire? Or the game re-allocates it? I have no idea.
-        // Anyways, we check to see if the title is wrong, and if so, search for the window again.
-        constexpr int TITLE_SIZE = sizeof(L"The Witness") / sizeof(wchar_t);
-        wchar_t title[TITLE_SIZE] = {L'\0'};
-        GetWindowTextW(_hwnd, title, TITLE_SIZE);
-        if (wcsncmp(title, L"The Witness", TITLE_SIZE) != 0) _hwnd = GetProcessHwnd(_pid);
-    }
-
-    if (_hwnd == NULL) {
-        assert(false, "Couldn't find the HWND for the game");
-        return;
-    }
-
-    // New game causes the entity manager to re-allocate
-    if (entityManager != _previousEntityManager) {
-        _previousEntityManager = entityManager;
-        _computedAddresses.Clear();
-    }
-
-    // Loading a game causes entities to be shuffled
-    int loadCount = ReadAbsoluteData<int>({entityManager, _loadCountOffset}, 1)[0];
-    if (_previousLoadCount != loadCount) {
-        _previousLoadCount = loadCount;
-        _computedAddresses.Clear();
-    }
-
-    int numEntities = ReadData<int>({_globals, 0x10}, 1)[0];
-    if (numEntities != 400'000) {
-        // New game is starting, do not take any actions.
-        _nextStatus = ProcStatus::NewGame;
-        return;
-    }
-
-    byte isLoading = ReadAbsoluteData<byte>({entityManager, _loadCountOffset - 0x4}, 1)[0];
-    if (isLoading == 0x01) {
-        // Saved game is currently loading, do not take any actions.
-        _nextStatus = ProcStatus::Reload;
-        return;
-    }
-
-    if (_trainerHasStarted == false) {
-        // If it's the first time we started, and the game appears to be running, return "Running" instead of "Started".
-        PostMessage(window, message, ProcStatus::Running, NULL);
-    } else {
-        // Else, report whatever status we last encountered.
-        PostMessage(window, message, _nextStatus, NULL);
-    }
-    _nextStatus = ProcStatus::Running;
-}
-
-void Memory::Initialize() {
-    HANDLE handle = nullptr;
-    // First, get the handle of the process
-    PROCESSENTRY32W entry;
-    entry.dwSize = sizeof(entry);
-    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    while (Process32NextW(snapshot, &entry)) {
-        if (_processName == entry.szExeFile) {
-            _pid = entry.th32ProcessID;
-            handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, _pid);
-            break;
-        }
-    }
-    if (!handle || !_pid) {
-        // Game likely not opened yet. Don't spam the log.
-        _nextStatus = ProcStatus::Started;
-        return;
-    }
-    DebugPrint(L"Found " + _processName + L": PID " + std::to_wstring(_pid));
-
-    _hwnd = NULL; // Will be populated later.
-
-    std::tie(_baseAddress, _endOfModule) = DebugUtils::GetModuleBounds(handle);
-    if (_baseAddress == 0) {
-        DebugPrint("Couldn't locate base address");
-        return;
-    }
-
-    // Clear out any leftover sigscans from consumers (e.g. the trainer)
-    _sigScans.clear();
-
-    AddSigScan({0x74, 0x41, 0x48, 0x85, 0xC0, 0x74, 0x04, 0x48, 0x8B, 0x48, 0x10}, [&](__int64 offset, int index, const std::vector<byte>& data) {
-        _globals = Memory::ReadStaticInt(offset, index + 0x14, data);
-    });
-
-    AddSigScan({0x01, 0x00, 0x00, 0x66, 0xC7, 0x87}, [&](__int64 offset, int index, const std::vector<byte>& data) {
-        _loadCountOffset = *(int*)&data[index-1];
-    });
-
-    // This little song-and-dance is because we need _handle in order to execute sigscans.
-    // But, we use _handle to indicate success, so we need to reset it.
-    // Note that these sigscans are very lightweight -- they are *only* the scans required to handle loading.
-    _handle = handle;
-    size_t failedScans = ExecuteSigScans(); // Will DebugPrint the failed scans.
-    if (failedScans > 0) _handle = nullptr;
-}
-
 // These functions are much more generic than this witness-specific implementation. As such, I'm keeping them somewhat separated.
 
-__int64 Memory::ReadStaticInt(__int64 offset, int index, const std::vector<byte>& data, size_t bytesToEOL) {
+int64_t Memory::ReadStaticInt(int64_t offset, int index, const std::vector<byte>& data, size_t bytesToEOL) {
     // (address of next line) + (index interpreted as 4byte int)
     return offset + index + bytesToEOL + *(int*)&data[index];
 }
 
 // Small wrapper for non-failing scan functions
 void Memory::AddSigScan(const std::vector<byte>& scanBytes, const ScanFunc& scanFunc) {
-    _sigScans[scanBytes] = {false, [scanFunc](__int64 offset, int index, const std::vector<byte>& data) {
+    _sigScans[scanBytes] = {false, [scanFunc](int64_t offset, int index, const std::vector<byte>& data) {
         scanFunc(offset, index, data);
         return true;
     }};
@@ -277,8 +142,8 @@ size_t Memory::ExecuteSigScans() {
 }
 
 // Technically this is ReadChar*, but this name makes more sense with the return type.
-std::string Memory::ReadString(const std::vector<__int64>& offsets) {
-    __int64 charAddr = ReadData<__int64>(offsets, 1)[0];
+std::string Memory::ReadString(const std::vector<int64_t>& offsets) {
+    int64_t charAddr = ReadData<int64_t>(offsets, 1)[0];
     if (charAddr == 0) return ""; // Handle nullptr for strings
     
     std::vector<char> tmp;
@@ -356,6 +221,10 @@ int32_t Memory::CallFunction(int64_t relativeAddress,
     // Although I don't use it here, argument 5 (lpParameter) can be used to pass a single 8-byte integer to the target process.
     // Note that you cannot transfer data this way; if you pass a pointer it will point to memory in this process, not the target.
     HANDLE thread = CreateRemoteThread(_handle, NULL, 0, (LPTHREAD_START_ROUTINE)_functionPrimitive, 0, 0, 0);
+    if (!thread) {
+        assert(false, "Failed to create a thread in the process");
+        return 0;
+    }
 	DWORD result = WaitForSingleObject(thread, INFINITE);
 
     // This will be the return value of the called function.
@@ -365,10 +234,51 @@ int32_t Memory::CallFunction(int64_t relativeAddress,
     return exitCode;
 }
 
-int32_t Memory::CallFunction(__int64 address, const std::string& str, __int64 rdx) {
+int32_t Memory::CallFunction(int64_t address, const std::string& str, int64_t rdx) {
     uintptr_t addr = AllocateArray(str.size());
     WriteDataInternal(&str[0], addr, str.size());
     return CallFunction(address, addr, rdx, 0, 0);
+}
+
+Memory::Interception Memory::Intercept(const char* name, int32_t firstLine, int32_t nextLine, const std::vector<byte>& data) {
+    std::vector<byte> jumpBack = {
+        0x56,                                   // push esi
+        0xBE, INT_TO_BYTES(firstLine + 8),      // mov esi, firstLine + 8   ; pop esi in the jumpAway code below
+        0xFF, 0xE6,                             // jmp esi
+    };
+
+    std::vector<byte> injectionBytes = {0x5E}; // pop esi (before executing code that might need it)
+    injectionBytes.insert(injectionBytes.end(), data.begin(), data.end());
+    injectionBytes.push_back(0x90); // Padding nop
+    std::vector<byte> replacedCode = ReadAbsoluteData<byte>({firstLine}, nextLine - firstLine);
+    injectionBytes.insert(injectionBytes.end(), replacedCode.begin(), replacedCode.end());
+    injectionBytes.push_back(0x90); // Padding nop
+    injectionBytes.insert(injectionBytes.end(), jumpBack.begin(), jumpBack.end());
+
+    uintptr_t addr = AllocateArray(injectionBytes.size());
+    assert(addr <= 0xFFFFFFFF, "Injected bytes were allocated outside of the int32 range");
+    DebugPrint(name + std::string(" Source address: ") + DebugUtils::ToString(firstLine));
+    DebugPrint(name + std::string(" Injection address: ") + DebugUtils::ToString(addr));
+    WriteDataInternal(&injectionBytes[0], addr, injectionBytes.size());
+
+    std::vector<byte> jumpAway = {
+        0x56,                       // push esi
+        0xBE, INT_TO_BYTES(addr),   // mov esi, addr
+        0xFF, 0xE6,                 // jmp esi
+        0x5E,                       // pop esi (we return to this opcode)
+    };
+    // We need enough space for the jump in the source code, >= 9 bytes
+    assert(static_cast<int>(nextLine - firstLine) >= jumpAway.size(), "Source allocation is not sufficient for the jump instructions");
+
+    // Fill any leftover space with nops
+    for (size_t i=jumpAway.size(); i<static_cast<size_t>(nextLine - firstLine); i++) jumpAway.push_back(0x90);
+    WriteAbsoluteData<byte>({firstLine}, jumpAway);
+
+    return _interceptions.emplace_back(Interception{firstLine, replacedCode, addr});
+}
+
+void Memory::Unintercept(const Interception& intercept) {
+    WriteAbsoluteData<byte>({intercept.firstLine}, intercept.replacedCode);
 }
 
 void Memory::ReadDataInternal(void* buffer, uintptr_t computedOffset, size_t bufferSize) {
@@ -394,16 +304,16 @@ void Memory::WriteDataInternal(const void* buffer, uintptr_t computedOffset, siz
     }
 }
 
-uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets, bool absolute) {
+uintptr_t Memory::ComputeOffset(std::vector<int64_t> offsets, bool absolute) {
     assert(offsets.size() > 0, "[Internal error] Attempting to compute 0 offsets");
     assert(offsets.front() != 0, "[Internal error] First offset to compute was 0");
 
     // Leave off the last offset, since it will be either read/write, and may not be of type uintptr_t.
-    const __int64 final_offset = offsets.back();
+    const int64_t final_offset = offsets.back();
     offsets.pop_back();
 
     uintptr_t cumulativeAddress = (absolute ? 0 : _baseAddress);
-    for (const __int64 offset : offsets) {
+    for (const int64_t offset : offsets) {
         cumulativeAddress += offset;
 
         // If the address was already computed, continue to the next offset.
@@ -437,6 +347,8 @@ uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets, bool absolute) {
     return cumulativeAddress + final_offset;
 }
 
-uintptr_t Memory::AllocateArray(__int64 size) {
-    return (uintptr_t)VirtualAllocEx(_handle, 0, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+uintptr_t Memory::AllocateArray(int64_t size) {
+    void* addr = VirtualAllocEx(_handle, 0, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    _allocations.push_back(addr);
+    return (uintptr_t)addr;
 }
