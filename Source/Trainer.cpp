@@ -70,22 +70,42 @@ void Trainer::SetWrite(bool enabled) {
     _memory->WriteAbsoluteData<Mode>({_buffer + 4}, {enabled ? Mode::Writing : Mode::Reading});
 }
 
-Trainer::SaveData Trainer::GetBuffer() {
+SaveData Trainer::GetBuffer() {
     int32_t bufferSize = _memory->ReadAbsoluteData<int32_t>({_buffer}, 1)[0];
     std::vector<byte> raw = _memory->ReadAbsoluteData<byte>({_buffer + 8}, bufferSize);
 
     for (int i = 0; i < raw.size(); i += 16) {
-        std::stringstream message;
-        for (int j = i; j < raw.size() && j < i + 16; j++) {
-            message << "0x" << std::hex << std::setfill('0') << std::setw(2) << raw[j];
+        std::string buffer(32, '\0');
+        for (int j = 0; j < 16 && i + j < raw.size(); j++) {
+            byte b = raw[i + j];
+            buffer[2*j] = "0123456789ABCDEF"[b / 16];
+            buffer[2*j + 1] = "0123456789ABCDEF"[b % 16];
         }
-        DebugPrint(message.str());
+        DebugPrint(buffer);
     }
 
     SaveData data = {};
+
+    // There's a bitmask (or something) at 40-48, for which rectangle heads I've unlocked
+
+    data.headShape = raw[717];
+    data.headId = raw[718];
+    data.subA = (SubWeapon)raw[719]; // uh
+    data.subB = (SubWeapon)raw[720]; // o.O
+
+
+    data.headId = raw[723];
+    data.headShape = raw[729];
+    data.headId = raw[730];
+
+    data.gems = *(int*)&raw[760]; // 760-763
+    data.yarn = *(int*)&raw[764]; // 764-767
+
+    // There *seems* to be a 'total heads' count at 1585.
+
     return data; // TODO.
 }
 
-void Trainer::SetBuffer(const Trainer::SaveData& saveData) {
+void Trainer::SetBuffer(const SaveData& saveData) {
     // TODO:
 }

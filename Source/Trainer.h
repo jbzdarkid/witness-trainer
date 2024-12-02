@@ -1,4 +1,5 @@
 #pragma once
+#include "SaveData.h"
 
 class Trainer final {
 public:
@@ -11,9 +12,6 @@ public:
     };
     void SetWrite(bool enabled);
 
-    struct SaveData {
-        byte unknown[1000];
-    };
     SaveData GetBuffer();
     void SetBuffer(const SaveData& saveData);
 
