@@ -1,4 +1,5 @@
 #pragma once
+#include <bitset>
 
 enum SubWeapon {
 	LandMine = 0x00,
@@ -17,11 +18,14 @@ enum SubWeapon {
 };
 
 struct SaveData {
+	uint64_t squareHeads;
+
 	byte headShape;
 	byte headId;
 	SubWeapon subA;
 	SubWeapon subB;
 
-	int gems;
-	int yarn;
+	int32_t gems;
+	int32_t yarn;
+	int32_t totalHeads;
 };

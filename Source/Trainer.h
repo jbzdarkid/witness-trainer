@@ -22,4 +22,5 @@ private:
 
     int32_t _writeSaveFile = 0;
     int32_t _buffer = 0;
+    std::vector<byte> _lastBuffer;
 };

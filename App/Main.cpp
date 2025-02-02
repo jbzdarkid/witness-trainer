@@ -4,6 +4,7 @@
 #include "shellapi.h"
 #include "Shlobj.h"
 
+#include "SaveData.h"
 #include "Trainer.h"
 #include "Utils.h"
 
@@ -11,15 +12,17 @@
 
 #define ACTIVATE_GAME       0x401
 #define CALLSTACK           0x402
-#define READWRITE           0x403
-#define READ_BUFFER         0x404
+#define READ_BUFFER         0x403
+#define WRITE_BUFFER        0x404
+#define GEM_COUNT           0x405
 
 // Globals
 HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
 std::shared_ptr<Memory> g_witnessProc;
-HWND g_activateGame, g_readWrite;
+HWND g_activateGame, g_readWrite, g_gemCount;
+SaveData g_data;
 
 // https://stackoverflow.com/a/12662950
 void ToggleOption(int message, void (Trainer::*setter)(bool)) {
@@ -93,11 +96,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     if (!trainer) LaunchSteamGame("238460");
                     else g_witnessProc->BringToFront();
                     break;
-                case READWRITE:
-                    ToggleOption(READWRITE, &Trainer::SetWrite);
-                    break;
                 case READ_BUFFER:
-                    trainer->GetBuffer();
+                    trainer->SetWrite(false);
+                    g_data = trainer->GetBuffer();
+                    SetStringText(g_gemCount, std::to_string(g_data.gems));
+                    break;
+                case WRITE_BUFFER:
+                    trainer->SetWrite(true);
+                    trainer->SetBuffer(g_data);
+                    break;
+                case GEM_COUNT:
+                    g_data.gems = GetWindowInt(g_gemCount);
                     break;
                 }
             }).detach();
@@ -195,9 +204,16 @@ void CreateComponents() {
     int y = 10;
 
     g_activateGame = CreateButton(x, y, 200, L"Launch game", ACTIVATE_GAME);
-    auto [_, g_readWrite] = CreateLabelAndCheckbox(x, y, 100, L"Read/Write", READWRITE);
 
     CreateButton(x, y, 100, L"Read buffer", READ_BUFFER);
+    CreateButton(x, y, 100, L"Write buffer", WRITE_BUFFER);
+
+    // Column 2
+    x = 270;
+    y = 10;
+
+    CreateLabel(x, y + 4, 40, L"Gems");
+    g_gemCount = CreateText(x + 40, y, 130, L"", GEM_COUNT);
 }
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow) {

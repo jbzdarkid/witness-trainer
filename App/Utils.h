@@ -53,3 +53,7 @@ std::wstring GetWindowString(HWND hwnd) {
 float GetWindowFloat(HWND hwnd) {
     return wcstof(GetWindowString(hwnd).c_str(), nullptr);
 }
+
+int32_t GetWindowInt(HWND hwnd) {
+    return wcstol(GetWindowString(hwnd).c_str(), nullptr, 10);
+}
