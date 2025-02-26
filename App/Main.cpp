@@ -618,7 +618,7 @@ void CreateComponents() {
     g_sprintSpeed = CreateText(100, y, 130, L"2", SPRINT_SPEED);
 
     CreateLabel(x, y + 4, 100, L"Field of View");
-    g_fovCurrent = CreateText(100, y, 130, L"90", FOV_CURRENT);
+    g_fovCurrent = CreateText(100, y, 130, L"50.534012", FOV_CURRENT);
 
     auto [_, canSave] = CreateLabelAndCheckbox(x, y, 185, L"Can save the game", CAN_SAVE, L"Shift-Control-S", MASK_SHIFT | MASK_CONTROL | 'S');
     g_canSave = canSave;
