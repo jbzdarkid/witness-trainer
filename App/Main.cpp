@@ -31,6 +31,9 @@
 #define EP_OVERLAY          0x421
 #define CLAMP_AIM           0x422
 #define OPEN_DOOR           0x423
+#define NOCLIP_FLY_UP       0x424
+#define NOCLIP_FLY_DOWN     0x425
+#define NOCLIP_UD_SPEED     0x426
 
 // BUGS:
 // - Changing from old ver to new ver can set FOV = 0?
@@ -68,12 +71,13 @@ HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
 std::shared_ptr<Memory> g_witnessProc;
-HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelDist, g_panelName, g_panelState, g_panelPicture, g_activateGame, g_snapToPanel, g_snapToLabel, g_canSave, g_videoData;
+HWND g_noclipSpeed, g_noclipUpDownSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelDist, g_panelName, g_panelState, g_panelPicture, g_activateGame, g_snapToPanel, g_snapToLabel, g_canSave, g_videoData;
 
 std::vector<float> g_savedCameraPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> g_savedCameraAng = {0.0f, 0.0f};
 int previousPanel = -1;
 std::vector<float> previousPanelStart;
+float noclipUpDownSpeed = 10;
 
 constexpr int32_t MASK_SHIFT   = 0x0100;
 constexpr int32_t MASK_CONTROL = 0x0200;
@@ -235,6 +239,7 @@ void LaunchSteamGame(const char* gameId, const char* arguments = "") {
     */
 }
 
+int32_t lastCode = 0;
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_DESTROY:
@@ -383,6 +388,28 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 trainer->SetPlayerPos(playerPos);
             }
             ToggleOption(NOCLIP_ENABLED, &Trainer::SetNoclip);
+        } else if (command == NOCLIP_FLY_UP) {
+            // Only change position if NOCLIP is enabled.
+            if (IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED) && trainer) {
+                auto playerPos = trainer->GetCameraPos();
+                playerPos[2] += 0.0005f * noclipUpDownSpeed;
+                trainer->SetCameraPos(playerPos);
+                // While key is held, then repeat last command. BUG: Letting go of ANY key, will stop flying up/down.
+                if (lastCode != 0) {
+                    PostMessage(g_hwnd, WM_COMMAND, NOCLIP_FLY_UP, NULL);
+                }
+            }
+        } else if (command == NOCLIP_FLY_DOWN) {
+            // Only change position if NOCLIP is enabled.
+            if (IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED) && trainer) {
+                auto playerPos = trainer->GetCameraPos();
+                playerPos[2] -= 0.0005f * noclipUpDownSpeed;
+                trainer->SetCameraPos(playerPos);
+                // While key is held, then repeat last command. BUG: Letting go of ANY key, will stop flying up/down.
+                if (lastCode != 0) {
+                    PostMessage(g_hwnd, WM_COMMAND, NOCLIP_FLY_DOWN, NULL);
+                }
+            }
         } else if (command == CAN_SAVE) {
             if (IsDlgButtonChecked(g_hwnd, CAN_SAVE)) {
                 // If the game is running, request one last save before disabling saving
@@ -417,6 +444,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         if (!trainer) return;
 
         if (command == NOCLIP_SPEED)         trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
+        else if (command == NOCLIP_UD_SPEED) noclipUpDownSpeed = GetWindowFloat(g_noclipUpDownSpeed);
         else if (command == FOV_CURRENT)     {} // Because we constantly update FOV, we should not respond to this command here.
         else if (command == SPRINT_SPEED)    trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
         else if (command == SHOW_PANELS)     trainer->ShowMissingPanels();
@@ -446,7 +474,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     return DefWindowProc(hwnd, message, wParam, lParam);
 }
 
-int32_t lastCode = 0;
 LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     // Only steal hotkeys when we (or the game) are the active window.
     if (nCode == HC_ACTION) {
@@ -526,6 +553,11 @@ HWND CreateButton(int x, int& y, int width, LPCWSTR text, __int64 message, LPCWS
     return button;
 }
 
+// Call this to create a regular key binding.
+void CreateHotkey(__int64 message, int32_t hotkey) {
+    hotkeyCodes[hotkey] = message;
+}
+
 HWND CreateCheckbox(int x, int& y, __int64 message) {
     HWND checkbox = CreateWindow(L"BUTTON", NULL,
         WS_VISIBLE | WS_CHILD | BS_CHECKBOX,
@@ -572,15 +604,21 @@ void CreateComponents() {
     int y = 10;
 
     CreateLabelAndCheckbox(x, y, 100, L"Noclip Enabled", NOCLIP_ENABLED, L"Control-N", MASK_CONTROL | 'N');
+    // Create fly up/down hotkeys when using noclip.
+    CreateHotkey(NOCLIP_FLY_UP, 'E');
+    CreateHotkey(NOCLIP_FLY_DOWN, 'Q');
 
     CreateLabel(x, y + 4, 100, L"Noclip Speed");
     g_noclipSpeed = CreateText(100, y, 130, L"10", NOCLIP_SPEED);
+
+    CreateLabel(x, y + 4, 100, L"Noclip U/D");
+    g_noclipUpDownSpeed = CreateText(100, y, 130, L"10", NOCLIP_UD_SPEED);
 
     CreateLabel(x, y + 4, 100, L"Sprint Speed");
     g_sprintSpeed = CreateText(100, y, 130, L"2", SPRINT_SPEED);
 
     CreateLabel(x, y + 4, 100, L"Field of View");
-    g_fovCurrent = CreateText(100, y, 130, L"50.534012", FOV_CURRENT);
+    g_fovCurrent = CreateText(100, y, 130, L"90", FOV_CURRENT);
 
     auto [_, canSave] = CreateLabelAndCheckbox(x, y, 185, L"Can save the game", CAN_SAVE, L"Shift-Control-S", MASK_SHIFT | MASK_CONTROL | 'S');
     g_canSave = canSave;
