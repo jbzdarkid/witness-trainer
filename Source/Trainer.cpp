@@ -530,33 +530,6 @@ void Trainer::SetNoclipFlyDirection(Trainer::NoclipFlyDirection direction) {
     _noclipDirection = direction;
 }
 
-void Trainer::Loop() {
-    while (true) {
-        // Get start time
-        auto start_time = std::chrono::steady_clock::now();
-        // Get end time
-        auto end_time = start_time + std::chrono::milliseconds(1);
-
-        // Do stuff
-        // Handle Noclip.
-        if (GetNoclip()) {
-            if (_noclipDirection == Trainer::NoclipFlyDirection::UP) {
-                auto playerPos = GetCameraPos();
-                playerPos[2] += 0.01f * GetNoclipSpeed();
-                SetCameraPos(playerPos);
-            }
-            else if (_noclipDirection == Trainer::NoclipFlyDirection::DOWN) {
-                auto playerPos = GetCameraPos();
-                playerPos[2] -= 0.01f * GetNoclipSpeed();
-                SetCameraPos(playerPos);
-            }
-        }
-
-        // Sleep if necessary
-        std::this_thread::sleep_until(end_time);
-    }
-}
-
 void Trainer::SetPlayerPos(const std::vector<float>& pos) {
     _memory->WriteData<float>({_globals, 0x18, 0x1E465 * 8, 0x24}, pos);
 }
@@ -730,4 +703,31 @@ void Trainer::SetEPOverlayMinSize(bool enable) {
 
 void Trainer::ClampAimingPhi(bool clamp) {
     _memory->WriteData<byte>({_debugMode}, {clamp ? (byte)0x00 : (byte)0x09});
+}
+
+void Trainer::Loop() {
+    while (true) {
+        // Get start time
+        auto start_time = std::chrono::steady_clock::now();
+        // Get end time
+        auto end_time = start_time + std::chrono::milliseconds(1);
+
+        // Do stuff
+        // Handle Noclip.
+        if (GetNoclip()) {
+            if (_noclipDirection == Trainer::NoclipFlyDirection::UP) {
+                auto playerPos = GetCameraPos();
+                playerPos[2] += 0.01f * GetNoclipSpeed();
+                SetCameraPos(playerPos);
+            }
+            else if (_noclipDirection == Trainer::NoclipFlyDirection::DOWN) {
+                auto playerPos = GetCameraPos();
+                playerPos[2] -= 0.01f * GetNoclipSpeed();
+                SetCameraPos(playerPos);
+            }
+        }
+
+        // Sleep if necessary
+        std::this_thread::sleep_until(end_time);
+    }
 }
