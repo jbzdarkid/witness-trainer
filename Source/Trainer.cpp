@@ -156,6 +156,12 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
 
     trainer->SetMainMenuColor(true); // Recolor the menu
     trainer->SetEPOverlayMinSize(true); // Prevent the solvability overlay from getting subpixel
+
+    // Loop thread.
+    std::thread t([l_trainer = trainer] {
+        l_trainer->Loop();
+    });
+    t.detach();
     return trainer;
 }
 
@@ -518,6 +524,37 @@ void Trainer::SetNoclip(bool enable) {
 void Trainer::SetNoclipSpeed(float speed) {
     if (speed <= 0.0f) return;
     _memory->WriteData<float>({_noclipSpeed}, {speed});
+}
+
+void Trainer::SetNoclipFlyDirection(Trainer::NoclipFlyDirection direction) {
+    _noclipDirection = direction;
+}
+
+void Trainer::Loop() {
+    while (true) {
+        // Get start time
+        auto start_time = std::chrono::steady_clock::now();
+        // Get end time
+        auto end_time = start_time + std::chrono::milliseconds(1);
+
+        // Do stuff
+        // Handle Noclip.
+        if (GetNoclip()) {
+            if (_noclipDirection == Trainer::NoclipFlyDirection::UP) {
+                auto playerPos = GetCameraPos();
+                playerPos[2] += 0.01f * GetNoclipSpeed();
+                SetCameraPos(playerPos);
+            }
+            else if (_noclipDirection == Trainer::NoclipFlyDirection::DOWN) {
+                auto playerPos = GetCameraPos();
+                playerPos[2] -= 0.01f * GetNoclipSpeed();
+                SetCameraPos(playerPos);
+            }
+        }
+
+        // Sleep if necessary
+        std::this_thread::sleep_until(end_time);
+    }
 }
 
 void Trainer::SetPlayerPos(const std::vector<float>& pos) {

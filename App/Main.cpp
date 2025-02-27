@@ -33,6 +33,7 @@
 #define OPEN_DOOR           0x423
 #define NOCLIP_FLY_UP       0x424
 #define NOCLIP_FLY_DOWN     0x425
+#define NOCLIP_FLY_NONE     0x426
 
 // BUGS:
 // - Changing from old ver to new ver can set FOV = 0?
@@ -82,6 +83,7 @@ constexpr int32_t MASK_CONTROL = 0x0200;
 constexpr int32_t MASK_ALT     = 0x0400;
 constexpr int32_t MASK_WIN     = 0x0800;
 constexpr int32_t MASK_REPEAT  = 0x1000;
+constexpr int32_t MASK_RELEASE = 0x9900;
 std::map<int32_t, __int64> hotkeyCodes;
 std::unordered_set<int32_t> hotkeys; // Just the keys, for perf.
 
@@ -237,7 +239,6 @@ void LaunchSteamGame(const char* gameId, const char* arguments = "") {
     */
 }
 
-int32_t lastCode = 0;
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_DESTROY:
@@ -389,24 +390,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         } else if (command == NOCLIP_FLY_UP) {
             // Only change position if NOCLIP is enabled.
             if (IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED) && trainer) {
-                auto playerPos = trainer->GetCameraPos();
-                playerPos[2] += 0.0005f * trainer->GetNoclipSpeed();
-                trainer->SetCameraPos(playerPos);
-                // While key is held, then repeat last command. BUG: Letting go of ANY key, will stop flying up/down.
-                if (lastCode != 0) {
-                    PostMessage(g_hwnd, WM_COMMAND, NOCLIP_FLY_UP, NULL);
-                }
+                trainer->SetNoclipFlyDirection(trainer->UP);
             }
         } else if (command == NOCLIP_FLY_DOWN) {
             // Only change position if NOCLIP is enabled.
             if (IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED) && trainer) {
-                auto playerPos = trainer->GetCameraPos();
-                playerPos[2] -= 0.0005f * trainer->GetNoclipSpeed();
-                trainer->SetCameraPos(playerPos);
-                // While key is held, then repeat last command. BUG: Letting go of ANY key, will stop flying up/down.
-                if (lastCode != 0) {
-                    PostMessage(g_hwnd, WM_COMMAND, NOCLIP_FLY_DOWN, NULL);
-                }
+                trainer->SetNoclipFlyDirection(trainer->DOWN);
+            }
+        } else if (command == NOCLIP_FLY_NONE) {
+            // Only change position if NOCLIP is enabled.
+            if (IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED) && trainer) {
+                trainer->SetNoclipFlyDirection(trainer->NONE);
             }
         } else if (command == CAN_SAVE) {
             if (IsDlgButtonChecked(g_hwnd, CAN_SAVE)) {
@@ -471,11 +465,21 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     return DefWindowProc(hwnd, message, wParam, lParam);
 }
 
+int32_t lastCode = 0;
 LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     // Only steal hotkeys when we (or the game) are the active window.
     if (nCode == HC_ACTION) {
         if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP) {
             lastCode = 0; // Cancel key repeat
+
+            // Handle KeyRelease event.
+            auto foreground = GetForegroundWindow();
+            if (g_hwnd == foreground || g_witnessProc->IsForeground()) {
+                auto p = (PKBDLLHOOKSTRUCT)lParam;
+                int32_t fullCode = p->vkCode | MASK_RELEASE;
+                auto search = hotkeyCodes.find(fullCode);
+                if (search != std::end(hotkeyCodes)) PostMessage(g_hwnd, WM_COMMAND, search->second, NULL);
+            }
         } else if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
             auto foreground = GetForegroundWindow();
             if (g_hwnd == foreground || g_witnessProc->IsForeground()) {
@@ -604,6 +608,8 @@ void CreateComponents() {
     // Create fly up/down hotkeys when using noclip.
     CreateHotkey(NOCLIP_FLY_UP, 'E');
     CreateHotkey(NOCLIP_FLY_DOWN, 'Q');
+    CreateHotkey(NOCLIP_FLY_NONE, MASK_RELEASE | 'E');
+    CreateHotkey(NOCLIP_FLY_NONE, MASK_RELEASE | 'Q');
 
     CreateLabel(x, y + 4, 100, L"Noclip Speed");
     g_noclipSpeed = CreateText(100, y, 130, L"10", NOCLIP_SPEED);
