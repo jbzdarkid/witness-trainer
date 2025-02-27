@@ -33,7 +33,6 @@
 #define OPEN_DOOR           0x423
 #define NOCLIP_FLY_UP       0x424
 #define NOCLIP_FLY_DOWN     0x425
-#define NOCLIP_UD_SPEED     0x426
 
 // BUGS:
 // - Changing from old ver to new ver can set FOV = 0?
@@ -71,13 +70,12 @@ HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
 std::shared_ptr<Memory> g_witnessProc;
-HWND g_noclipSpeed, g_noclipUpDownSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelDist, g_panelName, g_panelState, g_panelPicture, g_activateGame, g_snapToPanel, g_snapToLabel, g_canSave, g_videoData;
+HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelDist, g_panelName, g_panelState, g_panelPicture, g_activateGame, g_snapToPanel, g_snapToLabel, g_canSave, g_videoData;
 
 std::vector<float> g_savedCameraPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> g_savedCameraAng = {0.0f, 0.0f};
 int previousPanel = -1;
 std::vector<float> previousPanelStart;
-float noclipUpDownSpeed = 10;
 
 constexpr int32_t MASK_SHIFT   = 0x0100;
 constexpr int32_t MASK_CONTROL = 0x0200;
@@ -392,7 +390,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             // Only change position if NOCLIP is enabled.
             if (IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED) && trainer) {
                 auto playerPos = trainer->GetCameraPos();
-                playerPos[2] += 0.0005f * noclipUpDownSpeed;
+                playerPos[2] += 0.0005f * trainer->GetNoclipSpeed();
                 trainer->SetCameraPos(playerPos);
                 // While key is held, then repeat last command. BUG: Letting go of ANY key, will stop flying up/down.
                 if (lastCode != 0) {
@@ -403,7 +401,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             // Only change position if NOCLIP is enabled.
             if (IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED) && trainer) {
                 auto playerPos = trainer->GetCameraPos();
-                playerPos[2] -= 0.0005f * noclipUpDownSpeed;
+                playerPos[2] -= 0.0005f * trainer->GetNoclipSpeed();
                 trainer->SetCameraPos(playerPos);
                 // While key is held, then repeat last command. BUG: Letting go of ANY key, will stop flying up/down.
                 if (lastCode != 0) {
@@ -444,7 +442,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         if (!trainer) return;
 
         if (command == NOCLIP_SPEED)         trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
-        else if (command == NOCLIP_UD_SPEED) noclipUpDownSpeed = GetWindowFloat(g_noclipUpDownSpeed);
         else if (command == FOV_CURRENT)     {} // Because we constantly update FOV, we should not respond to this command here.
         else if (command == SPRINT_SPEED)    trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
         else if (command == SHOW_PANELS)     trainer->ShowMissingPanels();
@@ -610,9 +607,6 @@ void CreateComponents() {
 
     CreateLabel(x, y + 4, 100, L"Noclip Speed");
     g_noclipSpeed = CreateText(100, y, 130, L"10", NOCLIP_SPEED);
-
-    CreateLabel(x, y + 4, 100, L"Noclip U/D");
-    g_noclipUpDownSpeed = CreateText(100, y, 130, L"10", NOCLIP_UD_SPEED);
 
     CreateLabel(x, y + 4, 100, L"Sprint Speed");
     g_sprintSpeed = CreateText(100, y, 130, L"2", SPRINT_SPEED);
