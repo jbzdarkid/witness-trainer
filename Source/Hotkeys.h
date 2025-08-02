@@ -2,6 +2,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 
 constexpr uint32_t MASK_SHIFT   = 0x0100;
@@ -26,24 +27,21 @@ private:
 	static std::shared_ptr<Hotkeys> _instance;
 
 	bool ParseHotkeyFile();
+	bool CompareNoCase(const std::string_view& a, const char* b);
 	std::wstring GetHoverText(keycode keyCode);
 
 	keycode _lastCode = 0;
 	std::map<keycode, int64_t> _hotkeyCodes;
 	std::unordered_set<keycode> _hotkeys;
-	std::map<LPCSTR, keycode> _hotkeyNames;
+	std::map<std::string, keycode> _hotkeyNames;
 
 	const LPCSTR DEFAULT_KEYBINDS =
 		"noclip_enabled: Control-N\n"
-		"can_save_game: Shift-Control-S\n";
-	/*
-	_hotkeyNames["open_console"] = MASK_SHIFT | VK_OEM_3;
-	_hotkeyNames["ep_overlay"] = MASK_ALT | '2';
-	_hotkeyNames["save_position"] = MASK_CONTROL | 'P';
-	_hotkeyNames["load_position"] = MASK_SHIFT | MASK_CONTROL | 'P';
-	_hotkeyNames["snap_to_panel"] = MASK_CONTROL | 'L';
-	_hotkeyNames["open_doors"] = MASK_CONTROL | 'O';
-	_hotkeyNames["dump_callstack"] = MASK_CONTROL | MASK_SHIFT | MASK_ALT | VK_OEM_PLUS;
-	*/
-
+		"can_save_game: Shift-Control-S\n"
+		"open_console: Tilde\n"
+		"ep_overlay: Alt-2\n"
+		"save_position: Control-P\n"
+		"load_position: Control-Shift-P\n"
+		"snap_to_panel: Control-L\n"
+		"open_doors: Control-O\n";
 };

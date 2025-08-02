@@ -2,8 +2,10 @@
 #include "shellapi.h"
 #include "Shlobj.h"
 
+#include <algorithm>
 #include <fstream>
 #include <sstream>
+#include <string>
 
 #include "Hotkeys.h"
 
@@ -16,7 +18,7 @@ std::shared_ptr<Hotkeys> Hotkeys::Get() {
 
 Hotkeys::Hotkeys() {
     if (!ParseHotkeyFile()) {
-        // Default hotkeys (duplicate of what's defined in DEFAULT_HOTKEYS in the header, just in case the parse fails.
+        // Default hotkeys (duplicate of what's defined in DEFAULT_HOTKEYS in the header), just in case the parse fails.
         _hotkeyNames["noclip_enabled"] = MASK_CONTROL | 'N';
         _hotkeyNames["can_save_game"] = MASK_SHIFT | MASK_CONTROL | 'S';
         _hotkeyNames["open_console"] = MASK_SHIFT | VK_OEM_3;
@@ -25,9 +27,28 @@ Hotkeys::Hotkeys() {
         _hotkeyNames["load_position"] = MASK_SHIFT | MASK_CONTROL | 'P';
         _hotkeyNames["snap_to_panel"] = MASK_CONTROL | 'L';
         _hotkeyNames["open_doors"] = MASK_CONTROL | 'O';
-        _hotkeyNames["dump_callstack"] = MASK_CONTROL | MASK_SHIFT | MASK_ALT | VK_OEM_PLUS;
     }
+
+    // Can't be changed, this is for internal debugging only.
+    _hotkeyNames["dump_callstack"] = MASK_CONTROL | MASK_SHIFT | MASK_ALT | VK_OEM_PLUS;
 }
+
+bool Hotkeys::CompareNoCase(const std::string_view& a, const char* b) {
+    for (int i = 0; i < a.size(); i++) {
+        if (b[i] == '\0') return false;
+        if ((a[i] & 0xDF) != (b[i] & 0xDF)) return false;
+    }
+
+    return true;
+}
+
+#define ASSERT(condition, message) \
+    do { \
+        if (!(condition)) { \
+            std::wstring __fullMessage = std::wstring(L"Error while parsing hotkey file (") + path + std::wstring(L") on line ") + std::to_wstring(lineNo) + std::wstring(L":\n") + std::wstring(message); \
+            ShowAssertDialogue(__fullMessage.c_str()); \
+        } \
+    } while(0)
 
 bool Hotkeys::ParseHotkeyFile() {
     _hotkeyNames.clear();
@@ -56,38 +77,46 @@ bool Hotkeys::ParseHotkeyFile() {
     std::ifstream file(path);
     if (file.fail()) return false;
 
-    // TODO: The rest of the parser
-    return true;
-
-    /*
-    std::ifstream file(filename);
     std::string line;
-
-    bool skip = false;
+    int32_t lineNo = 0;
     while (std::getline(file, line)) {
-        if (skip) {
-            skip = false;
-            buffer.pop_back();
+        ++lineNo;
+        std::string_view lineView(line);
+
+        size_t colonIndex = lineView.find_first_of(':');
+        if (colonIndex == std::string::npos) continue;
+        std::string_view key = lineView.substr(0, colonIndex); // TODO: Lowercase me!
+        // TODO: Run some post-parse sanity check to make sure there's no extra keys.
+
+        keycode keyCode = 0;
+        size_t valueIndex = lineView.find_first_not_of(' ', colonIndex + 1);
+        while (valueIndex != std::string::npos) {
+            size_t partIndex = lineView.find_first_of('-', valueIndex);
+            std::string_view segment(lineView.substr(valueIndex, partIndex - valueIndex));
+            if (segment.size() == 1) {
+                char ch = segment[0];
+                if (ch >= 'a' && ch <= 'z') ch += 'A' - 'a';
+                keyCode |= ch;
+                ASSERT(partIndex == std::string::npos, L"A one-character segment should always be at the end of the keycode.");
+            }
+            else if (CompareNoCase(segment, "control")) keyCode |= MASK_CONTROL;
+            else if (CompareNoCase(segment, "shift"))   keyCode |= MASK_SHIFT;
+            else if (CompareNoCase(segment, "alt"))     keyCode |= MASK_ALT;
+            else if (CompareNoCase(segment, "win"))     keyCode |= MASK_WIN;
+            else if (CompareNoCase(segment, "tilde"))   keyCode |= MASK_SHIFT | VK_OEM_3;
+            else if (CompareNoCase(segment, "plus"))    keyCode |= VK_OEM_PLUS;
+            else {
+                ASSERT(false, L"Unable to parse segment: " + std::wstring(segment.begin(), segment.end()));
+            }
+
+            if (partIndex == std::string::npos) break;
+            valueIndex = partIndex + 1;
         }
-        if (line == "North") buffer.push_back(North);
-        if (line == "South") buffer.push_back(South);
-        if (line == "East")  buffer.push_back(East);
-        if (line == "West")  buffer.push_back(West);
-#ifdef _DEBUG // Only skip Undos in Debug mode -- in release mode, we need them for the TAS.
-        if (line == "Undo") {
-            skip = true;
-            continue;
-        }
-#else
-        if (line == "Undo")  buffer.push_back(Undo);
-#endif
-        if (line == "Reset") buffer.push_back(Reset);
-        if (line == "None")  buffer.push_back(None); // Allow "None" in demo files, in case we need to buffer something, at some point.
+
+        if (keyCode != 0) _hotkeyNames[std::string(key)] = keyCode;
     }
-    buffer.push_back(Stop);
-    Wipe();
-    WriteData(buffer);
-    */
+
+    return true;
 }
 
 int64_t Hotkeys::CheckMatchingHotkey(WPARAM wParam, LPARAM lParam) {
