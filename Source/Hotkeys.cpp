@@ -1,7 +1,11 @@
 #include "pch.h"
-#include "Hotkeys.h"
+#include "shellapi.h"
+#include "Shlobj.h"
 
+#include <fstream>
 #include <sstream>
+
+#include "Hotkeys.h"
 
 std::shared_ptr<Hotkeys> Hotkeys::_instance = nullptr;
 
@@ -11,16 +15,79 @@ std::shared_ptr<Hotkeys> Hotkeys::Get() {
 }
 
 Hotkeys::Hotkeys() {
-    // In theory, this comes from some file. I haven't written the parser yet, though.
-    _hotkeyNames["noclip_enabled"] = MASK_CONTROL | 'N';
-    _hotkeyNames["can_save_game"] = MASK_SHIFT | MASK_CONTROL | 'S';
-    _hotkeyNames["open_console"] = MASK_SHIFT | VK_OEM_3;
-    _hotkeyNames["ep_overlay"] = MASK_ALT | '2';
-    _hotkeyNames["save_position"] = MASK_CONTROL | 'P';
-    _hotkeyNames["load_position"] = MASK_SHIFT | MASK_CONTROL | 'P';
-    _hotkeyNames["snap_to_panel"] = MASK_CONTROL | 'L';
-    _hotkeyNames["open_doors"] = MASK_CONTROL | 'O';
-    _hotkeyNames["dump_callstack"] = MASK_CONTROL | MASK_SHIFT | MASK_ALT | VK_OEM_PLUS;
+    if (!ParseHotkeyFile()) {
+        // Default hotkeys (duplicate of what's defined in DEFAULT_HOTKEYS in the header, just in case the parse fails.
+        _hotkeyNames["noclip_enabled"] = MASK_CONTROL | 'N';
+        _hotkeyNames["can_save_game"] = MASK_SHIFT | MASK_CONTROL | 'S';
+        _hotkeyNames["open_console"] = MASK_SHIFT | VK_OEM_3;
+        _hotkeyNames["ep_overlay"] = MASK_ALT | '2';
+        _hotkeyNames["save_position"] = MASK_CONTROL | 'P';
+        _hotkeyNames["load_position"] = MASK_SHIFT | MASK_CONTROL | 'P';
+        _hotkeyNames["snap_to_panel"] = MASK_CONTROL | 'L';
+        _hotkeyNames["open_doors"] = MASK_CONTROL | 'O';
+        _hotkeyNames["dump_callstack"] = MASK_CONTROL | MASK_SHIFT | MASK_ALT | VK_OEM_PLUS;
+    }
+}
+
+bool Hotkeys::ParseHotkeyFile() {
+    _hotkeyNames.clear();
+
+    // Try to open the file, and regenerate it if it doesn't exist.
+    std::wstring path;
+    {
+        PWSTR outPath;
+        SHGetKnownFolderPath(FOLDERID_LocalAppData, SHGFP_TYPE_CURRENT, NULL, &outPath);
+        path = outPath;
+        CoTaskMemFree(outPath);
+    }
+
+    if (GetFileAttributes(path.c_str()) == INVALID_FILE_ATTRIBUTES) return false; // Do not try to create LocalAppData
+    path += L"\\WitnessTrainer";
+    if (GetFileAttributes(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        if (_wmkdir(path.c_str()) != 0) return false;
+    }
+    path += L"\\keybinds.txt";
+    if (GetFileAttributes(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        HANDLE file = CreateFile(path.c_str(), FILE_GENERIC_WRITE, NULL, nullptr, CREATE_ALWAYS, NULL, nullptr);
+        WriteFile(file, &DEFAULT_KEYBINDS[0], (DWORD)strnlen(DEFAULT_KEYBINDS, 0xFFFF), nullptr, nullptr);
+        CloseHandle(file);
+    }
+
+    std::ifstream file(path);
+    if (file.fail()) return false;
+
+    // TODO: The rest of the parser
+    return true;
+
+    /*
+    std::ifstream file(filename);
+    std::string line;
+
+    bool skip = false;
+    while (std::getline(file, line)) {
+        if (skip) {
+            skip = false;
+            buffer.pop_back();
+        }
+        if (line == "North") buffer.push_back(North);
+        if (line == "South") buffer.push_back(South);
+        if (line == "East")  buffer.push_back(East);
+        if (line == "West")  buffer.push_back(West);
+#ifdef _DEBUG // Only skip Undos in Debug mode -- in release mode, we need them for the TAS.
+        if (line == "Undo") {
+            skip = true;
+            continue;
+        }
+#else
+        if (line == "Undo")  buffer.push_back(Undo);
+#endif
+        if (line == "Reset") buffer.push_back(Reset);
+        if (line == "None")  buffer.push_back(None); // Allow "None" in demo files, in case we need to buffer something, at some point.
+    }
+    buffer.push_back(Stop);
+    Wipe();
+    WriteData(buffer);
+    */
 }
 
 int64_t Hotkeys::CheckMatchingHotkey(WPARAM wParam, LPARAM lParam) {
