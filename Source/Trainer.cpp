@@ -162,16 +162,20 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
 // Restore default game settings when shutting down the trainer.
 Trainer::~Trainer() {
     SetNoclip(false);
-    SetRandomDoorsPractice(false);
-    SetCanSave(true);
-    SetInfiniteChallenge(false);
+    SetNoclipSpeed(4.0f);
     float fov = GetFov();
     if (fov < 80.0f) SetFov(80.0f);
     if (fov > 120.0f) SetFov(120.0f);
+    SetCanSave(true);
     SetSprintSpeed(2.0f);
+    SetInfiniteChallenge(false);
+    SetConsoleOpen(false);
     SetMainMenuColor(false);
+    SetRandomDoorsPractice(false);
     SetChallengePillarsPractice(false);
+    SetEPOverlay(false);
     SetEPOverlayMinSize(false);
+    ClampAimingPhi(true);
 }
 
 int Trainer::GetActivePanel() {
