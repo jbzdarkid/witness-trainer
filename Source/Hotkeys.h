@@ -11,18 +11,24 @@ constexpr uint32_t MASK_WIN     = 0x0800;
 constexpr uint32_t MASK_REPEAT  = 0x1000;
 
 class Hotkeys {
+	typedef int32_t keycode;
+
 public:
 	static std::shared_ptr<Hotkeys> Get();
+	Hotkeys();
 
 	int64_t CheckMatchingHotkey(WPARAM wParam, LPARAM lParam);
-	void SetHotkey(int32_t keyCode, int64_t message);
-	void SetHotkey(int32_t keyCode, int32_t message);
-	std::wstring GetHoverText(int32_t keyCode);
+
+	void RegisterHotkey(LPCSTR hotkeyName, int64_t message);
+	std::wstring GetHoverText(LPCSTR hotkeyName);
 
 private:
 	static std::shared_ptr<Hotkeys> _instance;
 
-	int32_t _lastCode;
-	std::map<int32_t, int64_t> _hotkeyCodes;
-	std::unordered_set<int32_t> _hotkeys;
+	std::wstring GetHoverText(keycode keyCode);
+
+	keycode _lastCode;
+	std::map<keycode, int64_t> _hotkeyCodes;
+	std::unordered_set<keycode> _hotkeys;
+	std::map<LPCSTR, keycode> _hotkeyNames;
 };

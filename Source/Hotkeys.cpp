@@ -10,6 +10,19 @@ std::shared_ptr<Hotkeys> Hotkeys::Get() {
     return _instance;
 }
 
+Hotkeys::Hotkeys() {
+    // In theory, this comes from some file. I haven't written the parser yet, though.
+    _hotkeyNames["noclip_enabled"] = MASK_CONTROL | 'N';
+    _hotkeyNames["can_save_game"] = MASK_SHIFT | MASK_CONTROL | 'S';
+    _hotkeyNames["open_console"] = MASK_SHIFT | VK_OEM_3;
+    _hotkeyNames["ep_overlay"] = MASK_ALT | '2';
+    _hotkeyNames["save_position"] = MASK_CONTROL | 'P';
+    _hotkeyNames["load_position"] = MASK_SHIFT | MASK_CONTROL | 'P';
+    _hotkeyNames["snap_to_panel"] = MASK_CONTROL | 'L';
+    _hotkeyNames["open_doors"] = MASK_CONTROL | 'O';
+    _hotkeyNames["dump_callstack"] = MASK_CONTROL | MASK_SHIFT | MASK_ALT | VK_OEM_PLUS;
+}
+
 int64_t Hotkeys::CheckMatchingHotkey(WPARAM wParam, LPARAM lParam) {
     if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP) {
         _lastCode = 0; // Cancel key repeat
@@ -37,10 +50,24 @@ int64_t Hotkeys::CheckMatchingHotkey(WPARAM wParam, LPARAM lParam) {
     return 0;
 }
 
-// In theory, this comes from some file. I haven't written the parser yet, but assume it's a dynamic value (or at least it *can* change)
-// const int32_t NOCLIP_HOTKEY = MASK_CONTROL | 'N';
+void Hotkeys::RegisterHotkey(LPCSTR hotkeyName, int64_t message) {
+    auto search = _hotkeyNames.find(hotkeyName);
+    if (search == std::end(_hotkeyNames)) return; // No keybind for this hotkey, no need to register a callback
 
-std::wstring Hotkeys::GetHoverText(int32_t keyCode) {
+    keycode keyCode = search->second;
+    _hotkeyCodes[keyCode] = message;
+    _hotkeys.insert(keyCode & 0xFF);
+}
+
+std::wstring Hotkeys::GetHoverText(LPCSTR hotkeyName) {
+    auto search = _hotkeyNames.find(hotkeyName);
+    if (search == std::end(_hotkeyNames)) return {}; // No keybind for this hotkey
+
+    Hotkeys::keycode keyCode = search->second;
+    return GetHoverText(keyCode);
+}
+
+std::wstring Hotkeys::GetHoverText(keycode keyCode) {
     // Special handling because this is a weird key
     if (keyCode == (MASK_SHIFT | VK_OEM_3)) return std::wstring(L"Tilde (~)");
 
@@ -54,22 +81,10 @@ std::wstring Hotkeys::GetHoverText(int32_t keyCode) {
     keyCode &= 0xFF; // Remove masks for comparison to ascii codes
 
     if      (keyCode >= 'a' && keyCode <= 'z') ss << (char)(keyCode - 'a' + 'A');
-    else if (keyCode >= '+' && keyCode <= ']') ss << (char)keyCode; // Includes A-Z and 0-9
+    else if (keyCode >= '0' && keyCode <= ']') ss << (char)keyCode; // Includes A-Z and 0-9
+    else if (keyCode == VK_OEM_PLUS) ss << '+';
 
 
     if (repeat) ss << " (held)";
     return ss.str();
-}
-
-
-
-
-void Hotkeys::SetHotkey(int32_t keyCode, int64_t message) {
-    assert(((int32_t)message) == message, "Attempted to set a hotkey with message > int32");
-    SetHotkey(keyCode, (int32_t)message);
-}
-
-void Hotkeys::SetHotkey(int32_t keyCode, int32_t message) {
-    _hotkeyCodes[keyCode] = message;
-    _hotkeys.insert(keyCode & 0xFF);
 }

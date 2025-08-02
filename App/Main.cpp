@@ -482,19 +482,17 @@ HWND CreateLabel(int x, int y, int width, LPCWSTR text, __int64 message = 0) {
     return CreateLabel(x, y, width, 16, text, message);
 }
 
-HWND CreateButton(int x, int& y, int width, LPCWSTR text, __int64 message) {
+HWND CreateButton(int x, int& y, int width, LPCWSTR text, __int64 message, LPCSTR hotkeyName) {
     HWND button = CreateWindow(L"BUTTON", text,
         WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
         x, y, width, 26,
         g_hwnd, (HMENU)message, g_hInstance, NULL);
     y += 30;
-    return button;
-}
 
-HWND CreateButton(int x, int& y, int width, LPCWSTR text, __int64 message, LPCWSTR hoverText, int32_t hotkey) {
-    auto button = CreateButton(x, y, width, text, message);
-    CreateTooltip(button, hoverText);
-    Hotkeys::Get()->SetHotkey(hotkey, message);
+    Hotkeys::Get()->RegisterHotkey(hotkeyName, message);
+    std::wstring hoverText = Hotkeys::Get()->GetHoverText(hotkeyName);
+    CreateTooltip(button, hoverText.c_str());
+
     return button;
 }
 
@@ -507,28 +505,24 @@ HWND CreateCheckbox(int x, int& y, __int64 message) {
     return checkbox;
 }
 
-HWND CreateCheckbox(int x, int& y, __int64 message, int32_t hotkey) {
+HWND CreateCheckbox(int x, int& y, __int64 message, const std::wstring& hoverText) {
     auto checkbox = CreateCheckbox(x, y, message);
-    std::wstring hoverText = Hotkeys::Get()->GetHoverText(hotkey);
     CreateTooltip(checkbox, hoverText.c_str());
-    Hotkeys::Get()->SetHotkey(hotkey, message);
     return checkbox;
 }
 
 // The same arguments as Button.
-std::pair<HWND, HWND> CreateLabelAndCheckbox(int x, int& y, int width, LPCWSTR text, __int64 message, int32_t hotkey) {
+std::pair<HWND, HWND> CreateLabelAndCheckbox(int x, int& y, int width, LPCWSTR text, __int64 message, LPCSTR hotkeyName) {
     // We need a distinct message (HMENU) for the label so that when we call CheckDlgButton it targets the checkbox, not the label.
     // However, we only use the low word (bottom 2 bytes) for logic, so we can safely modify the high word to make it distinct.
     auto label = CreateLabel(x + 20, y, width, text, message + 0x10000);
-    std::wstring hoverText = Hotkeys::Get()->GetHoverText(hotkey);
-    CreateTooltip(label, hoverText.c_str());
-    auto checkbox = CreateCheckbox(x, y, message, hotkey);
-    return {label, checkbox};
-}
 
-// Also the same arguments as Button.
-std::pair<HWND, HWND> CreateLabelAndCheckbox(int x, int& y, int width, LPCWSTR text, __int64 message) {
-    return CreateLabelAndCheckbox(x, y, width, text, message, 0);
+    Hotkeys::Get()->RegisterHotkey(hotkeyName, message);
+    std::wstring hoverText = Hotkeys::Get()->GetHoverText(hotkeyName);
+    CreateTooltip(label, hoverText.c_str());
+
+    auto checkbox = CreateCheckbox(x, y, message, hoverText);
+    return {label, checkbox};
 }
 
 HWND CreateText(int x, int& y, int width, LPCWSTR defaultText = L"", __int64 message = NULL) {
@@ -545,7 +539,7 @@ void CreateComponents() {
     int x = 10;
     int y = 10;
 
-    CreateLabelAndCheckbox(x, y, 100, L"Noclip Enabled", NOCLIP_ENABLED, MASK_CONTROL | 'N');
+    CreateLabelAndCheckbox(x, y, 100, L"Noclip Enabled", NOCLIP_ENABLED, "noclip_enabled");
 
     CreateLabel(x, y + 4, 100, L"Noclip Speed");
     g_noclipSpeed = CreateText(100, y, 130, L"10", NOCLIP_SPEED);
@@ -556,24 +550,24 @@ void CreateComponents() {
     CreateLabel(x, y + 4, 100, L"Field of View");
     g_fovCurrent = CreateText(100, y, 130, L"50.534012", FOV_CURRENT);
 
-    auto [_, canSave] = CreateLabelAndCheckbox(x, y, 185, L"Can save the game", CAN_SAVE, MASK_SHIFT | MASK_CONTROL | 'S');
+    auto [_, canSave] = CreateLabelAndCheckbox(x, y, 185, L"Can save the game", CAN_SAVE, "can_save_game");
     g_canSave = canSave;
     CheckDlgButton(g_hwnd, CAN_SAVE, true);
 
-    CreateLabelAndCheckbox(x, y, 185, L"Random Doors Practice", DOORS_PRACTICE);
+    CreateLabelAndCheckbox(x, y, 185, L"Random Doors Practice", DOORS_PRACTICE, "doors_practice");
 
-    CreateLabelAndCheckbox(x, y, 185, L"Disable Challenge time limit", INFINITE_CHALLENGE);
+    CreateLabelAndCheckbox(x, y, 185, L"Disable Challenge time limit", INFINITE_CHALLENGE, "challenge_limit");
 
-    CreateLabelAndCheckbox(x, y, 185, L"Open the Console", OPEN_CONSOLE, MASK_SHIFT | VK_OEM_3);
+    CreateLabelAndCheckbox(x, y, 185, L"Open the Console", OPEN_CONSOLE, "open_console");
 
-    CreateLabelAndCheckbox(x, y, 185, L"Show Entity Solvability", EP_OVERLAY, MASK_ALT | '2');
+    CreateLabelAndCheckbox(x, y, 185, L"Show Entity Solvability", EP_OVERLAY, "ep_overlay");
 
-    CreateLabelAndCheckbox(x, y, 185, L"Enable vertical aim limit", CLAMP_AIM);
+    CreateLabelAndCheckbox(x, y, 185, L"Enable vertical aim limit", CLAMP_AIM, "clamp_aim");
     CheckDlgButton(g_hwnd, CLAMP_AIM, true);
 
-    CreateButton(x, y, 110, L"Save Position", SAVE_POS, L"Control-P", MASK_CONTROL | 'P');
+    CreateButton(x, y, 110, L"Save Position", SAVE_POS, "save_position");
     y -= 30;
-    CreateButton(x + 120, y, 110, L"Load Position", LOAD_POS, L"Shift-Control-P", MASK_SHIFT | MASK_CONTROL | 'P');
+    CreateButton(x + 120, y, 110, L"Load Position", LOAD_POS, "load_position");
     g_currentPos = CreateLabel(x + 5,   y, 110, 80);
     g_savedPos   = CreateLabel(x + 125, y, 110, 80);
     SetPosAndAngText(g_currentPos, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f });
@@ -588,8 +582,8 @@ void CreateComponents() {
     x = 270;
     y = 10;
 
-    g_activateGame = CreateButton(x, y, 200, L"Launch game", ACTIVATE_GAME);
-    CreateButton(x, y, 200, L"Open save folder", OPEN_SAVES);
+    g_activateGame = CreateButton(x, y, 200, L"Launch game", ACTIVATE_GAME, "launch_game");
+    CreateButton(x, y, 200, L"Open save folder", OPEN_SAVES, "open_save_folder");
 
     g_activePanel = CreateLabel(x, y, 200, L"No active entity");
     y += 20;
@@ -603,22 +597,22 @@ void CreateComponents() {
     g_panelState = CreateLabel(x, y, 200, L"");
     y += 20;
 
-    std::tie(g_snapToLabel, g_snapToPanel) = CreateLabelAndCheckbox(x, y, 200, L"Lock view to entity", SNAP_TO_PANEL, MASK_CONTROL | 'L');
+    std::tie(g_snapToLabel, g_snapToPanel) = CreateLabelAndCheckbox(x, y, 200, L"Lock view to entity", SNAP_TO_PANEL, "snap_to_panel");
     EnableWindow(g_snapToLabel, false);
     EnableWindow(g_snapToPanel, false);
 
-    CreateButton(x, y, 200, L"Show unsolved panels", SHOW_PANELS);
+    CreateButton(x, y, 200, L"Show unsolved panels", SHOW_PANELS, "show_unsolved");
 
-    CreateButton(x, y, 200, L"Disable distance gating", DISTANCE_GATING);
+    CreateButton(x, y, 200, L"Disable distance gating", DISTANCE_GATING, "distance_gating");
 
-    CreateButton(x, y, 200, L"Open nearby doors", OPEN_DOOR, L"Control-O", MASK_CONTROL | 'O');
+    CreateButton(x, y, 200, L"Open nearby doors", OPEN_DOOR, "open_doors");
 
     // Hotkey for debug purposes, to get addresses based on a reported callstack
-    Hotkeys::Get()->SetHotkey(MASK_CONTROL | MASK_SHIFT | MASK_ALT | VK_OEM_PLUS, CALLSTACK);
+    Hotkeys::Get()->RegisterHotkey("dump_callstack", CALLSTACK);
 
 #ifdef _DEBUG
-    CreateButton(x, y, 200, L"Show nearby entities", SHOW_NEARBY);
-    CreateButton(x, y, 200, L"Export all entities", EXPORT);
+    CreateButton(x, y, 200, L"Show nearby entities", SHOW_NEARBY, "show_nearby");
+    CreateButton(x, y, 200, L"Export all entities", EXPORT, "export");
 #endif
 }
 

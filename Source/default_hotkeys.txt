@@ -1,0 +1,2 @@
+noclip_enabled: C-N
+can_save_game: shift-control-s
