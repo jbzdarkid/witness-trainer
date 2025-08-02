@@ -1,6 +1,7 @@
 #pragma once
 #include <map>
 #include <memory>
+#include <string>
 #include <unordered_set>
 
 constexpr uint32_t MASK_SHIFT   = 0x0100;
@@ -13,9 +14,10 @@ class Hotkeys {
 public:
 	static std::shared_ptr<Hotkeys> Get();
 
-	int64_t Foo(WPARAM wParam, LPARAM lParam);
+	int64_t CheckMatchingHotkey(WPARAM wParam, LPARAM lParam);
 	void SetHotkey(int32_t keyCode, int64_t message);
 	void SetHotkey(int32_t keyCode, int32_t message);
+	std::wstring GetHoverText(int32_t keyCode);
 
 private:
 	static std::shared_ptr<Hotkeys> _instance;

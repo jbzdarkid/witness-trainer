@@ -1,6 +1,8 @@
 #include "pch.h"
 #include "Hotkeys.h"
 
+#include <sstream>
+
 std::shared_ptr<Hotkeys> Hotkeys::_instance = nullptr;
 
 std::shared_ptr<Hotkeys> Hotkeys::Get() {
@@ -8,7 +10,7 @@ std::shared_ptr<Hotkeys> Hotkeys::Get() {
     return _instance;
 }
 
-int64_t Hotkeys::Foo(WPARAM wParam, LPARAM lParam) {
+int64_t Hotkeys::CheckMatchingHotkey(WPARAM wParam, LPARAM lParam) {
     if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP) {
         _lastCode = 0; // Cancel key repeat
     } else if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
@@ -34,6 +36,33 @@ int64_t Hotkeys::Foo(WPARAM wParam, LPARAM lParam) {
 
     return 0;
 }
+
+// In theory, this comes from some file. I haven't written the parser yet, but assume it's a dynamic value (or at least it *can* change)
+// const int32_t NOCLIP_HOTKEY = MASK_CONTROL | 'N';
+
+std::wstring Hotkeys::GetHoverText(int32_t keyCode) {
+    // Special handling because this is a weird key
+    if (keyCode == (MASK_SHIFT | VK_OEM_3)) return std::wstring(L"Tilde (~)");
+
+    std::wstringstream ss;
+    if (keyCode & MASK_CONTROL) ss << "Control-";
+    if (keyCode & MASK_SHIFT)   ss << "Shift-";
+    if (keyCode & MASK_ALT)     ss << "Alt-";
+    if (keyCode & MASK_WIN)     ss << "Win-";
+
+    bool repeat = keyCode & MASK_REPEAT;
+    keyCode &= 0xFF; // Remove masks for comparison to ascii codes
+
+    if      (keyCode >= 'a' && keyCode <= 'z') ss << (char)(keyCode - 'a' + 'A');
+    else if (keyCode >= '+' && keyCode <= ']') ss << (char)keyCode; // Includes A-Z and 0-9
+
+
+    if (repeat) ss << " (held)";
+    return ss.str();
+}
+
+
+
 
 void Hotkeys::SetHotkey(int32_t keyCode, int64_t message) {
     assert(((int32_t)message) == message, "Attempted to set a hotkey with message > int32");

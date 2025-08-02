@@ -444,7 +444,7 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
         // Only steal hotkeys when we (or the game) are the active window.
         auto foreground = GetForegroundWindow();
         if (g_hwnd == foreground || g_witnessProc->IsForeground()) {
-            int64_t found = Hotkeys::Get()->Foo(wParam, lParam);
+            int64_t found = Hotkeys::Get()->CheckMatchingHotkey(wParam, lParam);
             if (found) {
                 PostMessage(g_hwnd, WM_COMMAND, found, NULL);
                 return -1; // Do not let the game see this keyboard input (in case it overlaps with the user's keybinds)
@@ -507,26 +507,28 @@ HWND CreateCheckbox(int x, int& y, __int64 message) {
     return checkbox;
 }
 
-HWND CreateCheckbox(int x, int& y, __int64 message, LPCWSTR hoverText, int32_t hotkey) {
+HWND CreateCheckbox(int x, int& y, __int64 message, int32_t hotkey) {
     auto checkbox = CreateCheckbox(x, y, message);
-    CreateTooltip(checkbox, hoverText);
+    std::wstring hoverText = Hotkeys::Get()->GetHoverText(hotkey);
+    CreateTooltip(checkbox, hoverText.c_str());
     Hotkeys::Get()->SetHotkey(hotkey, message);
     return checkbox;
 }
 
 // The same arguments as Button.
-std::pair<HWND, HWND> CreateLabelAndCheckbox(int x, int& y, int width, LPCWSTR text, __int64 message, LPCWSTR hoverText, int32_t hotkey) {
+std::pair<HWND, HWND> CreateLabelAndCheckbox(int x, int& y, int width, LPCWSTR text, __int64 message, int32_t hotkey) {
     // We need a distinct message (HMENU) for the label so that when we call CheckDlgButton it targets the checkbox, not the label.
     // However, we only use the low word (bottom 2 bytes) for logic, so we can safely modify the high word to make it distinct.
     auto label = CreateLabel(x + 20, y, width, text, message + 0x10000);
-    CreateTooltip(label, hoverText);
-    auto checkbox = CreateCheckbox(x, y, message, hoverText, hotkey);
+    std::wstring hoverText = Hotkeys::Get()->GetHoverText(hotkey);
+    CreateTooltip(label, hoverText.c_str());
+    auto checkbox = CreateCheckbox(x, y, message, hotkey);
     return {label, checkbox};
 }
 
 // Also the same arguments as Button.
 std::pair<HWND, HWND> CreateLabelAndCheckbox(int x, int& y, int width, LPCWSTR text, __int64 message) {
-    return CreateLabelAndCheckbox(x, y, width, text, message, L"", 0);
+    return CreateLabelAndCheckbox(x, y, width, text, message, 0);
 }
 
 HWND CreateText(int x, int& y, int width, LPCWSTR defaultText = L"", __int64 message = NULL) {
@@ -543,7 +545,7 @@ void CreateComponents() {
     int x = 10;
     int y = 10;
 
-    CreateLabelAndCheckbox(x, y, 100, L"Noclip Enabled", NOCLIP_ENABLED, L"Control-N", MASK_CONTROL | 'N');
+    CreateLabelAndCheckbox(x, y, 100, L"Noclip Enabled", NOCLIP_ENABLED, MASK_CONTROL | 'N');
 
     CreateLabel(x, y + 4, 100, L"Noclip Speed");
     g_noclipSpeed = CreateText(100, y, 130, L"10", NOCLIP_SPEED);
@@ -554,7 +556,7 @@ void CreateComponents() {
     CreateLabel(x, y + 4, 100, L"Field of View");
     g_fovCurrent = CreateText(100, y, 130, L"50.534012", FOV_CURRENT);
 
-    auto [_, canSave] = CreateLabelAndCheckbox(x, y, 185, L"Can save the game", CAN_SAVE, L"Shift-Control-S", MASK_SHIFT | MASK_CONTROL | 'S');
+    auto [_, canSave] = CreateLabelAndCheckbox(x, y, 185, L"Can save the game", CAN_SAVE, MASK_SHIFT | MASK_CONTROL | 'S');
     g_canSave = canSave;
     CheckDlgButton(g_hwnd, CAN_SAVE, true);
 
@@ -562,9 +564,9 @@ void CreateComponents() {
 
     CreateLabelAndCheckbox(x, y, 185, L"Disable Challenge time limit", INFINITE_CHALLENGE);
 
-    CreateLabelAndCheckbox(x, y, 185, L"Open the Console", OPEN_CONSOLE, L"Tilde (~)", MASK_SHIFT | VK_OEM_3);
+    CreateLabelAndCheckbox(x, y, 185, L"Open the Console", OPEN_CONSOLE, MASK_SHIFT | VK_OEM_3);
 
-    CreateLabelAndCheckbox(x, y, 185, L"Show Entity Solvability", EP_OVERLAY, L"Alt-2", MASK_ALT | '2');
+    CreateLabelAndCheckbox(x, y, 185, L"Show Entity Solvability", EP_OVERLAY, MASK_ALT | '2');
 
     CreateLabelAndCheckbox(x, y, 185, L"Enable vertical aim limit", CLAMP_AIM);
     CheckDlgButton(g_hwnd, CLAMP_AIM, true);
@@ -601,7 +603,7 @@ void CreateComponents() {
     g_panelState = CreateLabel(x, y, 200, L"");
     y += 20;
 
-    std::tie(g_snapToLabel, g_snapToPanel) = CreateLabelAndCheckbox(x, y, 200, L"Lock view to entity", SNAP_TO_PANEL, L"Control-L", MASK_CONTROL | 'L');
+    std::tie(g_snapToLabel, g_snapToPanel) = CreateLabelAndCheckbox(x, y, 200, L"Lock view to entity", SNAP_TO_PANEL, MASK_CONTROL | 'L');
     EnableWindow(g_snapToLabel, false);
     EnableWindow(g_snapToPanel, false);
 
