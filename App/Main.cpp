@@ -5,6 +5,7 @@
 #include "Shlobj.h"
 
 #include "Trainer.h"
+#include "Hotkeys.h"
 
 #include <unordered_set>
 
@@ -74,14 +75,6 @@ std::vector<float> g_savedCameraPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> g_savedCameraAng = {0.0f, 0.0f};
 int previousPanel = -1;
 std::vector<float> previousPanelStart;
-
-constexpr int32_t MASK_SHIFT   = 0x0100;
-constexpr int32_t MASK_CONTROL = 0x0200;
-constexpr int32_t MASK_ALT     = 0x0400;
-constexpr int32_t MASK_WIN     = 0x0800;
-constexpr int32_t MASK_REPEAT  = 0x1000;
-std::map<int32_t, __int64> hotkeyCodes;
-std::unordered_set<int32_t> hotkeys; // Just the keys, for perf.
 
 #define SetWindowTextA(...) static_assert(false, "Call SetStringText instead of SetWindowTextA");
 #define SetWindowTextW(...) static_assert(false, "Call SetStringText instead of SetWindowTextW");
@@ -446,36 +439,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     return DefWindowProc(hwnd, message, wParam, lParam);
 }
 
-int32_t lastCode = 0;
 LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
-    // Only steal hotkeys when we (or the game) are the active window.
     if (nCode == HC_ACTION) {
-        if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP) {
-            lastCode = 0; // Cancel key repeat
-        } else if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
-            auto foreground = GetForegroundWindow();
-            if (g_hwnd == foreground || g_witnessProc->IsForeground()) {
-                auto p = (PKBDLLHOOKSTRUCT)lParam;
-                int32_t fullCode = p->vkCode;
-
-                __int64 found = 0;
-                if (hotkeys.find(fullCode) != hotkeys.end()) { // For perf, we look at just the keyboard key first (before consulting GetKeyState).
-                    if (GetKeyState(VK_SHIFT) & 0x8000)     fullCode |= MASK_SHIFT;
-                    if (GetKeyState(VK_CONTROL) & 0x8000)   fullCode |= MASK_CONTROL;
-                    if (GetKeyState(VK_MENU) & 0x8000)      fullCode |= MASK_ALT;
-                    if (GetKeyState(VK_LWIN) & 0x8000)      fullCode |= MASK_WIN;
-                    if (GetKeyState(VK_RWIN) & 0x8000)      fullCode |= MASK_WIN;
-                    if (lastCode == fullCode)               fullCode |= MASK_REPEAT;
-
-                    auto search = hotkeyCodes.find(fullCode);
-                    if (search != std::end(hotkeyCodes)) found = search->second;
-                }
-                lastCode = fullCode & ~MASK_REPEAT;
-
-                if (found) {
-                    PostMessage(g_hwnd, WM_COMMAND, found, NULL);
-                    return -1; // Do not let the game see this keyboard input (in case it overlaps with the user's keybinds)
-                }
+        // Only steal hotkeys when we (or the game) are the active window.
+        auto foreground = GetForegroundWindow();
+        if (g_hwnd == foreground || g_witnessProc->IsForeground()) {
+            int64_t found = Hotkeys::Get()->Foo(wParam, lParam);
+            if (found) {
+                PostMessage(g_hwnd, WM_COMMAND, found, NULL);
+                return -1; // Do not let the game see this keyboard input (in case it overlaps with the user's keybinds)
             }
         }
     }
@@ -522,7 +494,7 @@ HWND CreateButton(int x, int& y, int width, LPCWSTR text, __int64 message) {
 HWND CreateButton(int x, int& y, int width, LPCWSTR text, __int64 message, LPCWSTR hoverText, int32_t hotkey) {
     auto button = CreateButton(x, y, width, text, message);
     CreateTooltip(button, hoverText);
-    hotkeyCodes[hotkey] = message;
+    Hotkeys::Get()->SetHotkey(hotkey, message);
     return button;
 }
 
@@ -538,7 +510,7 @@ HWND CreateCheckbox(int x, int& y, __int64 message) {
 HWND CreateCheckbox(int x, int& y, __int64 message, LPCWSTR hoverText, int32_t hotkey) {
     auto checkbox = CreateCheckbox(x, y, message);
     CreateTooltip(checkbox, hoverText);
-    hotkeyCodes[hotkey] = message;
+    Hotkeys::Get()->SetHotkey(hotkey, message);
     return checkbox;
 }
 
@@ -640,14 +612,12 @@ void CreateComponents() {
     CreateButton(x, y, 200, L"Open nearby doors", OPEN_DOOR, L"Control-O", MASK_CONTROL | 'O');
 
     // Hotkey for debug purposes, to get addresses based on a reported callstack
-    hotkeyCodes[MASK_CONTROL | MASK_SHIFT | MASK_ALT | VK_OEM_PLUS] = CALLSTACK;
+    Hotkeys::Get()->SetHotkey(MASK_CONTROL | MASK_SHIFT | MASK_ALT | VK_OEM_PLUS, CALLSTACK);
 
 #ifdef _DEBUG
     CreateButton(x, y, 200, L"Show nearby entities", SHOW_NEARBY);
     CreateButton(x, y, 200, L"Export all entities", EXPORT);
 #endif
-
-    for (const auto [key, _] : hotkeyCodes) hotkeys.insert(key & 0xFF);
 }
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow) {
