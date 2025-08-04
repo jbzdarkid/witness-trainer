@@ -31,6 +31,8 @@ Hotkeys::Hotkeys() {
 
     // Can't be changed, this is for internal debugging only.
     _hotkeyNames["dump_callstack"] = MASK_CONTROL | MASK_SHIFT | MASK_ALT | VK_OEM_PLUS;
+    // Can't be changed, used to signal 'end of hold'
+    _hotkeyNames["key_released"] = KEYCODE_RELEASE;
 }
 
 bool Hotkeys::CompareNoCase(const std::string_view& a, const char* b) {
@@ -61,6 +63,7 @@ bool Hotkeys::ParseHotkeyFile() {
         path = outPath;
         CoTaskMemFree(outPath);
     }
+    _hotkeyFilePath = path + L"\\WitnessTrainer\\keybinds.txt";
 
     if (GetFileAttributes(path.c_str()) == INVALID_FILE_ATTRIBUTES) return false; // Do not try to create LocalAppData
     path += L"\\WitnessTrainer";
@@ -85,8 +88,7 @@ bool Hotkeys::ParseHotkeyFile() {
 
         size_t colonIndex = lineView.find_first_of(':');
         if (colonIndex == std::string::npos) continue;
-        std::string_view key = lineView.substr(0, colonIndex); // TODO: Lowercase me!
-        // TODO: Run some post-parse sanity check to make sure there's no extra keys.
+        std::string_view keyView = lineView.substr(0, colonIndex);
 
         keycode keyCode = 0;
         size_t valueIndex = lineView.find_first_not_of(' ', colonIndex + 1);
@@ -95,16 +97,26 @@ bool Hotkeys::ParseHotkeyFile() {
             std::string_view segment(lineView.substr(valueIndex, partIndex - valueIndex));
             if (segment.size() == 1) {
                 char ch = segment[0];
-                if (ch >= 'a' && ch <= 'z') ch += 'A' - 'a';
+                ASSERT(ch >= 0x20 && ch <= 0x7F, L"Unable to parse letter: " + std::wstring(1, ch));
+                if (ch >= 'a' && ch <= 'z') ch += 'A' - 'a'; // ASCII uppercase, to match the virtual keycodes
                 keyCode |= ch;
-                ASSERT(partIndex == std::string::npos, L"A one-character segment should always be at the end of the keycode.");
+                ASSERT(partIndex == std::string::npos, L"The letter key in a hotkey must go at the end of the line.");
             }
-            else if (CompareNoCase(segment, "control")) keyCode |= MASK_CONTROL;
-            else if (CompareNoCase(segment, "shift"))   keyCode |= MASK_SHIFT;
-            else if (CompareNoCase(segment, "alt"))     keyCode |= MASK_ALT;
-            else if (CompareNoCase(segment, "win"))     keyCode |= MASK_WIN;
-            else if (CompareNoCase(segment, "tilde"))   keyCode |= MASK_SHIFT | VK_OEM_3;
-            else if (CompareNoCase(segment, "plus"))    keyCode |= VK_OEM_PLUS;
+            else if (CompareNoCase(segment, "control"))  keyCode |= MASK_CONTROL;
+            else if (CompareNoCase(segment, "shift"))    keyCode |= MASK_SHIFT;
+            else if (CompareNoCase(segment, "alt"))      keyCode |= MASK_ALT;
+            else if (CompareNoCase(segment, "win"))      keyCode |= MASK_WIN;
+            else if (CompareNoCase(segment, "tilde"))    keyCode |= MASK_SHIFT | VK_OEM_3;
+            else if (CompareNoCase(segment, "plus"))     keyCode |= VK_OEM_PLUS;
+            else if (CompareNoCase(segment, "pageup"))   keyCode |= VK_PRIOR;
+            else if (CompareNoCase(segment, "pagedown")) keyCode |= VK_NEXT;
+            else if (CompareNoCase(segment, "home"))     keyCode |= VK_HOME;
+            else if (CompareNoCase(segment, "end"))      keyCode |= VK_END;
+            else if (CompareNoCase(segment, "space"))    keyCode |= VK_SPACE;
+            else if (CompareNoCase(segment, "up"))       keyCode |= VK_UP;
+            else if (CompareNoCase(segment, "down"))     keyCode |= VK_DOWN;
+            else if (CompareNoCase(segment, "left"))     keyCode |= VK_LEFT;
+            else if (CompareNoCase(segment, "right"))    keyCode |= VK_RIGHT;
             else {
                 ASSERT(false, L"Unable to parse segment: " + std::wstring(segment.begin(), segment.end()));
             }
@@ -113,7 +125,16 @@ bool Hotkeys::ParseHotkeyFile() {
             valueIndex = partIndex + 1;
         }
 
-        if (keyCode != 0) _hotkeyNames[std::string(key)] = keyCode;
+        if (keyCode != 0) {
+            std::string key(keyView.size(), '\0');
+            for (int i = 0; i < keyView.size(); i++) {
+                char ch = keyView[i];
+                ASSERT(ch >= 0x40 && ch <= 0x7F, L"Unable to parse key: " + std::wstring(keyView.begin(), keyView.end()));
+                if (ch >= 'A' && ch <= 'Z') ch += 'a' - 'A'; // ASCII lowercase
+                key[i] = ch;
+            }
+            _hotkeyNames[key] = keyCode;
+        }
     }
 
     return true;
@@ -121,7 +142,12 @@ bool Hotkeys::ParseHotkeyFile() {
 
 int64_t Hotkeys::CheckMatchingHotkey(WPARAM wParam, LPARAM lParam) {
     if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP) {
-        _lastCode = 0; // Cancel key repeat
+        if (_lastCode != 0) {
+            _lastCode = 0; // Cancel key repeat, and return a signal that a key was let up
+
+            auto search = _hotkeyCodes.find(KEYCODE_RELEASE);
+            if (search != std::end(_hotkeyCodes)) return search->second;
+        }
     } else if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
         auto p = (PKBDLLHOOKSTRUCT)lParam;
         int32_t fullCode = p->vkCode;
@@ -134,12 +160,11 @@ int64_t Hotkeys::CheckMatchingHotkey(WPARAM wParam, LPARAM lParam) {
             if (GetKeyState(VK_MENU) & 0x8000)      fullCode |= MASK_ALT;
             if (GetKeyState(VK_LWIN) & 0x8000)      fullCode |= MASK_WIN;
             if (GetKeyState(VK_RWIN) & 0x8000)      fullCode |= MASK_WIN;
-            if (_lastCode == fullCode)              fullCode |= MASK_REPEAT;
 
             auto search = _hotkeyCodes.find(fullCode);
             if (search != std::end(_hotkeyCodes)) found = search->second;
         }
-        _lastCode = fullCode & ~MASK_REPEAT;
+        _lastCode = fullCode;
         return found;
     }
 
@@ -147,6 +172,7 @@ int64_t Hotkeys::CheckMatchingHotkey(WPARAM wParam, LPARAM lParam) {
 }
 
 void Hotkeys::RegisterHotkey(LPCSTR hotkeyName, int64_t message) {
+    _registeredHotkeys.insert(hotkeyName);
     auto search = _hotkeyNames.find(hotkeyName);
     if (search == std::end(_hotkeyNames)) return; // No keybind for this hotkey, no need to register a callback
 
@@ -173,14 +199,31 @@ std::wstring Hotkeys::GetHoverText(keycode keyCode) {
     if (keyCode & MASK_ALT)     ss << "Alt-";
     if (keyCode & MASK_WIN)     ss << "Win-";
 
-    bool repeat = keyCode & MASK_REPEAT;
     keyCode &= 0xFF; // Remove masks for comparison to ascii codes
 
-    if      (keyCode >= 'a' && keyCode <= 'z') ss << (char)(keyCode - 'a' + 'A');
-    else if (keyCode >= '0' && keyCode <= ']') ss << (char)keyCode; // Includes A-Z and 0-9
-    else if (keyCode == VK_OEM_PLUS) ss << '+';
+    if      (keyCode >= 'a' && keyCode <= 'z')  ss << (char)(keyCode - 'a' + 'A');
+    else if (keyCode >= '0' && keyCode <= ']')  ss << (char)keyCode; // Includes A-Z and 0-9
+    else if (keyCode == VK_OEM_PLUS)            ss << '+';
+    else if (keyCode == VK_PRIOR)               ss << "PageUp";
+    else if (keyCode == VK_NEXT)                ss << "PageDown";
+    else if (keyCode == VK_HOME)                ss << "Home";
+    else if (keyCode == VK_END)                 ss << "End";
+    else if (keyCode == VK_SPACE)               ss << "Space";
+    else if (keyCode == VK_UP)                  ss << "UpArrow";
+    else if (keyCode == VK_DOWN)                ss << "DownArrow";
+    else if (keyCode == VK_LEFT)                ss << "LeftArrow";
+    else if (keyCode == VK_RIGHT)               ss << "RightArrow";
 
-
-    if (repeat) ss << " (held)";
     return ss.str();
+}
+
+void Hotkeys::SanityCheckHotkeys() {
+    for (const auto& it : _hotkeyNames) {
+        auto search = _registeredHotkeys.find(it.first);
+        if (search == std::end(_registeredHotkeys)) {
+            std::wstring __fullMessage = std::wstring(L"Error while parsing hotkey file (") + _hotkeyFilePath + std::wstring(L")\n")
+                + std::wstring(L"Found entry for unknown hotkey: ") + std::wstring(it.first.begin(), it.first.end());
+            ShowAssertDialogue(__fullMessage.c_str());
+        }
+    }
 }

@@ -9,6 +9,9 @@
         ShowAssertDialogue(W_(message)); \
     }
 
+#define CLAMP(value, min, max) \
+    ((value) < min ? (value) : ((value) > max ? max : (value)))
+
 #define _HAS_EXCEPTIONS 0
 
 // We include the debug headers early, so we can override the assert macros.

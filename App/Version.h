@@ -4,11 +4,12 @@
 #define TO_STRING(s) TO_STRING2(s)
 
 #define MAJOR 1
-#define MINOR 8
-#define PATCH 8
+#define MINOR 9
+#define PATCH 0
 
 #define VERSION_STR     TO_STRING(MAJOR) L"." TO_STRING(MINOR) L"." TO_STRING(PATCH)
-#define VERSION			MAJOR, MINOR, PATCH
+#define VERSION         MAJOR, MINOR, PATCH
 
 #define PRODUCT_NAME L"Witness Trainer"
 #define WINDOW_CLASS L"WitnessTrainer"
+#define WINDOW_TITLE PRODUCT_NAME L" v" VERSION_STR

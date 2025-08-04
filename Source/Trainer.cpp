@@ -164,8 +164,7 @@ Trainer::~Trainer() {
     SetNoclip(false);
     SetNoclipSpeed(4.0f);
     float fov = GetFov();
-    if (fov < 80.0f) SetFov(80.0f);
-    if (fov > 120.0f) SetFov(120.0f);
+    SetFov(CLAMP(fov, 80.0f, 120.0f));
     SetCanSave(true);
     SetSprintSpeed(2.0f);
     SetInfiniteChallenge(false);

@@ -32,6 +32,10 @@
 #define EP_OVERLAY          0x421
 #define CLAMP_AIM           0x422
 #define OPEN_DOOR           0x423
+#define NOCLIP_UP           0x424
+#define NOCLIP_DOWN         0x425
+#define KEY_RELEASED        0x426
+#define OPEN_KEYBINDS       0x427
 
 // BUGS:
 // - Changing from old ver to new ver can set FOV = 0?
@@ -43,11 +47,9 @@
 // - show player collision
 // - Icon for trainer
 //   https://stackoverflow.com/questions/40933304
-// - Delete all saves (?)
 // - Save settings to some file, and reload them on trainer start
 // - CreateRemoteThread + VirtualAllocEx allows me to *run* code in another process. This seems... powerful!
 // - SuspendThread as a way to pause the game when an assert fires? Then I could investigate...
-// - Hotkeys should eat from game (e.g. shift-ctrl-s)
 // - Change the solution fade time so that you can TP to puzzle (or whatever) and see what you traced. This will be easier than GDI+ nonsense.
 //   It's still hard though.
 
@@ -69,7 +71,7 @@ HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
 std::shared_ptr<Memory> g_witnessProc;
-HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelDist, g_panelName, g_panelState, g_panelPicture, g_activateGame, g_snapToPanel, g_snapToLabel, g_canSave, g_videoData;
+HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelDist, g_panelName, g_panelState, g_panelPicture, g_activateGame, g_snapToPanel, g_snapToLabel, g_canSave, g_videoData, g_flyUp, g_flyDown;
 
 std::vector<float> g_savedCameraPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> g_savedCameraAng = {0.0f, 0.0f};
@@ -250,16 +252,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             PostQuitMessage(0);
             return 0;
         case WM_COMMAND:
-            break; // LOWORD(wParam) contains the command
-		    case WM_ERASEBKGND: // ???
-		    {
-			      RECT rc;
-			      ::GetClientRect(hwnd, &rc);
-			      HBRUSH brush = CreateSolidBrush(RGB(255,255,255));
-			      FillRect((HDC)wParam, &rc, brush);
-			      DeleteObject(brush);
-			      return TRUE;
-		    }
+            break; // LOWORD(wParam) contains the actual command, handled below
+        case WM_ERASEBKGND: // ???
+        {
+            RECT rc;
+            ::GetClientRect(hwnd, &rc);
+            HBRUSH brush = CreateSolidBrush(RGB(255,255,255));
+            FillRect((HDC)wParam, &rc, brush);
+            DeleteObject(brush);
+            return TRUE;
+        }
         case WM_CTLCOLORSTATIC:
             // Get rid of the gross gray background. https://stackoverflow.com/a/4495814
             SetTextColor((HDC)wParam, RGB(0, 0, 0));
@@ -274,7 +276,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 // Don't discard any settings, just free the trainer.
                 if (g_trainer) g_trainer = nullptr;
                 // Also reset the title & launch text, since they can get stuck
-                SetStringText(g_hwnd, L"Witness Trainer");
+                SetStringText(g_hwnd, WINDOW_TITLE);
                 SetStringText(g_activateGame, L"Launch game");
                 break;
             case ProcStatus::Reload:
@@ -286,7 +288,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     g_trainer = Trainer::Create(g_witnessProc);
                 }
                 if (!g_trainer) break;
-                SetStringText(g_hwnd, L"Witness Trainer");
+                SetStringText(g_hwnd, WINDOW_TITLE);
                 // Or, we started a new game / loaded a save, in which case some of the entity data might have been reset.
                 SetActivePanel(-1);
                 previousPanel = -1;
@@ -308,11 +310,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     SetStringText(g_hwnd, L"Attaching to The Witness...");
                     g_trainer = Trainer::Create(g_witnessProc);
                     if (!g_trainer) break;
-                    SetStringText(g_hwnd, L"Witness Trainer");
+                    SetStringText(g_hwnd, WINDOW_TITLE);
                     SetFloatText(g_noclipSpeed, g_trainer->GetNoclipSpeed());
                     SetFloatText(g_sprintSpeed, g_trainer->GetSprintSpeed());
                     SetFloatText(g_fovCurrent, g_trainer->GetFov());
                     CheckDlgButton(hwnd, NOCLIP_ENABLED, g_trainer->GetNoclip());
+                    EnableWindow(g_flyUp, g_trainer->GetNoclip());
+                    EnableWindow(g_flyDown, g_trainer->GetNoclip());
                     CheckDlgButton(hwnd, CAN_SAVE, g_trainer->CanSave());
                     CheckDlgButton(hwnd, DOORS_PRACTICE, g_trainer->GetRandomDoorsPractice());
                     CheckDlgButton(hwnd, INFINITE_CHALLENGE, g_trainer->GetInfiniteChallenge());
@@ -324,6 +328,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 } else {
                     // Process was already running, and so were we (this recurs every heartbeat). Enforce settings and apply repeated actions.
                     g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
+
+                    // Check to see if we're holding the 'fly up' or 'fly down' buttons, then move the camera accordingly.
+                    if (SendMessage(g_flyUp, BM_GETSTATE, NULL, NULL) & BST_PUSHED) {
+                        auto pos = g_trainer->GetCameraPos();
+                        pos[2] += 0.01f * GetWindowFloat(g_noclipSpeed);
+                        pos[2] = CLAMP(pos[2], -10000.0f, 10000.0f);
+                        g_trainer->SetCameraPos(pos);
+                    } else if (SendMessage(g_flyDown, BM_GETSTATE, NULL, NULL) & BST_PUSHED) {
+                        auto pos = g_trainer->GetCameraPos();
+                        pos[2] -= 0.01f * GetWindowFloat(g_noclipSpeed);
+                        pos[2] = CLAMP(pos[2], -10000.0f, 10000.0f);
+                        g_trainer->SetCameraPos(pos);
+                    }
 
                     // If we are the foreground window, set FOV. Otherwise, read FOV.
                     if (g_hwnd == GetForegroundWindow()) {
@@ -376,6 +393,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 trainer->SetPlayerPos(playerPos);
             }
             ToggleOption(NOCLIP_ENABLED, &Trainer::SetNoclip);
+            EnableWindow(g_flyUp, IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED));
+            EnableWindow(g_flyDown, IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED));
         } else if (command == CAN_SAVE) {
             if (IsDlgButtonChecked(g_hwnd, CAN_SAVE)) {
                 // If the game is running, request one last save before disabling saving
@@ -397,11 +416,21 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             CoTaskMemFree(outPath);
             savesFolder += L"\\The Witness";
             ShellExecute(NULL, L"open", savesFolder.c_str(), NULL, NULL, SW_SHOWDEFAULT);
+        } else if (command == OPEN_KEYBINDS) {
+            std::wstring hotkeyFile = Hotkeys::Get()->GetHotkeyFilePath();
+            ShellExecute(NULL, L"open", hotkeyFile.c_str(), NULL, NULL, SW_SHOWDEFAULT);
         } else if (command == SNAP_TO_PANEL) {
             if (HIWORD(wParam) == STN_CLICKED && IsWindowEnabled(g_snapToPanel)) {
                 bool enabled = IsDlgButtonChecked(g_hwnd, SNAP_TO_PANEL);
                 CheckDlgButton(g_hwnd, SNAP_TO_PANEL, !enabled);
             }
+        } else if (command == NOCLIP_UP) {
+            PostMessage(g_flyUp, BM_SETSTATE, true, NULL);
+        } else if (command == NOCLIP_DOWN) {
+            PostMessage(g_flyDown, BM_SETSTATE, true, NULL);
+        } else if (command == KEY_RELEASED) {
+            PostMessage(g_flyUp, BM_SETSTATE, false, NULL);
+            PostMessage(g_flyDown, BM_SETSTATE, false, NULL);
         } else if (!trainer && HIWORD(wParam) == 0) { // Message was triggered by the user
             MessageBox(g_hwnd, L"The process must be running in order to use this button", L"", MB_OK);
         }
@@ -447,7 +476,9 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
             int64_t found = Hotkeys::Get()->CheckMatchingHotkey(wParam, lParam);
             if (found) {
                 PostMessage(g_hwnd, WM_COMMAND, found, NULL);
-                return -1; // Do not let the game see this keyboard input (in case it overlaps with the user's keybinds)
+
+                // If this command is a keydown, do not send it to the game in case it overlaps with the user's keybinds.
+                if (found != KEY_RELEASED) return -1;
             }
         }
     }
@@ -496,17 +527,12 @@ HWND CreateButton(int x, int& y, int width, LPCWSTR text, __int64 message, LPCST
     return button;
 }
 
-HWND CreateCheckbox(int x, int& y, __int64 message) {
+HWND CreateCheckbox(int x, int& y, __int64 message, const std::wstring& hoverText) {
     HWND checkbox = CreateWindow(L"BUTTON", NULL,
         WS_VISIBLE | WS_CHILD | BS_CHECKBOX,
         x, y + 2, 12, 12,
         g_hwnd, (HMENU)message, g_hInstance, NULL);
     y += 20;
-    return checkbox;
-}
-
-HWND CreateCheckbox(int x, int& y, __int64 message, const std::wstring& hoverText) {
-    auto checkbox = CreateCheckbox(x, y, message);
     CreateTooltip(checkbox, hoverText.c_str());
     return checkbox;
 }
@@ -541,6 +567,12 @@ void CreateComponents() {
 
     CreateLabelAndCheckbox(x, y, 100, L"Noclip Enabled", NOCLIP_ENABLED, "noclip_enabled");
 
+    g_flyUp = CreateButton(x, y, 70, L"Fly up", NOCLIP_UP, "fly_up");
+    EnableWindow(g_flyUp, false);
+    y -= 30;
+    g_flyDown = CreateButton(x + 80, y, 70, L"Fly down", NOCLIP_DOWN, "fly_down");
+    EnableWindow(g_flyDown, false);
+
     CreateLabel(x, y + 4, 100, L"Noclip Speed");
     g_noclipSpeed = CreateText(100, y, 130, L"10", NOCLIP_SPEED);
 
@@ -556,7 +588,7 @@ void CreateComponents() {
 
     CreateLabelAndCheckbox(x, y, 185, L"Random Doors Practice", DOORS_PRACTICE, "doors_practice");
 
-    CreateLabelAndCheckbox(x, y, 185, L"Disable Challenge time limit", INFINITE_CHALLENGE, "challenge_limit");
+    CreateLabelAndCheckbox(x, y, 185, L"Disable Challenge time limit", INFINITE_CHALLENGE, "challenge_timer");
 
     CreateLabelAndCheckbox(x, y, 185, L"Open the Console", OPEN_CONSOLE, "open_console");
 
@@ -584,6 +616,7 @@ void CreateComponents() {
 
     g_activateGame = CreateButton(x, y, 200, L"Launch game", ACTIVATE_GAME, "launch_game");
     CreateButton(x, y, 200, L"Open save folder", OPEN_SAVES, "open_save_folder");
+    CreateButton(x, y, 200, L"Open keybinds file", OPEN_KEYBINDS, "open_keybinds");
 
     g_activePanel = CreateLabel(x, y, 200, L"No active entity");
     y += 20;
@@ -610,9 +643,12 @@ void CreateComponents() {
     // Hotkey for debug purposes, to get addresses based on a reported callstack
     Hotkeys::Get()->RegisterHotkey("dump_callstack", CALLSTACK);
 
+    // Required to 'unselect' any hold-based keybinds
+    Hotkeys::Get()->RegisterHotkey("key_released", KEY_RELEASED);
+
 #ifdef _DEBUG
     CreateButton(x, y, 200, L"Show nearby entities", SHOW_NEARBY, "show_nearby");
-    CreateButton(x, y, 200, L"Export all entities", EXPORT, "export");
+    CreateButton(x, y, 200, L"Export all entities", EXPORT, "export_entities");
 #endif
 }
 
@@ -634,18 +670,25 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     };
     RegisterClass(&wndClass);
 
+#ifndef _DEBUG
+    int height = 500;
+#else // Debug mode has some extra *stuff* at the bottom for the sounds. Make the box bigger to handle it.
+    int height = 600;
+#endif
+
     RECT rect;
     GetClientRect(GetDesktopWindow(), &rect);
-    g_hwnd = CreateWindow(WINDOW_CLASS, PRODUCT_NAME,
+    g_hwnd = CreateWindow(WINDOW_CLASS, WINDOW_TITLE,
         WS_SYSMENU | WS_MINIMIZEBOX,
-        rect.right - 550, 200, 500, 500,
+        rect.right - 550, 200, 500, height,
         nullptr, nullptr, hInstance, nullptr);
     ShowWindow(g_hwnd, nCmdShow);
     UpdateWindow(g_hwnd);
     g_hInstance = hInstance;
 
-    CreateComponents();
     DebugUtils::version = VERSION_STR;
+    CreateComponents();
+    Hotkeys::Get()->SanityCheckHotkeys();
 
     g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
     g_witnessProc->StartHeartbeat(g_hwnd, HEARTBEAT);
