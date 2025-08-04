@@ -9,7 +9,7 @@ It should work with any Steam release of the game, but YMMV with GoG/Epic/Xbox v
 This program is Windows-only for the forseeable future.
 
 # Features
-- Noclip mode [Hotkey: Control-N]
+- Noclip mode
   * Noclip stands for "No Clipping", i.e. you will not have collision (clip) any geometry while using it.
   * In other words, you can fly around and through walls.
   * Note that some of the areas in the game will derender while out of bounds, so don't worry if you see the world flickering.
@@ -19,7 +19,7 @@ This program is Windows-only for the forseeable future.
 - Field of View change
   * This lets you adjust your FoV beyond the normal limits of the game. This is useful for practicing snipes, since a lower FoV will zoom you in on the panel you're sniping.
   * Note that decreasing the FoV does not change what is or isn't rendered, so you won't be able to see panels that you couldn't before.
-- Disable saving [Hotkey: Shift-Control-S]
+- Disable saving
   * Disabling saving is a great way to practice an individual segment over and over.
   * When you enable this checkbox (and disable saving), the game will make one final save from your current position.
   * Then, you can practice whatever segment you need to, and once you complete it (or fail), reload your latest save, which will bring you back to the start.
@@ -31,7 +31,7 @@ This program is Windows-only for the forseeable future.
 - Disable challenge time limit
   * This setting is useful for practicing the challenge, if you are a newer runner. It is important to practice all the way through the challenge, especially since the harder parts are at the end.
   * Note that this does not remove the music, so you can still keep track of if you're finishing within the normal timer.
-- Save Position (and Load Position) [Hotkeys: Control-P and Shift-Control-P]
+- Save Position (and Load Position)
   * Useful to test running times between locations.
   * Also useful for practicing extreme distance snipes, where angles are important (such as the mountaintop redirect snipe)
   * X represents your horizontal position (-X = west towards symmetry, +X = east towards mountain)
@@ -41,7 +41,7 @@ This program is Windows-only for the forseeable future.
   * Psi (Φ) represents your vertical angle (-Φ = rotating down, +Φ = rotating up)
 - Show unsolved panels
   * Fairly self-explanatory, but very helpful for figuring out what you missed in a failed 100% run.
-- Lock to entity [Hotkey: Control-L]
+- Lock to entity
   * When you have a previous panel or EP, this checkbox will keep your 3d view snapped into the startpoint of that entity.
   * This is helpful for practicing snipes, or trying to develop new snipes.
   * It is also helpful for solving panels through walls
@@ -59,3 +59,13 @@ This program is Windows-only for the forseeable future.
   * This will allow you to look all the way up and down (helpful for lining up with a pixel on the ground)
 - Open nearby doors
   * This will search for nearby Entity_Door objects, and open any nearby ones. I'm not too sure why you'd need this, but it's here anyways.
+- Custom hotkeys
+  * Hotkeys can now be changed by using the hotkey file at %LocalAppData%\WitnessTrainer\hotkeys.txt
+  * If the file does not exist, it will be created at app start
+  * You must reload the app to handle new hotkeys
+  * Supports US-INTL keys, please contact me if you need help with non-english keybinds
+  * Keybinds are available for any button/checkbox (even if they're not present by default). Check out the keybinds file for a full list of bindable actions.
+- Noclip fly up/down
+  * While in noclip mode, use these buttons (or hotkeys) to ascend and desend
+  * Keys can be held to move continuously
+  * Vertical speed scales with noclip speed
