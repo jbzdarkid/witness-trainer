@@ -280,7 +280,7 @@ size_t Memory::ExecuteSigScans() {
 std::string Memory::ReadString(const std::vector<__int64>& offsets) {
     __int64 charAddr = ReadData<__int64>(offsets, 1)[0];
     if (charAddr == 0) return ""; // Handle nullptr for strings
-    
+
     std::vector<char> tmp;
     auto nullTerminator = tmp.begin(); // Value is only for type information.
     for (size_t maxLength = (1 << 6); maxLength < (1 << 10); maxLength *= 2) {

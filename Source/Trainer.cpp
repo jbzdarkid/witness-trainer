@@ -123,7 +123,7 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
 
     memory->AddSigScan({0x0F, 0x84, 0x38, 0x06, 0x00, 0x00, 0x48, 0x89, 0x58, 0xF0}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
         trainer->_showPatternStatus = Memory::ReadStaticInt(offset, index - 5, data, 5);
-    }); 
+    });
 
     memory->AddSigScan({0x41, 0x3B, 0xFC, 0x41, 0x0F, 0x4F, 0xFC}, [trainer](__int64 offset, int index, const std::vector<byte>& data) {
         trainer->_drawPatternManager = offset + index + 0x16;
