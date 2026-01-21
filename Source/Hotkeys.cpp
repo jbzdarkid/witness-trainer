@@ -20,17 +20,10 @@ Hotkeys::Hotkeys() {
     if (!ParseHotkeyFile()) {
         // Default hotkeys (duplicate of what's defined in DEFAULT_HOTKEYS in the header), just in case the parse fails.
         _hotkeyNames["noclip_enabled"] = MASK_CONTROL | 'N';
-        _hotkeyNames["can_save_game"] = MASK_SHIFT | MASK_CONTROL | 'S';
-        _hotkeyNames["open_console"] = MASK_SHIFT | VK_OEM_3;
-        _hotkeyNames["ep_overlay"] = MASK_ALT | '2';
         _hotkeyNames["save_position"] = MASK_CONTROL | 'P';
         _hotkeyNames["load_position"] = MASK_SHIFT | MASK_CONTROL | 'P';
-        _hotkeyNames["snap_to_panel"] = MASK_CONTROL | 'L';
-        _hotkeyNames["open_doors"] = MASK_CONTROL | 'O';
     }
 
-    // Can't be changed, this is for internal debugging only.
-    _hotkeyNames["dump_callstack"] = MASK_CONTROL | MASK_SHIFT | MASK_ALT | VK_OEM_PLUS;
     // Can't be changed, used to signal 'end of hold'
     _hotkeyNames["key_released"] = KEYCODE_RELEASE;
 }

@@ -82,6 +82,7 @@ void Memory::Heartbeat(HWND window, UINT message) {
         // Process has exited, clean up. We only need to reset _handle here -- its validity is linked to all other class members.
         _computedAddresses.Clear();
         _handle = nullptr;
+        _pid = 0;
 
         _nextStatus = ProcStatus::Started;
         PostMessage(window, message, ProcStatus::Stopped, NULL);
@@ -90,23 +91,23 @@ void Memory::Heartbeat(HWND window, UINT message) {
         return;
     }
 
-    __int64 entityManager = ReadData<__int64>({_globals}, 1)[0];
-    if (entityManager == 0) {
-        // Game hasn't loaded yet, we're still sitting on the launcher
-        PostMessage(window, message, ProcStatus::NotRunning, NULL);
-        return;
-    }
-
-    // To avoid obtaining the HWND for the launcher, we wait to determine HWND until after the entity manager is allocated (the main game has started).
+    // To avoid obtaining the HWND for the launcher, we double check that the window is valid.
     if (_hwnd == NULL) {
         _hwnd = GetProcessHwnd(_pid);
     } else {
         // Under some circumstances the window can expire? Or the game re-allocates it? I have no idea.
         // Anyways, we check to see if the title is wrong, and if so, search for the window again.
-        constexpr int TITLE_SIZE = sizeof(L"The Witness") / sizeof(wchar_t);
+        constexpr wchar_t GAME_TITLE[] = L"HOB";
+        constexpr int TITLE_SIZE = sizeof(GAME_TITLE) / sizeof(wchar_t);
         wchar_t title[TITLE_SIZE] = {L'\0'};
         GetWindowTextW(_hwnd, title, TITLE_SIZE);
-        if (wcsncmp(title, L"The Witness", TITLE_SIZE) != 0) _hwnd = GetProcessHwnd(_pid);
+        if (wcsncmp(title, GAME_TITLE, TITLE_SIZE) != 0) _hwnd = GetProcessHwnd(_pid);
+    }
+
+    if (_baseAddress == 0) {
+        // Game hasn't loaded yet, we're still sitting on the launcher
+        PostMessage(window, message, ProcStatus::NotRunning, NULL);
+        return;
     }
 
     if (_hwnd == NULL) {
@@ -114,32 +115,9 @@ void Memory::Heartbeat(HWND window, UINT message) {
         return;
     }
 
-    // New game causes the entity manager to re-allocate
-    if (entityManager != _previousEntityManager) {
-        _previousEntityManager = entityManager;
-        _computedAddresses.Clear();
-    }
-
-    // Loading a game causes entities to be shuffled
-    int loadCount = ReadAbsoluteData<int>({entityManager, _loadCountOffset}, 1)[0];
-    if (_previousLoadCount != loadCount) {
-        _previousLoadCount = loadCount;
-        _computedAddresses.Clear();
-    }
-
-    int numEntities = ReadData<int>({_globals, 0x10}, 1)[0];
-    if (numEntities != 400'000) {
-        // New game is starting, do not take any actions.
-        _nextStatus = ProcStatus::NewGame;
-        return;
-    }
-
-    byte isLoading = ReadAbsoluteData<byte>({entityManager, _loadCountOffset - 0x4}, 1)[0];
-    if (isLoading == 0x01) {
-        // Saved game is currently loading, do not take any actions.
-        _nextStatus = ProcStatus::Reload;
-        return;
-    }
+    BOOL wow64Process = false;
+    IsWow64Process(_handle, &wow64Process);
+    _pointerSize = (wow64Process == TRUE) ? 4 : 8;
 
     if (_trainerHasStarted == false) {
         // If it's the first time we started, and the game appears to be running, return "Running" instead of "Started".
@@ -182,6 +160,7 @@ void Memory::Initialize() {
     // Clear out any leftover sigscans from consumers (e.g. the trainer)
     _sigScans.clear();
 
+    /* TODO: Sigscans for determining loading go here
     AddSigScan({0x74, 0x41, 0x48, 0x85, 0xC0, 0x74, 0x04, 0x48, 0x8B, 0x48, 0x10}, [&](__int64 offset, int index, const std::vector<byte>& data) {
         _globals = Memory::ReadStaticInt(offset, index + 0x14, data);
     });
@@ -189,6 +168,7 @@ void Memory::Initialize() {
     AddSigScan({0x01, 0x00, 0x00, 0x66, 0xC7, 0x87}, [&](__int64 offset, int index, const std::vector<byte>& data) {
         _loadCountOffset = *(int*)&data[index-1];
     });
+    */
 
     // This little song-and-dance is because we need _handle in order to execute sigscans.
     // But, we use _handle to indicate success, so we need to reset it.
@@ -356,6 +336,10 @@ int32_t Memory::CallFunction(int64_t relativeAddress,
     // Although I don't use it here, argument 5 (lpParameter) can be used to pass a single 8-byte integer to the target process.
     // Note that you cannot transfer data this way; if you pass a pointer it will point to memory in this process, not the target.
     HANDLE thread = CreateRemoteThread(_handle, NULL, 0, (LPTHREAD_START_ROUTINE)_functionPrimitive, 0, 0, 0);
+    if (!thread) {
+        assert(thread, "[Internal error] Failed to allocate a thread in the target process");
+        return 0;
+    }
 	DWORD result = WaitForSingleObject(thread, INFINITE);
 
     // This will be the return value of the called function.
@@ -416,7 +400,7 @@ uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets, bool absolute) {
         // If the address was not yet computed, read it from memory.
         uintptr_t computedAddress = 0;
         if (!_handle) return 0;
-        if (ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(cumulativeAddress), &computedAddress, sizeof(computedAddress), NULL) && computedAddress != 0) {
+        if (ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(cumulativeAddress), &computedAddress, _pointerSize, NULL) && computedAddress != 0) {
             // Success!
             _computedAddresses.Set(cumulativeAddress, computedAddress);
             cumulativeAddress = computedAddress;

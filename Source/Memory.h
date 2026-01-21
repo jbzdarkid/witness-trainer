@@ -87,12 +87,9 @@ private:
     HANDLE _handle = nullptr;
     DWORD _pid = 0;
     HWND _hwnd = NULL;
+    size_t _pointerSize = 0;
     uintptr_t _baseAddress = 0;
     uintptr_t _endOfModule = 0;
-    __int64 _globals = 0;
-    int _loadCountOffset = 0;
-    __int64 _previousEntityManager = 0;
-    int _previousLoadCount = 0;
     ProcStatus _nextStatus = ProcStatus::Started;
     bool _trainerHasStarted = false;
 

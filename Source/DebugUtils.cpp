@@ -81,7 +81,8 @@ std::pair<uint64_t, uint64_t> DebugUtils::GetModuleBounds(HANDLE process) {
     HMODULE modules[1];
     EnumProcessModules(process, &modules[0], sizeof(HMODULE), &unused);
     MODULEINFO moduleInfo;
-    GetModuleInformation(process, modules[0], &moduleInfo, sizeof(moduleInfo));
+    BOOL success = GetModuleInformation(process, modules[0], &moduleInfo, sizeof(moduleInfo));
+    if (success == FALSE) return {0, 0};
 
     uint64_t startOfModule = reinterpret_cast<uint64_t>(moduleInfo.lpBaseOfDll);
     uint64_t endOfModule = startOfModule + moduleInfo.SizeOfImage;

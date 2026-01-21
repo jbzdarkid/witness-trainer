@@ -12,71 +12,25 @@
 #define HEARTBEAT           0x401
 #define SAVE_POS            0x402
 #define LOAD_POS            0x403
-#define NOCLIP_SPEED        0x404
-#define SPRINT_SPEED        0x405
-#define FOV_CURRENT         0x406
 #define NOCLIP_ENABLED      0x407
-#define CAN_SAVE            0x408
-#define DOORS_PRACTICE      0x409
-#define INFINITE_CHALLENGE  0x410
-#define OPEN_CONSOLE        0x411
 #define ACTIVATE_GAME       0x412
 #define OPEN_SAVES          0x413
-#define SHOW_PANELS         0x414
-#define SHOW_NEARBY         0x415
-#define EXPORT              0x416
-#define START_TIMER         0x417
-#define CALLSTACK           0x418
-#define SNAP_TO_PANEL       0x419
-#define DISTANCE_GATING     0x420
-#define EP_OVERLAY          0x421
-#define CLAMP_AIM           0x422
-#define OPEN_DOOR           0x423
 #define NOCLIP_UP           0x424
 #define NOCLIP_DOWN         0x425
 #define KEY_RELEASED        0x426
 #define OPEN_KEYBINDS       0x427
-
-// BUGS:
-// - Changing from old ver to new ver can set FOV = 0?
-
-// Feature requests:
-// - Bug report can submit via google forms? Maybe also a 'help/about' which has a button for generic feedback?
-// - show solve collision
-//   The trick here is going to be immediate-mode UI, coupled with determining which entities are presenting collision.
-// - show player collision
-// - Icon for trainer
-//   https://stackoverflow.com/questions/40933304
-// - Save settings to some file, and reload them on trainer start
-// - CreateRemoteThread + VirtualAllocEx allows me to *run* code in another process. This seems... powerful!
-// - SuspendThread as a way to pause the game when an assert fires? Then I could investigate...
-// - Change the solution fade time so that you can TP to puzzle (or whatever) and see what you traced. This will be easier than GDI+ nonsense.
-//   It's still hard though.
-
-// Bad/Hard ideas:
-// - Basic timer, Show time of last challenge / last 20 challenges
-//   Out of scope.
-// - Avoid hanging the UI during load; call Trainer::ctor on a background thread.
-//   Instead, I just sped up the sigscan.
-// - Show currently traced line (hard, requires changes in Memory)
-//   Would also require figuring out what needs to be changed to properly reset "panel data".
-//   I actually figured out how to do this, but drawing the line is a behemoth.
-// - _timing asl to the trainer? Just something simple would be good enough, mostly
-// - LOD hack
-// - Change current save name
-//   Not possible -- the name of the save is created dynamically from the save file
+#define INFINITE_HEALTH     0x428
+#define INFINITE_CHARGE     0x429
+#define RESPAWN             0x430
 
 // Globals
 HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
 std::shared_ptr<Memory> g_witnessProc;
-HWND g_noclipSpeed, g_currentPos, g_savedPos, g_fovCurrent, g_sprintSpeed, g_activePanel, g_panelDist, g_panelName, g_panelState, g_panelPicture, g_activateGame, g_snapToPanel, g_snapToLabel, g_canSave, g_videoData, g_flyUp, g_flyDown;
+HWND g_currentPos, g_savedPos, g_activateGame, g_flyUp, g_flyDown;
 
-std::vector<float> g_savedCameraPos = {0.0f, 0.0f, 0.0f};
-std::vector<float> g_savedCameraAng = {0.0f, 0.0f};
-int previousPanel = -1;
-std::vector<float> previousPanelStart;
+std::vector<float> g_savedPlayerPos = {0.0f, 0.0f, 0.0f};
 
 #define SetWindowTextA(...) static_assert(false, "Call SetStringText instead of SetWindowTextA");
 #define SetWindowTextW(...) static_assert(false, "Call SetStringText instead of SetWindowTextW");
@@ -115,11 +69,10 @@ void SetStringText(HWND hwnd, const std::wstring& text) {
 #pragma pop_macro("SetWindowTextW")
 }
 
-void SetPosAndAngText(HWND hwnd, const std::vector<float>& pos, const std::vector<float>& ang) {
+void SetPosText(HWND hwnd, const std::vector<float>& pos) {
     assert(pos.size() == 3, "[Internal error] Attempted to set position of <> 3 elements");
-    assert(ang.size() == 2, "[Internal error] Attempted to set angle of <> 2 elements");
     std::wstring text(128, '\0');
-    swprintf_s(text.data(), text.size(), L"X %.3f\nY %.3f\nZ %.3f\n\u0398 %.8f\n\u03A6 %.8f", pos[0], pos[1], pos[2], ang[0], ang[1]);
+    swprintf_s(text.data(), text.size(), L"X %.3f\nY %.3f\nZ %.3f", pos[0], pos[1], pos[2]);
     SetStringText(hwnd, text);
 }
 
@@ -143,71 +96,6 @@ float GetWindowFloat(HWND hwnd) {
     return wcstof(GetWindowString(hwnd).c_str(), nullptr);
 }
 
-void SetVideoData(const Trainer::VideoData& videoData) {
-#if _DEBUG
-    std::string text(1024, '\0');
-    sprintf_s(text.data(), text.size(), "Next sound index: %d\nMax sound index: %d\nDry sound ID: 0x%05X (index: %d)\nVideo: %s\nFrame: %05d / %05d\n",
-        videoData.nextUnusedIdIdx,
-        videoData.numUnusedIds,
-        videoData.videoDrySoundId,
-        videoData.videoDrySoundIdIdx,
-        videoData.fileName.c_str(),
-        videoData.currentFrame,
-        videoData.totalFrames);
-    SetStringText(g_videoData, text);
-#endif
-}
-
-// We can do 3 different things in this function:
-// activePanel != -1, previousPanel != activePanel -> Started solving a panel, show information about it
-// activePanel != -1, previousPanel == activePanel -> Actively solving a panel, show information about it
-// activePanel == -1, previousPanel != -1 -> Stopped solving a panel, show information about the previous panel.
-void SetActivePanel(int activePanel) {
-    if (activePanel != -1) previousPanel = activePanel;
-
-    std::string typeName = "entity";
-
-    if (g_trainer) {
-        std::shared_ptr<Trainer::EntityData> entityData = g_trainer->GetEntityData(previousPanel);
-        if (!entityData) {
-            SetStringText(g_panelName, "");
-            SetStringText(g_panelState, "");
-            SetStringText(g_panelDist, "");
-            CheckDlgButton(g_hwnd, SNAP_TO_PANEL, false);
-            EnableWindow(g_snapToLabel, false);
-            EnableWindow(g_snapToPanel, false);
-        } else {
-            typeName = entityData->type;
-            SetStringText(g_panelName, "Name: " + entityData->name);
-            SetStringText(g_panelState, entityData->state);
-            if (!entityData->startPoint.empty()) {
-                previousPanelStart = entityData->startPoint;
-            }
-            if (!previousPanelStart.empty()) {
-                auto cameraPos = g_trainer->GetCameraPos();
-                auto distance = sqrt(pow(previousPanelStart[0] - cameraPos[0], 2) + pow(previousPanelStart[1] - cameraPos[1], 2) + pow(previousPanelStart[2] - cameraPos[2], 2));
-                SetStringText(g_panelDist, "Distance to " + entityData->type + ": " + std::to_string(distance));
-                SetStringText(g_snapToLabel, "Lock view to " + entityData->type);
-                EnableWindow(g_snapToLabel, true);
-                EnableWindow(g_snapToPanel, true);
-            }
-        }
-    }
-
-    std::stringstream ss;
-    if (activePanel != -1) {
-        ss << "Active " << typeName << ":";
-    } else if (previousPanel != -1) {
-        ss << "Previous " << typeName << ":";
-    } else {
-        ss << "No active entity";
-    }
-    if (previousPanel != -1) {
-        ss << " 0x" << std::hex << std::setfill('0') << std::setw(5) << previousPanel;
-    }
-    SetStringText(g_activePanel, ss.str());
-}
-
 // https://stackoverflow.com/a/12662950
 void ToggleOption(int message, void (Trainer::*setter)(bool)) {
     bool enabled = IsDlgButtonChecked(g_hwnd, message);
@@ -226,7 +114,7 @@ void LaunchSteamGame(const char* gameId, const char* arguments = "") {
     char* steamPath = REG_KEY_READ(key, "InstallPath");
 
     std::string fullArguments = "-applaunch " + gameId + " " + arguments;
-    ShellExecuteW(g_hwnd, L"open", steamPath, fullArguments.c_str(), NULL, SW_SHOWDEFAULT);
+    ShellExecuteA(g_hwnd, "open", steamPath, fullArguments.c_str(), NULL, SW_SHOWDEFAULT);
     */
 }
 
@@ -284,73 +172,40 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             case ProcStatus::Started:
                 if (!g_trainer) {
                     // Process just started (we were already alive), enforce our settings.
-                    SetStringText(g_hwnd, L"Attaching to The Witness...");
+                    SetStringText(g_hwnd, L"Attaching to HOB...");
                     g_trainer = Trainer::Create(g_witnessProc);
                 }
                 if (!g_trainer) break;
                 SetStringText(g_hwnd, WINDOW_TITLE);
-                // Or, we started a new game / loaded a save, in which case some of the entity data might have been reset.
-                SetActivePanel(-1);
-                previousPanel = -1;
-                g_trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
-                g_trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
-                g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
                 g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
-                g_trainer->SetCanSave(IsDlgButtonChecked(hwnd, CAN_SAVE));
-                g_trainer->SetRandomDoorsPractice(IsDlgButtonChecked(hwnd, DOORS_PRACTICE));
-                g_trainer->SetInfiniteChallenge(IsDlgButtonChecked(hwnd, INFINITE_CHALLENGE));
-                g_trainer->SetConsoleOpen(IsDlgButtonChecked(hwnd, OPEN_CONSOLE));
-                g_trainer->SetEPOverlay(IsDlgButtonChecked(hwnd, EP_OVERLAY));
-                g_trainer->SetChallengePillarsPractice(true);
                 SetStringText(g_activateGame, L"Switch to game");
                 break;
             case ProcStatus::Running:
                 if (!g_trainer) {
                     // Process was already running, and we just started. Load settings from the game.
-                    SetStringText(g_hwnd, L"Attaching to The Witness...");
+                    SetStringText(g_hwnd, L"Attaching to HOB...");
                     g_trainer = Trainer::Create(g_witnessProc);
                     if (!g_trainer) break;
                     SetStringText(g_hwnd, WINDOW_TITLE);
-                    SetFloatText(g_noclipSpeed, g_trainer->GetNoclipSpeed());
-                    SetFloatText(g_sprintSpeed, g_trainer->GetSprintSpeed());
-                    SetFloatText(g_fovCurrent, g_trainer->GetFov());
                     CheckDlgButton(hwnd, NOCLIP_ENABLED, g_trainer->GetNoclip());
                     EnableWindow(g_flyUp, g_trainer->GetNoclip());
                     EnableWindow(g_flyDown, g_trainer->GetNoclip());
-                    CheckDlgButton(hwnd, CAN_SAVE, g_trainer->CanSave());
-                    CheckDlgButton(hwnd, DOORS_PRACTICE, g_trainer->GetRandomDoorsPractice());
-                    CheckDlgButton(hwnd, INFINITE_CHALLENGE, g_trainer->GetInfiniteChallenge());
-                    CheckDlgButton(hwnd, OPEN_CONSOLE, g_trainer->GetConsoleOpen());
-                    CheckDlgButton(hwnd, EP_OVERLAY, g_trainer->GetEPOverlay());
                     SetStringText(g_activateGame, L"Switch to game");
-                    g_trainer->SetMainMenuState(true);
-                    g_trainer->SetChallengePillarsPractice(true);
                 } else {
                     // Process was already running, and so were we (this recurs every heartbeat). Enforce settings and apply repeated actions.
                     g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
 
                     // Check to see if we're holding the 'fly up' or 'fly down' buttons, then move the camera accordingly.
                     if (SendMessage(g_flyUp, BM_GETSTATE, NULL, NULL) & BST_PUSHED) {
-                        auto pos = g_trainer->GetCameraPos();
-                        pos[2] += 0.01f * GetWindowFloat(g_noclipSpeed);
+                        auto pos = g_trainer->GetPlayerPos();
+                        pos[2] += 0.01f;
                         pos[2] = CLAMP(pos[2], -10000.0f, 10000.0f);
-                        g_trainer->SetCameraPos(pos);
+                        g_trainer->SetPlayerPos(pos);
                     } else if (SendMessage(g_flyDown, BM_GETSTATE, NULL, NULL) & BST_PUSHED) {
-                        auto pos = g_trainer->GetCameraPos();
-                        pos[2] -= 0.01f * GetWindowFloat(g_noclipSpeed);
+                        auto pos = g_trainer->GetPlayerPos();
+                        pos[2] -= 0.01f;
                         pos[2] = CLAMP(pos[2], -10000.0f, 10000.0f);
-                        g_trainer->SetCameraPos(pos);
-                    }
-
-                    // If we are the foreground window, set FOV. Otherwise, read FOV.
-                    if (g_hwnd == GetForegroundWindow()) {
-                        g_trainer->SetFov(GetWindowFloat(g_fovCurrent));
-                    } else {
-                        SetFloatText(g_fovCurrent, g_trainer->GetFov());
-                    }
-
-                    if (IsDlgButtonChecked(hwnd, SNAP_TO_PANEL) && previousPanel != -1) {
-                        g_trainer->SnapToPoint(previousPanelStart);
+                        g_trainer->SetPlayerPos(pos);
                     }
                 }
 
@@ -358,11 +213,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 // For performance reasons (redrawing text is expensive), these update 10x slower than other display fields.
                 static int64_t update = 0;
                 if (++update % 10 == 0) {
-                    SetPosAndAngText(g_currentPos, g_trainer->GetCameraPos(), g_trainer->GetCameraAng());
-                    SetActivePanel(g_trainer->GetActivePanel());
-#if _DEBUG
-                    SetVideoData(g_trainer->GetVideoData());
-#endif
+                    SetPosText(g_currentPos, g_trainer->GetPlayerPos());
+                    if (IsDlgButtonChecked(g_hwnd, INFINITE_HEALTH) == TRUE) {
+                        // Note: We still need to allow the player to die to instakill effects like fall damage.
+                        // Otherwise, Hob just gets stuck in the "dying" state.
+                        int currentHealth = g_trainer->GetHealth();
+                        if (currentHealth != 0 && currentHealth != 100) g_trainer->SetHealth(100);
+                    }
+                    if (IsDlgButtonChecked(g_hwnd, INFINITE_CHARGE) == TRUE) {
+                        g_trainer->SetCharge(100);
+                    }
                 }
                 break;
             }
@@ -378,52 +238,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         SetCurrentThreadName(L"Command Helper");
 
         WORD command = LOWORD(wParam);
-        if (command == INFINITE_CHALLENGE)      ToggleOption(INFINITE_CHALLENGE, &Trainer::SetInfiniteChallenge);
-        else if (command == DOORS_PRACTICE)     ToggleOption(DOORS_PRACTICE, &Trainer::SetRandomDoorsPractice);
-        else if (command == OPEN_CONSOLE)       ToggleOption(OPEN_CONSOLE, &Trainer::SetConsoleOpen);
-        else if (command == EP_OVERLAY)         ToggleOption(EP_OVERLAY, &Trainer::SetEPOverlay);
-        else if (command == CLAMP_AIM)          ToggleOption(CLAMP_AIM, &Trainer::ClampAimingPhi);
-        else if (command == CALLSTACK)          DebugUtils::RegenerateCallstack(GetWindowString(g_fovCurrent));
-        else if (command == NOCLIP_ENABLED) {
-            // Fix up the player position when exiting noclip
-            if (IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED) && trainer) {
-                // The player position is from the feet, not the eyes, so we have to adjust slightly.
-                auto playerPos = trainer->GetCameraPos();
-                playerPos[2] -= 1.69f;
-                trainer->SetPlayerPos(playerPos);
-            }
+        if (command == NOCLIP_ENABLED) {
             ToggleOption(NOCLIP_ENABLED, &Trainer::SetNoclip);
             EnableWindow(g_flyUp, IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED));
             EnableWindow(g_flyDown, IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED));
-        } else if (command == CAN_SAVE) {
-            if (IsDlgButtonChecked(g_hwnd, CAN_SAVE)) {
-                // If the game is running, request one last save before disabling saving
-                if (trainer) {
-                    EnableWindow(g_canSave, false); // This can take a little while, prevent accidental re-clicks by disabling the checkbox.
-                    bool saved = trainer->SaveCampaign();
-                    EnableWindow(g_canSave, true);
-                    if (!saved) return; // If we failed to save after the timeout, don't toggle the checkbox.
-                }
-            }
-            ToggleOption(CAN_SAVE, &Trainer::SetCanSave);
         } else if (command == ACTIVATE_GAME) {
-            if (!trainer) LaunchSteamGame("210970", "-skip_config_dialog");
+            if (!trainer) LaunchSteamGame("404680");
             else g_witnessProc->BringToFront();
         } else if (command == OPEN_SAVES) {
-            PWSTR outPath;
-            SHGetKnownFolderPath(FOLDERID_RoamingAppData, SHGFP_TYPE_CURRENT, NULL, &outPath);
-            std::wstring savesFolder = outPath;
-            CoTaskMemFree(outPath);
-            savesFolder += L"\\The Witness";
-            ShellExecute(NULL, L"open", savesFolder.c_str(), NULL, NULL, SW_SHOWDEFAULT);
+            const wchar_t* savesFolder = LR"(C:\Users\localhost\Documents\my games\runic games\hob\saves)";
+            ShellExecute(NULL, L"open", savesFolder, NULL, NULL, SW_SHOWDEFAULT);
         } else if (command == OPEN_KEYBINDS) {
             std::wstring hotkeyFile = Hotkeys::Get()->GetHotkeyFilePath();
             ShellExecute(NULL, L"open", hotkeyFile.c_str(), NULL, NULL, SW_SHOWDEFAULT);
-        } else if (command == SNAP_TO_PANEL) {
-            if (HIWORD(wParam) == STN_CLICKED && IsWindowEnabled(g_snapToPanel)) {
-                bool enabled = IsDlgButtonChecked(g_hwnd, SNAP_TO_PANEL);
-                CheckDlgButton(g_hwnd, SNAP_TO_PANEL, !enabled);
-            }
         } else if (command == NOCLIP_UP) {
             PostMessage(g_flyUp, BM_SETSTATE, true, NULL);
         } else if (command == NOCLIP_DOWN) {
@@ -438,29 +265,36 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         // All other messages need the trainer to be live in order to execute.
         if (!trainer) return;
 
-        if (command == NOCLIP_SPEED)         trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
-        else if (command == FOV_CURRENT)     {} // Because we constantly update FOV, we should not respond to this command here.
-        else if (command == SPRINT_SPEED)    trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
-        else if (command == SHOW_PANELS)     trainer->ShowMissingPanels();
-        else if (command == SHOW_NEARBY)     trainer->ShowNearbyEntities();
-        else if (command == EXPORT)          trainer->ExportEntities();
-        else if (command == DISTANCE_GATING) trainer->DisableDistanceGating();
-        else if (command == OPEN_DOOR)       trainer->OpenNearbyDoors();
-        else if (command == SAVE_POS) {
-            g_savedCameraPos = trainer->GetCameraPos();
-            g_savedCameraAng = trainer->GetCameraAng();
-            SetPosAndAngText(g_savedPos, g_savedCameraPos, g_savedCameraAng);
+        if (command == SAVE_POS) {
+            g_savedPlayerPos = trainer->GetPlayerPos();
+            SetPosText(g_savedPos, g_savedPlayerPos);
         } else if (command == LOAD_POS) {
-            if (g_savedCameraPos[0] != 0 ||  g_savedCameraPos[1] != 0 || g_savedCameraPos[2] != 0) { // Prevent TP to origin (i.e. if the user hasn't set a position yet)
-                trainer->SetCameraPos(g_savedCameraPos);
-                trainer->SetCameraAng(g_savedCameraAng);
-
-                // The player position is from the feet, not the eyes, so we have to adjust slightly.
-                auto playerPos = g_savedCameraPos;
-                playerPos[2] -= 1.69f;
-                trainer->SetPlayerPos(playerPos);
-                SetPosAndAngText(g_currentPos, g_savedCameraPos, g_savedCameraAng);
+            if (g_savedPlayerPos[0] != 0 || g_savedPlayerPos[1] != 0 || g_savedPlayerPos[2] != 0) { // Prevent TP to origin (i.e. if the user hasn't set a position yet)
+                trainer->SetPlayerPos(g_savedPlayerPos);
+                SetPosText(g_currentPos, g_savedPlayerPos);
             }
+        } else if (command == INFINITE_HEALTH) {
+            if (IsDlgButtonChecked(g_hwnd, INFINITE_HEALTH)) {
+                trainer->SetMaxHealth(3);
+                trainer->SetHealth(3);
+                CheckDlgButton(g_hwnd, INFINITE_HEALTH, false);
+            } else {
+                trainer->SetMaxHealth(100);
+                trainer->SetHealth(100);
+                CheckDlgButton(g_hwnd, INFINITE_HEALTH, true);
+            }
+        } else if (command == INFINITE_CHARGE) {
+            if (IsDlgButtonChecked(g_hwnd, INFINITE_CHARGE)) {
+                trainer->SetMaxCharge(1);
+                trainer->SetCharge(1);
+                CheckDlgButton(g_hwnd, INFINITE_CHARGE, false);
+            } else {
+                trainer->SetMaxCharge(100);
+                trainer->SetCharge(100);
+                CheckDlgButton(g_hwnd, INFINITE_CHARGE, true);
+            }
+        } else if (command == RESPAWN) {
+            trainer->SetHealth(0);
         }
     });
     t.detach();
@@ -567,48 +401,26 @@ void CreateComponents() {
 
     CreateLabelAndCheckbox(x, y, 100, L"Noclip Enabled", NOCLIP_ENABLED, "noclip_enabled");
 
+    CreateLabelAndCheckbox(x, y, 100, L"Infinite Health", INFINITE_HEALTH, "infinite_health");
+
+    CreateLabelAndCheckbox(x, y, 100, L"Infinite Charge", INFINITE_CHARGE, "infinite_charge");
+
+    CreateButton(x, y, 100, L"Respawn", RESPAWN, "respawn");
+
     g_flyUp = CreateButton(x, y, 70, L"Fly up", NOCLIP_UP, "fly_up");
     EnableWindow(g_flyUp, false);
     y -= 30;
     g_flyDown = CreateButton(x + 80, y, 70, L"Fly down", NOCLIP_DOWN, "fly_down");
     EnableWindow(g_flyDown, false);
 
-    CreateLabel(x, y + 4, 100, L"Noclip Speed");
-    g_noclipSpeed = CreateText(100, y, 130, L"10", NOCLIP_SPEED);
-
-    CreateLabel(x, y + 4, 100, L"Sprint Speed");
-    g_sprintSpeed = CreateText(100, y, 130, L"2", SPRINT_SPEED);
-
-    CreateLabel(x, y + 4, 100, L"Field of View");
-    g_fovCurrent = CreateText(100, y, 130, L"50.534012", FOV_CURRENT);
-
-    auto [_, canSave] = CreateLabelAndCheckbox(x, y, 185, L"Can save the game", CAN_SAVE, "can_save_game");
-    g_canSave = canSave;
-    CheckDlgButton(g_hwnd, CAN_SAVE, true);
-
-    CreateLabelAndCheckbox(x, y, 185, L"Random Doors Practice", DOORS_PRACTICE, "doors_practice");
-
-    CreateLabelAndCheckbox(x, y, 185, L"Disable Challenge time limit", INFINITE_CHALLENGE, "challenge_timer");
-
-    CreateLabelAndCheckbox(x, y, 185, L"Open the Console", OPEN_CONSOLE, "open_console");
-
-    CreateLabelAndCheckbox(x, y, 185, L"Show Entity Solvability", EP_OVERLAY, "ep_overlay");
-
-    CreateLabelAndCheckbox(x, y, 185, L"Enable vertical aim limit", CLAMP_AIM, "clamp_aim");
-    CheckDlgButton(g_hwnd, CLAMP_AIM, true);
-
     CreateButton(x, y, 110, L"Save Position", SAVE_POS, "save_position");
     y -= 30;
     CreateButton(x + 120, y, 110, L"Load Position", LOAD_POS, "load_position");
     g_currentPos = CreateLabel(x + 5,   y, 110, 80);
     g_savedPos   = CreateLabel(x + 125, y, 110, 80);
-    SetPosAndAngText(g_currentPos, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f });
-    SetPosAndAngText(g_savedPos,   { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f });
+    SetPosText(g_currentPos, { 0.0f, 0.0f, 0.0f });
+    SetPosText(g_savedPos,   { 0.0f, 0.0f, 0.0f });
     y += 90;
-
-#if _DEBUG
-    g_videoData = CreateLabel(x, y, 250, 100);
-#endif
 
     // Column 2
     x = 270;
@@ -618,38 +430,8 @@ void CreateComponents() {
     CreateButton(x, y, 200, L"Open save folder", OPEN_SAVES, "open_save_folder");
     CreateButton(x, y, 200, L"Open keybinds file", OPEN_KEYBINDS, "open_keybinds");
 
-    g_activePanel = CreateLabel(x, y, 200, L"No active entity");
-    y += 20;
-
-    g_panelDist = CreateLabel(x, y, 200, L"");
-    y += 20;
-
-    g_panelName = CreateLabel(x, y, 200, L"");
-    y += 20;
-
-    g_panelState = CreateLabel(x, y, 200, L"");
-    y += 20;
-
-    std::tie(g_snapToLabel, g_snapToPanel) = CreateLabelAndCheckbox(x, y, 200, L"Lock view to entity", SNAP_TO_PANEL, "snap_to_panel");
-    EnableWindow(g_snapToLabel, false);
-    EnableWindow(g_snapToPanel, false);
-
-    CreateButton(x, y, 200, L"Show unsolved panels", SHOW_PANELS, "show_unsolved");
-
-    CreateButton(x, y, 200, L"Disable distance gating", DISTANCE_GATING, "distance_gating");
-
-    CreateButton(x, y, 200, L"Open nearby doors", OPEN_DOOR, "open_doors");
-
-    // Hotkey for debug purposes, to get addresses based on a reported callstack
-    Hotkeys::Get()->RegisterHotkey("dump_callstack", CALLSTACK);
-
     // Required to 'unselect' any hold-based keybinds
     Hotkeys::Get()->RegisterHotkey("key_released", KEY_RELEASED);
-
-#ifdef _DEBUG
-    CreateButton(x, y, 200, L"Show nearby entities", SHOW_NEARBY, "show_nearby");
-    CreateButton(x, y, 200, L"Export all entities", EXPORT, "export_entities");
-#endif
 }
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow) {
@@ -690,7 +472,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     CreateComponents();
     Hotkeys::Get()->SanityCheckHotkeys();
 
-    g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
+    g_witnessProc = std::make_shared<Memory>(L"HOB.exe");
     g_witnessProc->StartHeartbeat(g_hwnd, HEARTBEAT);
     HHOOK hook = NULL;
 #ifndef _DEBUG
