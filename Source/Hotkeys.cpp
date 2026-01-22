@@ -22,6 +22,9 @@ Hotkeys::Hotkeys() {
         _hotkeyNames["noclip_enabled"] = MASK_CONTROL | 'N';
         _hotkeyNames["save_position"] = MASK_CONTROL | 'P';
         _hotkeyNames["load_position"] = MASK_SHIFT | MASK_CONTROL | 'P';
+        _hotkeyNames["infinite_health"] = MASK_SHIFT | MASK_CONTROL | 'H';
+        _hotkeyNames["infinite_charge"] = MASK_SHIFT | MASK_CONTROL | 'C';
+        _hotkeyNames["respawn"] = MASK_SHIFT | MASK_CONTROL | 'R';
     }
 
     // Can't be changed, used to signal 'end of hold'

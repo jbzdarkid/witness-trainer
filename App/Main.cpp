@@ -104,18 +104,15 @@ void ToggleOption(int message, void (Trainer::*setter)(bool)) {
     if (g_trainer) (*g_trainer.*setter)(!enabled);
 }
 
-void LaunchSteamGame(const char* gameId, const char* arguments = "") {
-    std::string steamUrl = "steam://rungameid/";
-    steamUrl += gameId;
-    ShellExecuteA(g_hwnd, "open", steamUrl.c_str(), NULL, NULL, SW_SHOWDEFAULT);
+void LaunchSteamGame(const std::string& path, const char* arguments = "") {
+    // TODO: AAAAAAAAAAH. How does steam do this? I need procmon I guess. I was trying to use -applaunch but it just boots the launcher :(
+    DWORD bufferLength = 1000;
+    std::string steamFolder(bufferLength, '\0');
+    RegGetValueA(HKEY_LOCAL_MACHINE, "SOFTWARE\\WOW6432Node\\Valve\\Steam", "InstallPath", RRF_RT_REG_SZ, nullptr, &steamFolder[0], &bufferLength);
+    steamFolder.resize(bufferLength - 1); // Trim trailing \0
 
-    /* The above doesn't really work with arguments, so in the future we should do this:
-    auto key = REG_QUERY("Computer\HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Valve\Steam")
-    char* steamPath = REG_KEY_READ(key, "InstallPath");
-
-    std::string fullArguments = "-applaunch " + gameId + " " + arguments;
-    ShellExecuteA(g_hwnd, "open", steamPath, fullArguments.c_str(), NULL, SW_SHOWDEFAULT);
-    */
+    std::string fullPath = steamFolder + "\\" + path;
+    ShellExecuteA(g_hwnd, "open", fullPath.c_str(), arguments, NULL, SW_SHOWDEFAULT);
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -187,6 +184,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     g_trainer = Trainer::Create(g_witnessProc);
                     if (!g_trainer) break;
                     SetStringText(g_hwnd, WINDOW_TITLE);
+                    CheckDlgButton(hwnd, INFINITE_HEALTH, g_trainer->GetHealth() == 100);
+                    CheckDlgButton(hwnd, INFINITE_CHARGE, g_trainer->GetCharge() == 100);
                     CheckDlgButton(hwnd, NOCLIP_ENABLED, g_trainer->GetNoclip());
                     EnableWindow(g_flyUp, g_trainer->GetNoclip());
                     EnableWindow(g_flyDown, g_trainer->GetNoclip());
@@ -243,7 +242,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             EnableWindow(g_flyUp, IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED));
             EnableWindow(g_flyDown, IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED));
         } else if (command == ACTIVATE_GAME) {
-            if (!trainer) LaunchSteamGame("404680");
+            if (!trainer) LaunchSteamGame("steamapps\\common\\Hob\\HOB.exe", "skip_file_check");
             else g_witnessProc->BringToFront();
         } else if (command == OPEN_SAVES) {
             const wchar_t* savesFolder = LR"(C:\Users\localhost\Documents\my games\runic games\hob\saves)";
@@ -399,13 +398,13 @@ void CreateComponents() {
     int x = 10;
     int y = 10;
 
-    CreateLabelAndCheckbox(x, y, 100, L"Noclip Enabled", NOCLIP_ENABLED, "noclip_enabled");
-
     CreateLabelAndCheckbox(x, y, 100, L"Infinite Health", INFINITE_HEALTH, "infinite_health");
 
     CreateLabelAndCheckbox(x, y, 100, L"Infinite Charge", INFINITE_CHARGE, "infinite_charge");
 
     CreateButton(x, y, 100, L"Respawn", RESPAWN, "respawn");
+
+    CreateLabelAndCheckbox(x, y, 100, L"Noclip Enabled", NOCLIP_ENABLED, "noclip_enabled");
 
     g_flyUp = CreateButton(x, y, 70, L"Fly up", NOCLIP_UP, "fly_up");
     EnableWindow(g_flyUp, false);
