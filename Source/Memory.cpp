@@ -111,7 +111,8 @@ void Memory::Heartbeat(HWND window, UINT message) {
     }
 
     if (_hwnd == NULL) {
-        assert(false, "Couldn't find the HWND for the game");
+        // Main window hasn't loaded yet
+        PostMessage(window, message, ProcStatus::NotRunning, NULL);
         return;
     }
 

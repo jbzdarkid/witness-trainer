@@ -104,15 +104,10 @@ void ToggleOption(int message, void (Trainer::*setter)(bool)) {
     if (g_trainer) (*g_trainer.*setter)(!enabled);
 }
 
-void LaunchSteamGame(const std::string& path, const char* arguments = "") {
-    // TODO: AAAAAAAAAAH. How does steam do this? I need procmon I guess. I was trying to use -applaunch but it just boots the launcher :(
-    DWORD bufferLength = 1000;
-    std::string steamFolder(bufferLength, '\0');
-    RegGetValueA(HKEY_LOCAL_MACHINE, "SOFTWARE\\WOW6432Node\\Valve\\Steam", "InstallPath", RRF_RT_REG_SZ, nullptr, &steamFolder[0], &bufferLength);
-    steamFolder.resize(bufferLength - 1); // Trim trailing \0
-
-    std::string fullPath = steamFolder + "\\" + path;
-    ShellExecuteA(g_hwnd, "open", fullPath.c_str(), arguments, NULL, SW_SHOWDEFAULT);
+void LaunchSteamGame(int gameId) {
+    // Steam does not like launching games with arguments. Just accept it.
+    std::string steamUrl = "steam://rungameid/" + std::to_string(gameId);
+    ShellExecuteA(g_hwnd, "open", steamUrl.c_str(), NULL, NULL, SW_SHOWDEFAULT);
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -242,7 +237,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             EnableWindow(g_flyUp, IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED));
             EnableWindow(g_flyDown, IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED));
         } else if (command == ACTIVATE_GAME) {
-            if (!trainer) LaunchSteamGame("steamapps\\common\\Hob\\HOB.exe", "skip_file_check");
+            if (!trainer) LaunchSteamGame(404680);
             else g_witnessProc->BringToFront();
         } else if (command == OPEN_SAVES) {
             const wchar_t* savesFolder = LR"(C:\Users\localhost\Documents\my games\runic games\hob\saves)";
