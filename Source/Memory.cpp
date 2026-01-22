@@ -408,8 +408,8 @@ uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets, bool absolute) {
             continue;
         }
 
+        // ReadProcessMemory failed, investigate:
         MEMORY_BASIC_INFORMATION info;
-        assert(computedAddress != 0, "Attempted to dereference NULL!");
         if (!VirtualQuery(reinterpret_cast<LPVOID>(cumulativeAddress), &info, sizeof(info))) {
             assert(false, "Failed to read process memory, possibly because cumulativeAddress was too large.");
         } else {

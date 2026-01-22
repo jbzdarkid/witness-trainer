@@ -270,11 +270,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         } else if (command == INFINITE_HEALTH) {
             if (IsDlgButtonChecked(g_hwnd, INFINITE_HEALTH)) {
                 trainer->SetMaxHealth(3);
-                trainer->SetHealth(3);
+                if (trainer->GetHealth() > 0) trainer->SetHealth(3);
                 CheckDlgButton(g_hwnd, INFINITE_HEALTH, false);
             } else {
                 trainer->SetMaxHealth(100);
-                trainer->SetHealth(100);
+                if (trainer->GetHealth() > 0) trainer->SetHealth(100);
                 CheckDlgButton(g_hwnd, INFINITE_HEALTH, true);
             }
         } else if (command == INFINITE_CHARGE) {
