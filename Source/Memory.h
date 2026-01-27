@@ -87,6 +87,7 @@ private:
     HANDLE _handle = nullptr;
     DWORD _pid = 0;
     HWND _hwnd = NULL;
+    int _previousGameWorld = 0;
     size_t _pointerSize = 0;
     uintptr_t _baseAddress = 0;
     uintptr_t _endOfModule = 0;

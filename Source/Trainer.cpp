@@ -58,6 +58,11 @@ int Trainer::GetCharge() {
 int Trainer::GetMaxCharge() {
     return (int)(_memory->ReadData<float>({0x4A89FC0, 0x50, 0xA8, 0x140, 0xD4}, 1)[0] / 20.0f);
 }
+
+bool Trainer::GetGodMode() {
+    return _memory->ReadData<int>({0x4A89FC0, 0x50, 0xA8, 0x154}, 1)[0] == 1;
+}
+
 void Trainer::SetNoclip(bool enable) {
     // TODO: Some sigscan here to defy gravity
 }
@@ -80,4 +85,8 @@ void Trainer::SetCharge(int charge) {
 
 void Trainer::SetMaxCharge(int maxCharge) {
     _memory->WriteData<float>({0x4A89FC0, 0x50, 0xA8, 0x140, 0xD4}, { maxCharge * 20.0f });
+}
+
+void Trainer::SetGodMode(bool enable) {
+    return _memory->WriteData<int>({0x4A89FC0, 0x50, 0xA8, 0x154}, { enable ? 1 : 0 });
 }

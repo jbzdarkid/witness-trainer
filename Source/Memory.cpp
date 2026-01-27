@@ -116,10 +116,19 @@ void Memory::Heartbeat(HWND window, UINT message) {
         return;
     }
 
-    BOOL wow64Process = false;
-    IsWow64Process(_handle, &wow64Process);
-    _pointerSize = (wow64Process == TRUE) ? 4 : 8;
+    // Continually scan for the CGameWorld* getting reallocated
+    int gameWorld = ReadData<int>({0x4A89FC0}, 1)[0];
+    if (gameWorld == 0) {
+        // New game is starting, do not take any actions.
+        _nextStatus = ProcStatus::NewGame;
+        return;
+    }
 
+    if (_previousGameWorld != gameWorld) {
+        _previousGameWorld = gameWorld;
+        _computedAddresses.Clear();
+    }
+        
     if (_trainerHasStarted == false) {
         // If it's the first time we started, and the game appears to be running, return "Running" instead of "Started".
         PostMessage(window, message, ProcStatus::Running, NULL);
@@ -157,6 +166,10 @@ void Memory::Initialize() {
         DebugPrint("Couldn't locate base address");
         return;
     }
+
+    BOOL wow64Process = false;
+    IsWow64Process(handle, &wow64Process);
+    _pointerSize = (wow64Process == TRUE) ? 4 : 8;
 
     // Clear out any leftover sigscans from consumers (e.g. the trainer)
     _sigScans.clear();

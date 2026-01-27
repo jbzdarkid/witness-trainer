@@ -1,4 +1,8 @@
 #pragma once
+#include <memory>
+#include <vector>
+
+class Memory;
 
 class Trainer final {
 public:
@@ -11,6 +15,7 @@ public:
     int GetMaxHealth();
     int GetCharge();
     int GetMaxCharge();
+    bool GetGodMode();
 
     void SetNoclip(bool enable);
     void SetPlayerPos(const std::vector<float>& pos);
@@ -18,6 +23,7 @@ public:
     void SetMaxHealth(int maxHealth);
     void SetCharge(int charge);
     void SetMaxCharge(int maxCharge);
+    void SetGodMode(bool enable);
 
 private:
     std::shared_ptr<Memory> _memory;

@@ -22,6 +22,7 @@
 #define INFINITE_HEALTH     0x428
 #define INFINITE_CHARGE     0x429
 #define RESPAWN             0x430
+#define GOD_MODE            0x431
 
 // Globals
 HWND g_hwnd;
@@ -170,6 +171,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 if (!g_trainer) break;
                 SetStringText(g_hwnd, WINDOW_TITLE);
                 g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
+                if (IsDlgButtonChecked(hwnd, INFINITE_HEALTH))  g_trainer->SetMaxHealth(100);
+                if (IsDlgButtonChecked(hwnd, INFINITE_CHARGE))  g_trainer->SetMaxCharge(100);
+                if (IsDlgButtonChecked(hwnd, GOD_MODE))         g_trainer->SetGodMode(true);
                 SetStringText(g_activateGame, L"Switch to game");
                 break;
             case ProcStatus::Running:
@@ -289,6 +293,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             }
         } else if (command == RESPAWN) {
             trainer->SetHealth(0);
+        } else if (command == GOD_MODE) {
+            ToggleOption(GOD_MODE, &Trainer::SetGodMode);
         }
     });
     t.detach();
@@ -392,6 +398,8 @@ void CreateComponents() {
     // Column 1
     int x = 10;
     int y = 10;
+
+    CreateLabelAndCheckbox(x, y, 100, L"God Mode", GOD_MODE, "god_mode");
 
     CreateLabelAndCheckbox(x, y, 100, L"Infinite Health", INFINITE_HEALTH, "infinite_health");
 
