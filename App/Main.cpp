@@ -28,7 +28,7 @@
 HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
-std::shared_ptr<Memory> g_witnessProc;
+std::shared_ptr<Memory> g_hobProc;
 HWND g_currentPos, g_savedPos, g_activateGame, g_flyUp, g_flyDown;
 
 std::vector<float> g_savedPlayerPos = {0.0f, 0.0f, 0.0f};
@@ -166,7 +166,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 if (!g_trainer) {
                     // Process just started (we were already alive), enforce our settings.
                     SetStringText(g_hwnd, L"Attaching to HOB...");
-                    g_trainer = Trainer::Create(g_witnessProc);
+                    g_trainer = Trainer::Create(g_hobProc);
                 }
                 if (!g_trainer) break;
                 SetStringText(g_hwnd, WINDOW_TITLE);
@@ -180,7 +180,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 if (!g_trainer) {
                     // Process was already running, and we just started. Load settings from the game.
                     SetStringText(g_hwnd, L"Attaching to HOB...");
-                    g_trainer = Trainer::Create(g_witnessProc);
+                    g_trainer = Trainer::Create(g_hobProc);
                     if (!g_trainer) break;
                     SetStringText(g_hwnd, WINDOW_TITLE);
                     CheckDlgButton(hwnd, INFINITE_HEALTH, g_trainer->GetHealth() == 100);
@@ -242,7 +242,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             EnableWindow(g_flyDown, IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED));
         } else if (command == ACTIVATE_GAME) {
             if (!trainer) LaunchSteamGame(404680);
-            else g_witnessProc->BringToFront();
+            else g_hobProc->BringToFront();
         } else if (command == OPEN_SAVES) {
             const wchar_t* savesFolder = LR"(C:\Users\localhost\Documents\my games\runic games\hob\saves)";
             ShellExecute(NULL, L"open", savesFolder, NULL, NULL, SW_SHOWDEFAULT);
@@ -306,7 +306,7 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if (nCode == HC_ACTION) {
         // Only steal hotkeys when we (or the game) are the active window.
         auto foreground = GetForegroundWindow();
-        if (g_hwnd == foreground || g_witnessProc->IsForeground()) {
+        if (g_hwnd == foreground || g_hobProc->IsForeground()) {
             int64_t found = Hotkeys::Get()->CheckMatchingHotkey(wParam, lParam);
             if (found) {
                 PostMessage(g_hwnd, WM_COMMAND, found, NULL);
@@ -474,8 +474,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     CreateComponents();
     Hotkeys::Get()->SanityCheckHotkeys();
 
-    g_witnessProc = std::make_shared<Memory>(L"HOB.exe");
-    g_witnessProc->StartHeartbeat(g_hwnd, HEARTBEAT);
+    g_hobProc = std::make_shared<Memory>(L"HOB.exe");
+    g_hobProc->StartHeartbeat(g_hwnd, HEARTBEAT);
     HHOOK hook = NULL;
 #ifndef _DEBUG
     // Don't hook in debug mode. While debugging, we are paused (and thus cannot run the hook). So, we will timeout on every hook call!
@@ -489,8 +489,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     }
 
     if (hook) UnhookWindowsHookEx(hook);
-    g_witnessProc->StopHeartbeat();
-    g_witnessProc = nullptr;
+    g_hobProc->StopHeartbeat();
+    g_hobProc = nullptr;
 
     CoUninitialize();
     return (int) msg.wParam;

@@ -68,12 +68,12 @@ void DebugUtils::ShowAssertDialogue(const wchar_t* message) {
     // Only show an assert every 30 seconds. This prevents assert loops inside the WndProc, as well as adding a grace period after an assert fires.
     if (time(nullptr) - lastShownAssert < 30) return;
     lastShownAssert = time(nullptr);
-    std::wstring msg = L"WitnessTrainer version " + version + L" has encountered an error.\n";
+    std::wstring msg = L"HobTrainer version " + version + L" has encountered an error.\n";
     msg += L"Please press Control C to copy this error, and paste it to darkid.\n";
     msg += message;
     msg += L"\n";
     msg += GetStackTrace();
-    MessageBox(NULL, msg.c_str(), L"WitnessTrainer encountered an error.", MB_TASKMODAL | MB_ICONHAND | MB_OK | MB_SETFOREGROUND);
+    MessageBox(NULL, msg.c_str(), L"HobTrainer encountered an error.", MB_TASKMODAL | MB_ICONHAND | MB_OK | MB_SETFOREGROUND);
 }
 
 std::pair<uint64_t, uint64_t> DebugUtils::GetModuleBounds(HANDLE process) {

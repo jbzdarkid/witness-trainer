@@ -59,10 +59,10 @@ bool Hotkeys::ParseHotkeyFile() {
         path = outPath;
         CoTaskMemFree(outPath);
     }
-    _hotkeyFilePath = path + L"\\WitnessTrainer\\keybinds.txt";
+    _hotkeyFilePath = path + L"\\HobTrainer\\keybinds.txt";
 
     if (GetFileAttributes(path.c_str()) == INVALID_FILE_ATTRIBUTES) return false; // Do not try to create LocalAppData
-    path += L"\\WitnessTrainer";
+    path += L"\\HobTrainer";
     if (GetFileAttributes(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
         if (_wmkdir(path.c_str()) != 0) return false;
     }
