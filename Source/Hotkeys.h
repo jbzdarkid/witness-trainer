@@ -40,9 +40,7 @@ private:
     std::unordered_set<std::string> _registeredHotkeys;
 
     const LPCSTR DEFAULT_KEYBINDS =
-        "noclip_enabled: Control-N\n"
-        "fly_up: PageUp\n"
-        "fly_down: PageDown\n"
+        "god_mode: Control-G\n"
         "save_position: Control-P\n"
         "load_position: Control-Shift-P\n"
         "infinite_health: Control-Shift-H\n"

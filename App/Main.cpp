@@ -407,6 +407,7 @@ void CreateComponents() {
 
     CreateButton(x, y, 100, L"Respawn", RESPAWN, "respawn");
 
+    /*
     CreateLabelAndCheckbox(x, y, 100, L"Noclip Enabled", NOCLIP_ENABLED, "noclip_enabled");
 
     g_flyUp = CreateButton(x, y, 70, L"Fly up", NOCLIP_UP, "fly_up");
@@ -414,6 +415,7 @@ void CreateComponents() {
     y -= 30;
     g_flyDown = CreateButton(x + 80, y, 70, L"Fly down", NOCLIP_DOWN, "fly_down");
     EnableWindow(g_flyDown, false);
+    */
 
     CreateButton(x, y, 110, L"Save Position", SAVE_POS, "save_position");
     y -= 30;

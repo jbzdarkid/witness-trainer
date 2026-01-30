@@ -19,7 +19,7 @@ std::shared_ptr<Hotkeys> Hotkeys::Get() {
 Hotkeys::Hotkeys() {
     if (!ParseHotkeyFile()) {
         // Default hotkeys (duplicate of what's defined in DEFAULT_HOTKEYS in the header), just in case the parse fails.
-        _hotkeyNames["noclip_enabled"] = MASK_CONTROL | 'N';
+        _hotkeyNames["god_mode"] = MASK_CONTROL | 'G';
         _hotkeyNames["save_position"] = MASK_CONTROL | 'P';
         _hotkeyNames["load_position"] = MASK_SHIFT | MASK_CONTROL | 'P';
         _hotkeyNames["infinite_health"] = MASK_SHIFT | MASK_CONTROL | 'H';
