@@ -11,6 +11,7 @@ public:
 
     bool GetNoclip();
     std::vector<float> GetPlayerPos();
+    std::vector<float> GetPlayerAngle();
     int GetHealth();
     int GetMaxHealth();
     int GetCharge();
@@ -19,6 +20,7 @@ public:
 
     void SetNoclip(bool enable);
     void SetPlayerPos(const std::vector<float>& pos);
+    void SetPlayerAngle(const std::vector<float>& angle);
     void SetHealth(int health);
     void SetMaxHealth(int maxHealth);
     void SetCharge(int charge);

@@ -32,6 +32,7 @@ std::shared_ptr<Memory> g_hobProc;
 HWND g_currentPos, g_savedPos, g_activateGame, g_flyUp, g_flyDown;
 
 std::vector<float> g_savedPlayerPos = {0.0f, 0.0f, 0.0f};
+std::vector<float> g_savedPlayerAngle = {0.0f, 0.0f, 0.0f, 0.0f};
 
 #define SetWindowTextA(...) static_assert(false, "Call SetStringText instead of SetWindowTextA");
 #define SetWindowTextW(...) static_assert(false, "Call SetStringText instead of SetWindowTextW");
@@ -70,10 +71,15 @@ void SetStringText(HWND hwnd, const std::wstring& text) {
 #pragma pop_macro("SetWindowTextW")
 }
 
-void SetPosText(HWND hwnd, const std::vector<float>& pos) {
+void SetPosText(HWND hwnd, const std::vector<float>& pos, const std::vector<float>& angle) {
     assert(pos.size() == 3, "[Internal error] Attempted to set position of <> 3 elements");
+    assert(angle.size() == 4, "[Internal error] Attempted to set position of <> 4 elements");
     std::wstring text(128, '\0');
-    swprintf_s(text.data(), text.size(), L"X %.3f\nY %.3f\nZ %.3f", pos[0], pos[1], pos[2]);
+    // Do some math to convert the angle into a polar coordinate (0-360 degrees).
+    // I don't know why this is correct, this isn't how quat math works usually.
+    double x = angle[3], y = angle[1];
+    double degrees = atan(y / x) * 360.0 / 3.14159 + 90.0;
+    swprintf_s(text.data(), text.size(), L"X %.3f\nY %.3f\nZ %.3f\n\u0398 %.3f", pos[0], pos[1], pos[2], degrees);
     SetStringText(hwnd, text);
 }
 
@@ -211,7 +217,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 // For performance reasons (redrawing text is expensive), these update 10x slower than other display fields.
                 static int64_t update = 0;
                 if (++update % 10 == 0) {
-                    SetPosText(g_currentPos, g_trainer->GetPlayerPos());
+                    SetPosText(g_currentPos, g_trainer->GetPlayerPos(), g_trainer->GetPlayerAngle());
                     if (IsDlgButtonChecked(g_hwnd, INFINITE_HEALTH) == TRUE) {
                         // Note: We still need to allow the player to die to instakill effects like fall damage.
                         // Otherwise, Hob just gets stuck in the "dying" state.
@@ -265,11 +271,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
 
         if (command == SAVE_POS) {
             g_savedPlayerPos = trainer->GetPlayerPos();
-            SetPosText(g_savedPos, g_savedPlayerPos);
+            g_savedPlayerAngle = trainer->GetPlayerAngle();
+            SetPosText(g_savedPos, g_savedPlayerPos, g_savedPlayerAngle);
         } else if (command == LOAD_POS) {
-            if (g_savedPlayerPos[0] != 0 || g_savedPlayerPos[1] != 0 || g_savedPlayerPos[2] != 0) { // Prevent TP to origin (i.e. if the user hasn't set a position yet)
+            if (g_savedPlayerPos[0] != 0.0f || g_savedPlayerPos[1] != 0.0f || g_savedPlayerPos[2] != 0.0f) { // Prevent TP to origin (i.e. if the user hasn't set a position yet)
                 trainer->SetPlayerPos(g_savedPlayerPos);
-                SetPosText(g_currentPos, g_savedPlayerPos);
+                trainer->SetPlayerAngle(g_savedPlayerAngle);
+                SetPosText(g_currentPos, g_savedPlayerPos, g_savedPlayerAngle);
             }
         } else if (command == INFINITE_HEALTH) {
             if (IsDlgButtonChecked(g_hwnd, INFINITE_HEALTH)) {
@@ -422,8 +430,8 @@ void CreateComponents() {
     CreateButton(x + 120, y, 110, L"Load Position", LOAD_POS, "load_position");
     g_currentPos = CreateLabel(x + 5,   y, 110, 80);
     g_savedPos   = CreateLabel(x + 125, y, 110, 80);
-    SetPosText(g_currentPos, { 0.0f, 0.0f, 0.0f });
-    SetPosText(g_savedPos,   { 0.0f, 0.0f, 0.0f });
+    SetPosText(g_currentPos, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f, 1.0f });
+    SetPosText(g_savedPos,   { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f, 1.0f });
     y += 90;
 
     // Column 2

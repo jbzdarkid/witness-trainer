@@ -43,6 +43,10 @@ std::vector<float> Trainer::GetPlayerPos() {
     return _memory->ReadData<float>({0x4A89FC0, 0x50, 0x78, 0x74}, 3);
 }
 
+std::vector<float> Trainer::GetPlayerAngle() {
+    return _memory->ReadData<float>({0x4A89FC0, 0x50, 0x78, 0x34}, 4);
+}
+
 int Trainer::GetHealth() {
     return _memory->ReadData<int>({0x4A89FC0, 0x50, 0xA8, 0x140, 0x94}, 1)[0] / 25;
 }
@@ -69,6 +73,10 @@ void Trainer::SetNoclip(bool enable) {
 
 void Trainer::SetPlayerPos(const std::vector<float>& pos) {
     _memory->WriteData<float>({0x4A89FC0, 0x50, 0x78, 0x74}, pos);
+}
+
+void Trainer::SetPlayerAngle(const std::vector<float>& angle) {
+    _memory->WriteData<float>({0x4A89FC0, 0x50, 0x78, 0x34}, angle);
 }
 
 void Trainer::SetHealth(int health) {
