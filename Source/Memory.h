@@ -1,13 +1,36 @@
 #pragma once
 #include "ThreadSafeAddressMap.h"
 
+/* State graph. Entry states are NotRunning, Running, and Loading.
+ * It is not recommended to act on the "Loading" state, except to gray out buttons.
+
+                   Stopped
+                      |
+                      |
+                      v
+                  NotRunning
+                      |
+                      |
+                      v
+        +<-------- Started -------->+
+        |             |             |
+        |             |             |
+        v             v             v
+     Running <---> Loading <---> Reload <---> (Running)
+        |             |             |
+        |             |             |
+        v             v             v
+        +-------> (Stopped) <-------+
+
+*/
+
 enum ProcStatus : WPARAM {
     NotRunning,
     Started,
     Running,
+    Loading,
     Reload,
-    NewGame,
-    Stopped
+    Stopped,
 };
 
 using byte = unsigned char;
@@ -71,7 +94,7 @@ public:
 
 private:
     void Heartbeat(HWND window, UINT message);
-    void Initialize();
+    HANDLE Initialize();
 
     void ReadDataInternal(void* buffer, const uintptr_t computedOffset, size_t bufferSize);
     void WriteDataInternal(const void* buffer, uintptr_t computedOffset, size_t bufferSize);
@@ -86,13 +109,13 @@ private:
     // Parts of Initialize / heartbeat
     HANDLE _handle = nullptr;
     DWORD _pid = 0;
-    HWND _hwnd = NULL;
-    int _previousGameWorld = 0;
-    size_t _pointerSize = 0;
     uintptr_t _baseAddress = 0;
     uintptr_t _endOfModule = 0;
-    ProcStatus _nextStatus = ProcStatus::Started;
-    bool _trainerHasStarted = false;
+    size_t _pointerSize = 0;
+    HWND _hwnd = NULL;
+    __int64 _gameWorldPtr = 0;
+    int _previousGameWorld = 0;
+    bool _firstHeartbeat = true;
 
 #ifdef NDEBUG
     static constexpr std::chrono::milliseconds s_heartbeat = std::chrono::milliseconds(100);

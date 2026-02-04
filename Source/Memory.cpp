@@ -22,7 +22,7 @@ void Memory::StartHeartbeat(HWND window, UINT message) {
 
         // Run the first heartbeat before setting trainerHasStarted, to detect if we are attaching to a game already in progress.
         sharedThis->Heartbeat(window, message);
-        sharedThis->_trainerHasStarted = true;
+        sharedThis->_firstHeartbeat = false;
 
         while (sharedThis->_threadActive) {
             std::this_thread::sleep_for(s_heartbeat);
@@ -68,7 +68,7 @@ HWND Memory::GetProcessHwnd(DWORD pid) {
 
 void Memory::Heartbeat(HWND window, UINT message) {
     if (!_handle) {
-        Initialize(); // Initialize promises to set _handle only on success
+        _handle = Initialize(); // Initialize returns nullptr on failure, which resets _handle for the next heartbeat
         if (!_handle) {
             // Couldn't initialize, definitely not running
             PostMessage(window, message, ProcStatus::NotRunning, NULL);
@@ -79,68 +79,60 @@ void Memory::Heartbeat(HWND window, UINT message) {
     DWORD exitCode = 0;
     GetExitCodeProcess(_handle, &exitCode);
     if (exitCode != STILL_ACTIVE) {
-        // Process has exited, clean up. We only need to reset _handle here -- its validity is linked to all other class members.
-        _computedAddresses.Clear();
+        // Process has exited, clean up.
         _handle = nullptr;
         _pid = 0;
+        _hwnd = nullptr;
+        _previousGameWorld = 0;
+        _computedAddresses.Clear();
 
-        _nextStatus = ProcStatus::Started;
         PostMessage(window, message, ProcStatus::Stopped, NULL);
         // Wait for the process to fully close; otherwise we might accidentally re-attach to it.
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         return;
     }
 
-    // To avoid obtaining the HWND for the launcher, we double check that the window is valid.
-    if (_hwnd == NULL) {
-        _hwnd = GetProcessHwnd(_pid);
-    } else {
-        // Under some circumstances the window can expire? Or the game re-allocates it? I have no idea.
-        // Anyways, we check to see if the title is wrong, and if so, search for the window again.
-        constexpr wchar_t GAME_TITLE[] = L"HOB";
-        constexpr int TITLE_SIZE = sizeof(GAME_TITLE) / sizeof(wchar_t);
-        wchar_t title[TITLE_SIZE] = {L'\0'};
-        GetWindowTextW(_hwnd, title, TITLE_SIZE);
-        if (wcsncmp(title, GAME_TITLE, TITLE_SIZE) != 0) _hwnd = GetProcessHwnd(_pid);
-    }
-
-    if (_baseAddress == 0) {
-        // Game hasn't loaded yet, we're still sitting on the launcher
-        PostMessage(window, message, ProcStatus::NotRunning, NULL);
-        return;
-    }
-
-    if (_hwnd == NULL) {
+    if (_hwnd == nullptr) _hwnd = GetProcessHwnd(_pid);
+    if (_hwnd == nullptr) {
         // Main window hasn't loaded yet
         PostMessage(window, message, ProcStatus::NotRunning, NULL);
         return;
     }
 
-    // Continually scan for the CGameWorld* getting reallocated
-    int gameWorld = ReadData<int>({0x4A89FC0}, 1)[0];
+    int gameWorld = ReadData<int>({_gameWorldPtr}, 1)[0];
     if (gameWorld == 0) {
-        // New game is starting, do not take any actions.
-        _nextStatus = ProcStatus::NewGame;
+        // CGameWorld* not allocated yet
+        PostMessage(window, message, ProcStatus::Loading, NULL);
         return;
     }
 
+    // At this point, we think the game is running... now we have to figure out what, exactly, to say.
+
+    // If this is the first heartbeat we're sending, we just started (and not the game).
+    if (_firstHeartbeat) {
+        PostMessage(window, message, ProcStatus::Running, NULL);
+        return; // We set _firstHeartbeat = false in the caller.
+    }
+
+    // If this is the first heartbeat where the CGameWorld* is allocated, the game just started
+    if (_previousGameWorld == 0) {
+        _previousGameWorld = gameWorld;
+        PostMessage(window, message, ProcStatus::Started, NULL);
+        return;
+    }
+
+    // If the CGameWorld* just changed, then this was a reload -- clear our memory addresses.
     if (_previousGameWorld != gameWorld) {
         _previousGameWorld = gameWorld;
         _computedAddresses.Clear();
+        PostMessage(window, message, ProcStatus::Reload, NULL);
     }
-        
-    if (_trainerHasStarted == false) {
-        // If it's the first time we started, and the game appears to be running, return "Running" instead of "Started".
-        PostMessage(window, message, ProcStatus::Running, NULL);
-    } else {
-        // Else, report whatever status we last encountered.
-        PostMessage(window, message, _nextStatus, NULL);
-    }
-    _nextStatus = ProcStatus::Running;
+
+    // Otherwise, business as usual.
+    PostMessage(window, message, ProcStatus::Running, NULL);
 }
 
-void Memory::Initialize() {
-    HANDLE handle = nullptr;
+HANDLE Memory::Initialize() {
     // First, get the handle of the process
     PROCESSENTRY32W entry;
     entry.dwSize = sizeof(entry);
@@ -148,48 +140,31 @@ void Memory::Initialize() {
     while (Process32NextW(snapshot, &entry)) {
         if (_processName == entry.szExeFile) {
             _pid = entry.th32ProcessID;
-            handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, _pid);
+            _handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, _pid);
             break;
         }
     }
-    if (!handle || !_pid) {
-        // Game likely not opened yet. Don't spam the log.
-        _nextStatus = ProcStatus::Started;
-        return;
-    }
-    DebugPrint(L"Found " + _processName + L": PID " + std::to_wstring(_pid));
+    if (!_handle || !_pid) return nullptr;
+    // DebugPrint(L"Found " + _processName + L": PID " + std::to_wstring(_pid));
 
-    _hwnd = NULL; // Will be populated later.
-
-    std::tie(_baseAddress, _endOfModule) = DebugUtils::GetModuleBounds(handle);
-    if (_baseAddress == 0) {
-        DebugPrint("Couldn't locate base address");
-        return;
-    }
+    std::tie(_baseAddress, _endOfModule) = DebugUtils::GetModuleBounds(_handle);
+    if (_baseAddress == 0) return nullptr;
 
     BOOL wow64Process = false;
-    IsWow64Process(handle, &wow64Process);
+    IsWow64Process(_handle, &wow64Process);
     _pointerSize = (wow64Process == TRUE) ? 4 : 8;
 
     // Clear out any leftover sigscans from consumers (e.g. the trainer)
     _sigScans.clear();
 
-    /* TODO: Sigscans for determining loading go here
-    AddSigScan({0x74, 0x41, 0x48, 0x85, 0xC0, 0x74, 0x04, 0x48, 0x8B, 0x48, 0x10}, [&](__int64 offset, int index, const std::vector<byte>& data) {
-        _globals = Memory::ReadStaticInt(offset, index + 0x14, data);
+    AddSigScan({0x80, 0xBD, 0x00, 0x01, 0x00, 0x00, 0x00}, [&](__int64 offset, int index, const std::vector<byte>& data) {
+        __int64 getGameWorld = Memory::ReadStaticInt(offset, index + 11, data);
+        _gameWorldPtr = ReadData<int>({getGameWorld + 1}, 1)[0] - _baseAddress;
     });
 
-    AddSigScan({0x01, 0x00, 0x00, 0x66, 0xC7, 0x87}, [&](__int64 offset, int index, const std::vector<byte>& data) {
-        _loadCountOffset = *(int*)&data[index-1];
-    });
-    */
-
-    // This little song-and-dance is because we need _handle in order to execute sigscans.
-    // But, we use _handle to indicate success, so we need to reset it.
-    // Note that these sigscans are very lightweight -- they are *only* the scans required to handle loading.
-    _handle = handle;
-    size_t failedScans = ExecuteSigScans(); // Will DebugPrint the failed scans.
-    if (failedScans > 0) _handle = nullptr;
+    size_t failedScans = ExecuteSigScans();
+    if (failedScans > 0) return nullptr;
+    return _handle;
 }
 
 __int64 Memory::ReadStaticInt(__int64 offset, int index, const std::vector<byte>& data, size_t bytesToEOL) {

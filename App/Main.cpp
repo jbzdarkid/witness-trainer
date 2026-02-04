@@ -12,11 +12,8 @@
 #define HEARTBEAT           0x401
 #define SAVE_POS            0x402
 #define LOAD_POS            0x403
-#define NOCLIP_ENABLED      0x407
 #define ACTIVATE_GAME       0x412
 #define OPEN_SAVES          0x413
-#define NOCLIP_UP           0x424
-#define NOCLIP_DOWN         0x425
 #define KEY_RELEASED        0x426
 #define OPEN_KEYBINDS       0x427
 #define INFINITE_HEALTH     0x428
@@ -29,7 +26,7 @@ HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
 std::shared_ptr<Memory> g_hobProc;
-HWND g_currentPos, g_savedPos, g_activateGame, g_flyUp, g_flyDown;
+HWND g_currentPos, g_savedPos, g_activateGame;
 
 std::vector<float> g_savedPlayerPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> g_savedPlayerAngle = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -138,8 +135,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             }
             PostQuitMessage(0);
             return 0;
-        case WM_COMMAND:
-            break; // LOWORD(wParam) contains the actual command, handled below
         case WM_ERASEBKGND: // ???
         {
             RECT rc;
@@ -159,24 +154,20 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         case HEARTBEAT:
             switch ((ProcStatus)wParam) {
             case ProcStatus::Stopped:
-            case ProcStatus::NotRunning:
                 // Don't discard any settings, just free the trainer.
-                if (g_trainer) g_trainer = nullptr;
+                g_trainer = nullptr;
                 // Also reset the title & launch text, since they can get stuck
                 SetStringText(g_hwnd, WINDOW_TITLE);
                 SetStringText(g_activateGame, L"Launch game");
                 break;
-            case ProcStatus::Reload:
-            case ProcStatus::NewGame:
             case ProcStatus::Started:
-                if (!g_trainer) {
-                    // Process just started (we were already alive), enforce our settings.
-                    SetStringText(g_hwnd, L"Attaching to HOB...");
-                    g_trainer = Trainer::Create(g_hobProc);
-                }
-                if (!g_trainer) break;
+                SetStringText(g_hwnd, L"Attaching to HOB...");
+                g_trainer = Trainer::Create(g_hobProc);
+                [[fallthrough]];
+            case ProcStatus::Reload:
+                if (!g_trainer) break; // It's possible that trainer failed to attach before a new game was started.
+                // Process just started (or reloaded), enforce our settings.
                 SetStringText(g_hwnd, WINDOW_TITLE);
-                g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
                 if (IsDlgButtonChecked(hwnd, INFINITE_HEALTH))  g_trainer->SetMaxHealth(100);
                 if (IsDlgButtonChecked(hwnd, INFINITE_CHARGE))  g_trainer->SetMaxCharge(100);
                 if (IsDlgButtonChecked(hwnd, GOD_MODE))         g_trainer->SetGodMode(true);
@@ -184,33 +175,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 break;
             case ProcStatus::Running:
                 if (!g_trainer) {
-                    // Process was already running, and we just started. Load settings from the game.
+                    // Process was already running, and we haven't attached yet. Try to attach, then load settings from the game once we do.
                     SetStringText(g_hwnd, L"Attaching to HOB...");
                     g_trainer = Trainer::Create(g_hobProc);
                     if (!g_trainer) break;
                     SetStringText(g_hwnd, WINDOW_TITLE);
                     CheckDlgButton(hwnd, INFINITE_HEALTH, g_trainer->GetHealth() == 100);
                     CheckDlgButton(hwnd, INFINITE_CHARGE, g_trainer->GetCharge() == 100);
-                    CheckDlgButton(hwnd, NOCLIP_ENABLED, g_trainer->GetNoclip());
-                    EnableWindow(g_flyUp, g_trainer->GetNoclip());
-                    EnableWindow(g_flyDown, g_trainer->GetNoclip());
                     SetStringText(g_activateGame, L"Switch to game");
-                } else {
-                    // Process was already running, and so were we (this recurs every heartbeat). Enforce settings and apply repeated actions.
-                    g_trainer->SetNoclip(IsDlgButtonChecked(hwnd, NOCLIP_ENABLED));
-
-                    // Check to see if we're holding the 'fly up' or 'fly down' buttons, then move the camera accordingly.
-                    if (SendMessage(g_flyUp, BM_GETSTATE, NULL, NULL) & BST_PUSHED) {
-                        auto pos = g_trainer->GetPlayerPos();
-                        pos[2] += 0.01f;
-                        pos[2] = CLAMP(pos[2], -10000.0f, 10000.0f);
-                        g_trainer->SetPlayerPos(pos);
-                    } else if (SendMessage(g_flyDown, BM_GETSTATE, NULL, NULL) & BST_PUSHED) {
-                        auto pos = g_trainer->GetPlayerPos();
-                        pos[2] -= 0.01f;
-                        pos[2] = CLAMP(pos[2], -10000.0f, 10000.0f);
-                        g_trainer->SetPlayerPos(pos);
-                    }
                 }
 
                 // Settings which are always sourced from the game, since they are not editable in the trainer.
@@ -221,6 +193,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     if (IsDlgButtonChecked(g_hwnd, INFINITE_HEALTH) == TRUE) {
                         // Note: We still need to allow the player to die to instakill effects like fall damage.
                         // Otherwise, Hob just gets stuck in the "dying" state.
+                        // (Don't bother setting HP if it's already full, to avoid churn)
                         int currentHealth = g_trainer->GetHealth();
                         if (currentHealth != 0 && currentHealth != 100) g_trainer->SetHealth(100);
                     }
@@ -231,6 +204,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 break;
             }
             return 0;
+        case WM_COMMAND:
+            break; // LOWORD(wParam) contains the actual command, handled below
         default:
             return DefWindowProc(hwnd, message, wParam, lParam);
     }
@@ -242,11 +217,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         SetCurrentThreadName(L"Command Helper");
 
         WORD command = LOWORD(wParam);
-        if (command == NOCLIP_ENABLED) {
-            ToggleOption(NOCLIP_ENABLED, &Trainer::SetNoclip);
-            EnableWindow(g_flyUp, IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED));
-            EnableWindow(g_flyDown, IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED));
-        } else if (command == ACTIVATE_GAME) {
+        if (command == ACTIVATE_GAME) {
             if (!trainer) LaunchSteamGame(404680);
             else g_hobProc->BringToFront();
         } else if (command == OPEN_SAVES) {
@@ -255,13 +226,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         } else if (command == OPEN_KEYBINDS) {
             std::wstring hotkeyFile = Hotkeys::Get()->GetHotkeyFilePath();
             ShellExecute(NULL, L"open", hotkeyFile.c_str(), NULL, NULL, SW_SHOWDEFAULT);
-        } else if (command == NOCLIP_UP) {
-            PostMessage(g_flyUp, BM_SETSTATE, true, NULL);
-        } else if (command == NOCLIP_DOWN) {
-            PostMessage(g_flyDown, BM_SETSTATE, true, NULL);
-        } else if (command == KEY_RELEASED) {
-            PostMessage(g_flyUp, BM_SETSTATE, false, NULL);
-            PostMessage(g_flyDown, BM_SETSTATE, false, NULL);
         } else if (!trainer && HIWORD(wParam) == 0) { // Message was triggered by the user
             MessageBox(g_hwnd, L"The process must be running in order to use this button", L"", MB_OK);
         }
@@ -414,16 +378,6 @@ void CreateComponents() {
     CreateLabelAndCheckbox(x, y, 100, L"Infinite Charge", INFINITE_CHARGE, "infinite_charge");
 
     CreateButton(x, y, 100, L"Respawn", RESPAWN, "respawn");
-
-    /*
-    CreateLabelAndCheckbox(x, y, 100, L"Noclip Enabled", NOCLIP_ENABLED, "noclip_enabled");
-
-    g_flyUp = CreateButton(x, y, 70, L"Fly up", NOCLIP_UP, "fly_up");
-    EnableWindow(g_flyUp, false);
-    y -= 30;
-    g_flyDown = CreateButton(x + 80, y, 70, L"Fly down", NOCLIP_DOWN, "fly_down");
-    EnableWindow(g_flyDown, false);
-    */
 
     CreateButton(x, y, 110, L"Save Position", SAVE_POS, "save_position");
     y -= 30;
