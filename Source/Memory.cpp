@@ -83,7 +83,7 @@ void Memory::Heartbeat(HWND window, UINT message) {
         _handle = nullptr;
         _pid = 0;
         _hwnd = nullptr;
-        _previousGameWorld = 0;
+        _previousCombatStats = 0;
         _computedAddresses.Clear();
 
         PostMessage(window, message, ProcStatus::Stopped, NULL);
@@ -99,9 +99,9 @@ void Memory::Heartbeat(HWND window, UINT message) {
         return;
     }
 
-    int gameWorld = ReadData<int>({_gameWorldPtr}, 1)[0];
-    if (gameWorld == 0) {
-        // CGameWorld* not allocated yet
+    // Some part of the player entity is not allocated yet, so the game is not functional.
+    uintptr_t playerCombatStats = ResolvePointerPath({_gameWorldPtr, 0x50, 0xA8, 0x140});
+    if (playerCombatStats == 0) {
         PostMessage(window, message, ProcStatus::Loading, NULL);
         return;
     }
@@ -115,15 +115,15 @@ void Memory::Heartbeat(HWND window, UINT message) {
     }
 
     // If this is the first heartbeat where the CGameWorld* is allocated, the game just started
-    if (_previousGameWorld == 0) {
-        _previousGameWorld = gameWorld;
+    if (_previousCombatStats == 0) {
+        _previousCombatStats = playerCombatStats;
         PostMessage(window, message, ProcStatus::Started, NULL);
         return;
     }
 
     // If the CGameWorld* just changed, then this was a reload -- clear our memory addresses.
-    if (_previousGameWorld != gameWorld) {
-        _previousGameWorld = gameWorld;
+    if (_previousCombatStats != playerCombatStats) {
+        _previousCombatStats = playerCombatStats;
         _computedAddresses.Clear();
         PostMessage(window, message, ProcStatus::Reload, NULL);
     }
@@ -159,7 +159,7 @@ HANDLE Memory::Initialize() {
 
     AddSigScan({0x80, 0xBD, 0x00, 0x01, 0x00, 0x00, 0x00}, [&](__int64 offset, int index, const std::vector<byte>& data) {
         __int64 getGameWorld = Memory::ReadStaticInt(offset, index + 11, data);
-        _gameWorldPtr = ReadData<int>({getGameWorld + 1}, 1)[0] - _baseAddress;
+        _gameWorldPtr = ReadData<int>({getGameWorld + 1}, 1)[0];
     });
 
     size_t failedScans = ExecuteSigScans();
@@ -251,7 +251,7 @@ std::string Memory::ReadString(const std::vector<__int64>& offsets) {
     std::vector<char> tmp;
     auto nullTerminator = tmp.begin(); // Value is only for type information.
     for (size_t maxLength = (1 << 6); maxLength < (1 << 10); maxLength *= 2) {
-        tmp = ReadAbsoluteData<char>({charAddr}, maxLength);
+        tmp = ReadData<char>({charAddr}, maxLength, true);
         nullTerminator = std::find(tmp.begin(), tmp.end(), '\0');
         // If a null terminator is found, we will strip any trailing data after it.
         if (nullTerminator != tmp.end()) break;
@@ -365,17 +365,16 @@ void Memory::WriteDataInternal(const void* buffer, uintptr_t computedOffset, siz
     }
 }
 
-uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets, bool absolute) {
+uintptr_t Memory::ComputeOffset(const std::vector<__int64>& offsets, bool absolute) {
     assert(offsets.size() > 0, "[Internal error] Attempting to compute 0 offsets");
     assert(offsets.front() != 0, "[Internal error] First offset to compute was 0");
 
     // Leave off the last offset, since it will be either read/write, and may not be of type uintptr_t.
     const __int64 final_offset = offsets.back();
-    offsets.pop_back();
 
     uintptr_t cumulativeAddress = (absolute ? 0 : _baseAddress);
-    for (const __int64 offset : offsets) {
-        cumulativeAddress += offset;
+    for (int i = 0; i < offsets.size() - 1; i++) {
+        cumulativeAddress += offsets[i];
 
         // If the address was already computed, continue to the next offset.
         uintptr_t foundAddress = _computedAddresses.Find(cumulativeAddress);
@@ -407,6 +406,22 @@ uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets, bool absolute) {
     }
     return cumulativeAddress + final_offset;
 }
+
+uintptr_t Memory::ResolvePointerPath(const std::vector<__int64>& offsets) {
+    uintptr_t cumulativeAddress = 0;
+    for (__int64 offset : offsets) {
+        cumulativeAddress += offset;
+
+        if (!_handle) return 0;
+        uintptr_t computedAddress = 0;
+        if (!ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(cumulativeAddress), &computedAddress, _pointerSize, NULL)) return 0;
+        if (cumulativeAddress == 0) return 0;
+        cumulativeAddress = computedAddress;
+    }
+
+    return cumulativeAddress;
+}
+
 
 uintptr_t Memory::AllocateArray(__int64 size) {
     return (uintptr_t)VirtualAllocEx(_handle, 0, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);

@@ -62,25 +62,19 @@ public:
     void AddSigScan2(const std::vector<byte>& scanBytes, const ScanFunc2& scanFunc);
     [[nodiscard]] size_t ExecuteSigScans();
 
-    template<class T>
-    inline std::vector<T> ReadData(const std::vector<__int64>& offsets, size_t numItems) {
-        std::vector<T> data(numItems);
-        if (!_handle) return data;
-        ReadDataInternal(&data[0], ComputeOffset(offsets), numItems * sizeof(T));
-        return data;
-    }
-    template<class T>
-    inline std::vector<T> ReadAbsoluteData(const std::vector<__int64>& offsets, size_t numItems) {
-        std::vector<T> data(numItems);
-        if (!_handle) return data;
-        ReadDataInternal(&data[0], ComputeOffset(offsets, true), numItems * sizeof(T));
-        return data;
-    }
     std::string ReadString(const std::vector<__int64>& offsets);
 
+    template<class T>
+    inline std::vector<T> ReadData(const std::vector<__int64>& offsets, size_t numItems, bool absolute = false) {
+        std::vector<T> data(numItems);
+        if (!_handle) return data;
+        ReadDataInternal(&data[0], ComputeOffset(offsets, absolute), numItems * sizeof(T));
+        return data;
+    }
+
     template <class T>
-    inline void WriteData(const std::vector<__int64>& offsets, const std::vector<T>& data) {
-        WriteDataInternal(&data[0], ComputeOffset(offsets), sizeof(T) * data.size());
+    inline void WriteData(const std::vector<__int64>& offsets, const std::vector<T>& data, bool absolute = false) {
+        WriteDataInternal(&data[0], ComputeOffset(offsets, absolute), sizeof(T) * data.size());
     }
 
     // This is the fully typed function -- you mostly won't need to call this.
@@ -98,7 +92,8 @@ private:
 
     void ReadDataInternal(void* buffer, const uintptr_t computedOffset, size_t bufferSize);
     void WriteDataInternal(const void* buffer, uintptr_t computedOffset, size_t bufferSize);
-    uintptr_t ComputeOffset(std::vector<__int64> offsets, bool absolute = false);
+    uintptr_t ComputeOffset(const std::vector<__int64>& offsets, bool absolute = false);
+    uintptr_t ResolvePointerPath(const std::vector<__int64>& offsets);
     uintptr_t AllocateArray(__int64 size);
 
     // Parts of the constructor / StartHeartbeat
@@ -114,7 +109,7 @@ private:
     size_t _pointerSize = 0;
     HWND _hwnd = NULL;
     __int64 _gameWorldPtr = 0;
-    int _previousGameWorld = 0;
+    uintptr_t _previousCombatStats = 0;
     bool _firstHeartbeat = true;
 
 #ifdef NDEBUG

@@ -7,7 +7,6 @@ class Memory;
 class Trainer final {
 public:
     static std::shared_ptr<Trainer> Create(const std::shared_ptr<Memory>& memory);
-    ~Trainer();
 
     bool GetNoclip();
     std::vector<float> GetPlayerPos();
@@ -29,4 +28,5 @@ public:
 
 private:
     std::shared_ptr<Memory> _memory;
+    int _gameWorldPtr = 0;
 };
