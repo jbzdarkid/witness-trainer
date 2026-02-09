@@ -117,6 +117,11 @@ bool Hotkeys::ParseHotkeyFile() {
             else if (CompareNoCase(segment, "down"))     keyCode |= VK_DOWN;
             else if (CompareNoCase(segment, "left"))     keyCode |= VK_LEFT;
             else if (CompareNoCase(segment, "right"))    keyCode |= VK_RIGHT;
+            else if (CompareNoCase(segment, "mouse1"))   keyCode |= VK_LBUTTON;
+            else if (CompareNoCase(segment, "mouse2"))   keyCode |= VK_RBUTTON;
+            else if (CompareNoCase(segment, "mouse3"))   keyCode |= VK_MBUTTON;
+            else if (CompareNoCase(segment, "mouse4"))   keyCode |= VK_XBUTTON1;
+            else if (CompareNoCase(segment, "mouse5"))   keyCode |= VK_XBUTTON2;
             else {
                 ASSERT(false, L"Unable to parse segment: " + std::wstring(segment.begin(), segment.end()));
             }
@@ -213,6 +218,11 @@ std::wstring Hotkeys::GetHoverText(keycode keyCode) {
     else if (keyCode == VK_DOWN)                ss << "DownArrow";
     else if (keyCode == VK_LEFT)                ss << "LeftArrow";
     else if (keyCode == VK_RIGHT)               ss << "RightArrow";
+    else if (keyCode == VK_LBUTTON)             ss << "Mouse1";
+    else if (keyCode == VK_RBUTTON)             ss << "Mouse2";
+    else if (keyCode == VK_MBUTTON)             ss << "Mouse3";
+    else if (keyCode == VK_XBUTTON1)            ss << "Mouse4";
+    else if (keyCode == VK_XBUTTON2)            ss << "Mouse5";
 
     return ss.str();
 }
