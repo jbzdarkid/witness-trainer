@@ -16,6 +16,7 @@ public:
     int GetCharge();
     int GetMaxCharge();
     bool GetGodMode();
+    std::string GetLevelName();
 
     void SetNoclip(bool enable);
     void SetPlayerPos(const std::vector<float>& pos);

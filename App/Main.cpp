@@ -26,7 +26,7 @@ HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
 std::shared_ptr<Memory> g_hobProc;
-HWND g_currentPos, g_savedPos, g_activateGame;
+HWND g_currentPos, g_savedPos, g_activateGame, g_levelName;
 
 std::vector<float> g_savedPlayerPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> g_savedPlayerAngle = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -200,6 +200,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     if (IsDlgButtonChecked(g_hwnd, INFINITE_CHARGE) == TRUE) {
                         g_trainer->SetCharge(100);
                     }
+
+                    std::string levelName = g_trainer->GetLevelName();
+                    levelName = levelName.substr(13, levelName.length() - 17); // Trim leading MEDIA/LEVELS/ and trailing .DAT
+                    SetStringText(g_levelName, levelName);
                 }
                 break;
             }
@@ -395,6 +399,10 @@ void CreateComponents() {
     g_activateGame = CreateButton(x, y, 200, L"Launch game", ACTIVATE_GAME, "launch_game");
     CreateButton(x, y, 200, L"Open save folder", OPEN_SAVES, "open_save_folder");
     CreateButton(x, y, 200, L"Open keybinds file", OPEN_KEYBINDS, "open_keybinds");
+
+    CreateLabel(x, y, 200, L"Level name:");
+    y += 20;
+    g_levelName = CreateLabel(x, y, 200, L"");
 
     // Required to 'unselect' any hold-based keybinds
     Hotkeys::Get()->RegisterHotkey("key_released", KEY_RELEASED);

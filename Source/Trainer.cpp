@@ -49,6 +49,10 @@ bool Trainer::GetGodMode() {
     return _memory->ReadData<int>({_gameWorldPtr, 0x50, 0xA8, 0x154}, 1, true)[0] == 1;
 }
 
+std::string Trainer::GetLevelName() {
+    return _memory->ReadString({_gameWorldPtr, 0x4C, 0xD4, 0}, true);
+}
+
 void Trainer::SetNoclip(bool enable) {
     // TODO: Some sigscan here to defy gravity
 }

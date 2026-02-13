@@ -62,7 +62,7 @@ public:
     void AddSigScan2(const std::vector<byte>& scanBytes, const ScanFunc2& scanFunc);
     [[nodiscard]] size_t ExecuteSigScans();
 
-    std::string ReadString(const std::vector<__int64>& offsets);
+    std::string ReadString(const std::vector<__int64>& offsets, bool absolute = false);
 
     template<class T>
     inline std::vector<T> ReadData(const std::vector<__int64>& offsets, size_t numItems, bool absolute = false) {
