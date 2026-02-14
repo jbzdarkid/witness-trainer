@@ -77,6 +77,8 @@ public:
         WriteDataInternal(&data[0], ComputeOffset(offsets, absolute), sizeof(T) * data.size());
     }
 
+    void ClearComputedAddress(const std::vector<__int64>& offsets, bool absolute = false);
+
     // This is the fully typed function -- you mostly won't need to call this.
     int CallFunction(__int64 address,
         const __int64 rcx, const __int64 rdx, const __int64 r8, const __int64 r9,

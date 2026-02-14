@@ -246,7 +246,6 @@ size_t Memory::ExecuteSigScans() {
 // Technically this is ReadChar*, but this name makes more sense with the return type.
 std::string Memory::ReadString(const std::vector<__int64>& offsets, bool absolute) {
     uintptr_t charAddr = ComputeOffset(offsets, absolute);
-    // __int64 charAddr = ReadData<__int64>(offsets, 1)[0];
     if (charAddr == 0) return ""; // Handle nullptr for strings
 
     std::vector<char> tmp;
@@ -335,6 +334,11 @@ int32_t Memory::CallFunction(int64_t relativeAddress,
     static_assert(sizeof(DWORD) == sizeof(exitCode));
     GetExitCodeThread(thread, reinterpret_cast<LPDWORD>(&exitCode));
     return exitCode;
+}
+
+void Memory::ClearComputedAddress(const std::vector<__int64>& offsets, bool absolute) {
+    uintptr_t address = ComputeOffset(offsets, absolute);
+    _computedAddresses.Remove(address);
 }
 
 int32_t Memory::CallFunction(__int64 address, const std::string& str, __int64 rdx) {

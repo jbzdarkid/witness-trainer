@@ -202,7 +202,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     }
 
                     std::string levelName = g_trainer->GetLevelName();
-                    levelName = levelName.substr(13, levelName.length() - 17); // Trim leading MEDIA/LEVELS/ and trailing .DAT
+                    levelName = levelName.substr(13); // Trim leading MEDIA/LEVELS/ (common to all levels)
                     SetStringText(g_levelName, levelName);
                 }
                 break;
@@ -392,6 +392,10 @@ void CreateComponents() {
     SetPosText(g_savedPos,   { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f, 1.0f });
     y += 90;
 
+    CreateLabel(x, y, 200, L"Level name:");
+    y += 20;
+    g_levelName = CreateLabel(x, y, 1000, L"");
+
     // Column 2
     x = 270;
     y = 10;
@@ -399,10 +403,6 @@ void CreateComponents() {
     g_activateGame = CreateButton(x, y, 200, L"Launch game", ACTIVATE_GAME, "launch_game");
     CreateButton(x, y, 200, L"Open save folder", OPEN_SAVES, "open_save_folder");
     CreateButton(x, y, 200, L"Open keybinds file", OPEN_KEYBINDS, "open_keybinds");
-
-    CreateLabel(x, y, 200, L"Level name:");
-    y += 20;
-    g_levelName = CreateLabel(x, y, 200, L"");
 
     // Required to 'unselect' any hold-based keybinds
     Hotkeys::Get()->RegisterHotkey("key_released", KEY_RELEASED);
@@ -426,17 +426,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     };
     RegisterClass(&wndClass);
 
-#ifndef _DEBUG
-    int height = 500;
-#else // Debug mode has some extra *stuff* at the bottom for the sounds. Make the box bigger to handle it.
-    int height = 600;
-#endif
-
     RECT rect;
     GetClientRect(GetDesktopWindow(), &rect);
     g_hwnd = CreateWindow(WINDOW_CLASS, WINDOW_TITLE,
         WS_SYSMENU | WS_MINIMIZEBOX,
-        rect.right - 550, 200, 500, height,
+        rect.right - 550, 200, 500, 500,
         nullptr, nullptr, hInstance, nullptr);
     ShowWindow(g_hwnd, nCmdShow);
     UpdateWindow(g_hwnd);

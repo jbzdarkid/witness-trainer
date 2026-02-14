@@ -50,6 +50,7 @@ bool Trainer::GetGodMode() {
 }
 
 std::string Trainer::GetLevelName() {
+    _memory->ClearComputedAddress({_gameWorldPtr, 0x4C}, true); // Level pointer cannot be cached
     return _memory->ReadString({_gameWorldPtr, 0x4C, 0xD4, 0}, true);
 }
 
