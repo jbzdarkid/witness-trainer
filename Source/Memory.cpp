@@ -3,6 +3,26 @@
 #include <psapi.h>
 #include <tlhelp32.h>
 
+int find(const std::vector<byte>& data, const std::vector<byte>& search, int offset=0) {
+    const byte* dataBegin = &data[0];
+    const byte* searchBegin = &search[0];
+    size_t maxI = data.size() - search.size();
+    size_t maxJ = search.size();
+
+    for (int i=offset; i<maxI; i++) {
+        bool match = true;
+        for (size_t j=0; j<maxJ; j++) {
+            if (*(dataBegin + i + j) == *(searchBegin + j)) {
+                continue;
+            }
+            match = false;
+            break;
+        }
+        if (match) return i;
+    }
+    return -1;
+}
+
 Memory::Memory(const std::wstring& processName) : _processName(processName) {}
 
 Memory::~Memory() {
@@ -182,26 +202,6 @@ void Memory::AddSigScan(const std::vector<byte>& scanBytes, const ScanFunc& scan
 
 void Memory::AddSigScan2(const std::vector<byte>& scanBytes, const ScanFunc2& scanFunc) {
     _sigScans[scanBytes] = {false, scanFunc};
-}
-
-int find(const std::vector<byte>& data, const std::vector<byte>& search) {
-    const byte* dataBegin = &data[0];
-    const byte* searchBegin = &search[0];
-    size_t maxI = data.size() - search.size();
-    size_t maxJ = search.size();
-
-    for (int i=0; i<maxI; i++) {
-        bool match = true;
-        for (size_t j=0; j<maxJ; j++) {
-            if (*(dataBegin + i + j) == *(searchBegin + j)) {
-                continue;
-            }
-            match = false;
-            break;
-        }
-        if (match) return i;
-    }
-    return -1;
 }
 
 #define BUFFER_SIZE 0x10000 // 10 KB

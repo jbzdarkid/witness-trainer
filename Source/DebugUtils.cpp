@@ -70,7 +70,7 @@ void DebugUtils::ShowAssertDialogue(const wchar_t* message) {
     lastShownAssert = time(nullptr);
     std::wstring msg = L"HobTrainer version " + version + L" has encountered an error.\n";
     msg += L"Please press Control C to copy this error, and paste it to darkid.\n";
-    msg += message;
+    if (message) msg += message;
     msg += L"\n";
     msg += GetStackTrace();
     MessageBox(NULL, msg.c_str(), L"HobTrainer encountered an error.", MB_TASKMODAL | MB_ICONHAND | MB_OK | MB_SETFOREGROUND);

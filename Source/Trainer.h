@@ -16,6 +16,7 @@ public:
     int GetCharge();
     int GetMaxCharge();
     bool GetGodMode();
+    bool GetShowCollision();
     std::string GetLevelName();
 
     void SetNoclip(bool enable);
@@ -26,8 +27,10 @@ public:
     void SetCharge(int charge);
     void SetMaxCharge(int maxCharge);
     void SetGodMode(bool enable);
+    void SetShowCollision(bool enable);
 
 private:
     std::shared_ptr<Memory> _memory;
     int _gameWorldPtr = 0;
+    int _globalSettingsPtr = 0;
 };

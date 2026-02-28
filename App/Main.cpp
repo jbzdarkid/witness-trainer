@@ -20,6 +20,7 @@
 #define INFINITE_CHARGE     0x429
 #define RESPAWN             0x430
 #define GOD_MODE            0x431
+#define SHOW_COLLISION      0x432
 
 // Globals
 HWND g_hwnd;
@@ -171,6 +172,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 if (IsDlgButtonChecked(hwnd, INFINITE_HEALTH))  g_trainer->SetMaxHealth(100);
                 if (IsDlgButtonChecked(hwnd, INFINITE_CHARGE))  g_trainer->SetMaxCharge(100);
                 if (IsDlgButtonChecked(hwnd, GOD_MODE))         g_trainer->SetGodMode(true);
+                if (IsDlgButtonChecked(hwnd, SHOW_COLLISION))   g_trainer->SetShowCollision(true);
                 SetStringText(g_activateGame, L"Switch to game");
                 break;
             case ProcStatus::Running:
@@ -182,6 +184,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     SetStringText(g_hwnd, WINDOW_TITLE);
                     CheckDlgButton(hwnd, INFINITE_HEALTH, g_trainer->GetHealth() == 100);
                     CheckDlgButton(hwnd, INFINITE_CHARGE, g_trainer->GetCharge() == 100);
+                    CheckDlgButton(hwnd, GOD_MODE, g_trainer->GetGodMode());
+                    CheckDlgButton(hwnd, SHOW_COLLISION, g_trainer->GetShowCollision());
                     SetStringText(g_activateGame, L"Switch to game");
                 }
 
@@ -271,6 +275,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             trainer->SetHealth(0);
         } else if (command == GOD_MODE) {
             ToggleOption(GOD_MODE, &Trainer::SetGodMode);
+        } else if (command == SHOW_COLLISION) {
+            ToggleOption(SHOW_COLLISION, &Trainer::SetShowCollision);
         }
     });
     t.detach();
@@ -376,6 +382,8 @@ void CreateComponents() {
     int y = 10;
 
     CreateLabelAndCheckbox(x, y, 100, L"God Mode", GOD_MODE, "god_mode");
+
+    CreateLabelAndCheckbox(x, y, 250, L"Show Collision (requires reload)", SHOW_COLLISION, "show_collision");
 
     CreateLabelAndCheckbox(x, y, 100, L"Infinite Health", INFINITE_HEALTH, "infinite_health");
 

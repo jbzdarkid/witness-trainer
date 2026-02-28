@@ -11,6 +11,11 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         trainer->_gameWorldPtr = memory->ReadData<int>({getGameWorld + 1}, 1)[0];
     });
 
+    memory->AddSigScan({0x83, 0xEC, 0x1C, 0x56, 0x6A, 0x2C}, [&](__int64 offset, int index, const std::vector<byte>& data) {
+        __int64 getGlobalSettings = Memory::ReadStaticInt(offset, index + 7, data);
+        trainer->_globalSettingsPtr = memory->ReadData<int>({getGlobalSettings + 1}, 1)[0];
+    });
+
     size_t numFailedScans = memory->ExecuteSigScans();
     if (numFailedScans != 0) return nullptr; // Sigscans failed, we'll try again later.
 
@@ -49,6 +54,10 @@ bool Trainer::GetGodMode() {
     return _memory->ReadData<int>({_gameWorldPtr, 0x50, 0xA8, 0x154}, 1, true)[0] == 1;
 }
 
+bool Trainer::GetShowCollision() { 
+    return _memory->ReadData<int>({_globalSettingsPtr, 0x4, 0x3D*4}, 1, true)[0] == 44;
+}
+
 std::string Trainer::GetLevelName() {
     _memory->ClearComputedAddress({_gameWorldPtr, 0x4C}, true); // Level pointer cannot be cached
     return _memory->ReadString({_gameWorldPtr, 0x4C, 0xD4, 0}, true);
@@ -84,4 +93,8 @@ void Trainer::SetMaxCharge(int maxCharge) {
 
 void Trainer::SetGodMode(bool enable) {
     return _memory->WriteData<int>({_gameWorldPtr, 0x50, 0xA8, 0x154}, { enable ? 1 : 0 }, true);
+}
+
+void Trainer::SetShowCollision(bool enable) {
+    _memory->WriteData<int>({_globalSettingsPtr, 0x4, 0x3D*4}, { enable ? 44 : 0 }, true);
 }
