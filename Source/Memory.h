@@ -1,13 +1,36 @@
 #pragma once
 #include "ThreadSafeAddressMap.h"
 
+/* State graph. Entry states are NotRunning, Running, and Loading.
+ * It is not recommended to act on the "Loading" state, except to gray out buttons.
+
+                   Stopped
+                      |
+                      |
+                      v
+                  NotRunning
+                      |
+                      |
+                      v
+        +<-------- Started -------->+
+        |             |             |
+        |             |             |
+        v             v             v
+     Running <---> Loading <---> Reload <---> (Running)
+        |             |             |
+        |             |             |
+        v             v             v
+        +-------> (Stopped) <-------+
+
+*/
+
 enum ProcStatus : WPARAM {
     NotRunning,
     Started,
     Running,
+    Loading,
     Reload,
-    NewGame,
-    Stopped
+    Stopped,
 };
 
 using byte = unsigned char;
@@ -39,26 +62,22 @@ public:
     void AddSigScan2(const std::vector<byte>& scanBytes, const ScanFunc2& scanFunc);
     [[nodiscard]] size_t ExecuteSigScans();
 
+    std::string ReadString(const std::vector<__int64>& offsets, bool absolute = false);
+
     template<class T>
-    inline std::vector<T> ReadData(const std::vector<__int64>& offsets, size_t numItems) {
+    inline std::vector<T> ReadData(const std::vector<__int64>& offsets, size_t numItems, bool absolute = false) {
         std::vector<T> data(numItems);
         if (!_handle) return data;
-        ReadDataInternal(&data[0], ComputeOffset(offsets), numItems * sizeof(T));
+        ReadDataInternal(&data[0], ComputeOffset(offsets, absolute), numItems * sizeof(T));
         return data;
     }
-    template<class T>
-    inline std::vector<T> ReadAbsoluteData(const std::vector<__int64>& offsets, size_t numItems) {
-        std::vector<T> data(numItems);
-        if (!_handle) return data;
-        ReadDataInternal(&data[0], ComputeOffset(offsets, true), numItems * sizeof(T));
-        return data;
-    }
-    std::string ReadString(const std::vector<__int64>& offsets);
 
     template <class T>
-    inline void WriteData(const std::vector<__int64>& offsets, const std::vector<T>& data) {
-        WriteDataInternal(&data[0], ComputeOffset(offsets), sizeof(T) * data.size());
+    inline void WriteData(const std::vector<__int64>& offsets, const std::vector<T>& data, bool absolute = false) {
+        WriteDataInternal(&data[0], ComputeOffset(offsets, absolute), sizeof(T) * data.size());
     }
+
+    void ClearComputedAddress(const std::vector<__int64>& offsets, bool absolute = false);
 
     // This is the fully typed function -- you mostly won't need to call this.
     int CallFunction(__int64 address,
@@ -71,11 +90,12 @@ public:
 
 private:
     void Heartbeat(HWND window, UINT message);
-    void Initialize();
+    HANDLE Initialize();
 
     void ReadDataInternal(void* buffer, const uintptr_t computedOffset, size_t bufferSize);
     void WriteDataInternal(const void* buffer, uintptr_t computedOffset, size_t bufferSize);
-    uintptr_t ComputeOffset(std::vector<__int64> offsets, bool absolute = false);
+    uintptr_t ComputeOffset(const std::vector<__int64>& offsets, bool absolute = false);
+    uintptr_t ResolvePointerPath(const std::vector<__int64>& offsets);
     uintptr_t AllocateArray(__int64 size);
 
     // Parts of the constructor / StartHeartbeat
@@ -86,15 +106,14 @@ private:
     // Parts of Initialize / heartbeat
     HANDLE _handle = nullptr;
     DWORD _pid = 0;
-    HWND _hwnd = NULL;
     uintptr_t _baseAddress = 0;
     uintptr_t _endOfModule = 0;
+    size_t _pointerSize = 0;
+    HWND _hwnd = NULL;
     __int64 _globals = 0;
     int _loadCountOffset = 0;
     __int64 _previousEntityManager = 0;
-    int _previousLoadCount = 0;
-    ProcStatus _nextStatus = ProcStatus::Started;
-    bool _trainerHasStarted = false;
+    bool _firstHeartbeat = true;
 
 #ifdef NDEBUG
     static constexpr std::chrono::milliseconds s_heartbeat = std::chrono::milliseconds(100);

@@ -216,18 +216,10 @@ void ToggleOption(int message, void (Trainer::*setter)(bool)) {
     if (g_trainer) (*g_trainer.*setter)(!enabled);
 }
 
-void LaunchSteamGame(const char* gameId, const char* arguments = "") {
-    std::string steamUrl = "steam://rungameid/";
-    steamUrl += gameId;
+void LaunchSteamGame(int gameId) {
+    // Steam does not like launching games with arguments. Just accept it.
+    std::string steamUrl = "steam://rungameid/" + std::to_string(gameId);
     ShellExecuteA(g_hwnd, "open", steamUrl.c_str(), NULL, NULL, SW_SHOWDEFAULT);
-
-    /* The above doesn't really work with arguments, so in the future we should do this:
-    auto key = REG_QUERY("Computer\HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Valve\Steam")
-    char* steamPath = REG_KEY_READ(key, "InstallPath");
-
-    std::string fullArguments = "-applaunch " + gameId + " " + arguments;
-    ShellExecuteW(g_hwnd, L"open", steamPath, fullArguments.c_str(), NULL, SW_SHOWDEFAULT);
-    */
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -251,8 +243,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             }
             PostQuitMessage(0);
             return 0;
-        case WM_COMMAND:
-            break; // LOWORD(wParam) contains the actual command, handled below
         case WM_ERASEBKGND: // ???
         {
             RECT rc;
@@ -272,22 +262,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         case HEARTBEAT:
             switch ((ProcStatus)wParam) {
             case ProcStatus::Stopped:
-            case ProcStatus::NotRunning:
                 // Don't discard any settings, just free the trainer.
-                if (g_trainer) g_trainer = nullptr;
+                g_trainer = nullptr;
                 // Also reset the title & launch text, since they can get stuck
                 SetStringText(g_hwnd, WINDOW_TITLE);
                 SetStringText(g_activateGame, L"Launch game");
                 break;
-            case ProcStatus::Reload:
-            case ProcStatus::NewGame:
             case ProcStatus::Started:
-                if (!g_trainer) {
-                    // Process just started (we were already alive), enforce our settings.
-                    SetStringText(g_hwnd, L"Attaching to The Witness...");
-                    g_trainer = Trainer::Create(g_witnessProc);
-                }
-                if (!g_trainer) break;
+                SetStringText(g_hwnd, L"Attaching to The Witness...");
+                g_trainer = Trainer::Create(g_witnessProc);
+                [[fallthrough]];
+            case ProcStatus::Reload:
+                if (!g_trainer) break; // It's possible that trainer failed to attach before a new game was started.
+                // Process just started (or reloaded), enforce our settings.
                 SetStringText(g_hwnd, WINDOW_TITLE);
                 // Or, we started a new game / loaded a save, in which case some of the entity data might have been reset.
                 SetActivePanel(-1);
@@ -367,6 +354,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 break;
             }
             return 0;
+        case WM_COMMAND:
+            break; // LOWORD(wParam) contains the actual command, handled below
         default:
             return DefWindowProc(hwnd, message, wParam, lParam);
     }
@@ -407,7 +396,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             }
             ToggleOption(CAN_SAVE, &Trainer::SetCanSave);
         } else if (command == ACTIVATE_GAME) {
-            if (!trainer) LaunchSteamGame("210970", "-skip_config_dialog");
+            if (!trainer) LaunchSteamGame(210970);
             else g_witnessProc->BringToFront();
         } else if (command == OPEN_SAVES) {
             PWSTR outPath;

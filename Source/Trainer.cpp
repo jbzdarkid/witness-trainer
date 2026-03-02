@@ -247,7 +247,7 @@ void Trainer::GetPanelData(const std::shared_ptr<Trainer::EntityData>& data) {
         if (edgeDataPtr != 0) {
             static_assert(sizeof(Traced_Edge) == 0x34);
             // However, we only need the first edge -- since all we care about is the startpoint.
-            std::vector<Traced_Edge> edgeData = _memory->ReadAbsoluteData<Traced_Edge>({edgeDataPtr}, 1);
+            std::vector<Traced_Edge> edgeData = _memory->ReadData<Traced_Edge>({edgeDataPtr}, 1, true);
             data->startPoint = {
                 edgeData[0].position_a[0],
                 edgeData[0].position_a[1],
@@ -435,7 +435,7 @@ void Trainer::DisableDistanceGating() {
         if (!entityData || entityData->type != "Machine_Panel") continue;
 
         assert(_globals == 0x62D0A0, "DisableDistanceGating is only supported on the latest version");
-        float distanceGated = _memory->ReadAbsoluteData<float>({entityData->entity, 0x3BC}, 1)[0];
+        float distanceGated = _memory->ReadData<float>({entityData->entity, 0x3BC}, 1, true)[0];
         if (distanceGated != 0.0f) _memory->WriteData<float>({_globals, 0x18, id * 8, 0x3BC}, {0.0f});
     }
 }

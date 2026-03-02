@@ -22,7 +22,7 @@ void Memory::StartHeartbeat(HWND window, UINT message) {
 
         // Run the first heartbeat before setting trainerHasStarted, to detect if we are attaching to a game already in progress.
         sharedThis->Heartbeat(window, message);
-        sharedThis->_trainerHasStarted = true;
+        sharedThis->_firstHeartbeat = false;
 
         while (sharedThis->_threadActive) {
             std::this_thread::sleep_for(s_heartbeat);
@@ -68,7 +68,7 @@ HWND Memory::GetProcessHwnd(DWORD pid) {
 
 void Memory::Heartbeat(HWND window, UINT message) {
     if (!_handle) {
-        Initialize(); // Initialize promises to set _handle only on success
+        _handle = Initialize(); // Initialize returns nullptr on failure, which resets _handle for the next heartbeat
         if (!_handle) {
             // Couldn't initialize, definitely not running
             PostMessage(window, message, ProcStatus::NotRunning, NULL);
@@ -79,80 +79,75 @@ void Memory::Heartbeat(HWND window, UINT message) {
     DWORD exitCode = 0;
     GetExitCodeProcess(_handle, &exitCode);
     if (exitCode != STILL_ACTIVE) {
-        // Process has exited, clean up. We only need to reset _handle here -- its validity is linked to all other class members.
-        _computedAddresses.Clear();
+        // Process has exited, clean up.
         _handle = nullptr;
+        _pid = 0;
+        _hwnd = nullptr;
+        _previousEntityManager = 0;
+        _computedAddresses.Clear();
 
-        _nextStatus = ProcStatus::Started;
         PostMessage(window, message, ProcStatus::Stopped, NULL);
         // Wait for the process to fully close; otherwise we might accidentally re-attach to it.
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         return;
     }
 
-    __int64 entityManager = ReadData<__int64>({_globals}, 1)[0];
-    if (entityManager == 0) {
-        // Game hasn't loaded yet, we're still sitting on the launcher
+    if (_hwnd == nullptr) _hwnd = GetProcessHwnd(_pid);
+    if (_hwnd == nullptr) {
+        // Main window hasn't loaded yet
         PostMessage(window, message, ProcStatus::NotRunning, NULL);
         return;
     }
 
-    // To avoid obtaining the HWND for the launcher, we wait to determine HWND until after the entity manager is allocated (the main game has started).
-    if (_hwnd == NULL) {
-        _hwnd = GetProcessHwnd(_pid);
-    } else {
-        // Under some circumstances the window can expire? Or the game re-allocates it? I have no idea.
-        // Anyways, we check to see if the title is wrong, and if so, search for the window again.
-        constexpr int TITLE_SIZE = sizeof(L"The Witness") / sizeof(wchar_t);
-        wchar_t title[TITLE_SIZE] = {L'\0'};
-        GetWindowTextW(_hwnd, title, TITLE_SIZE);
-        if (wcsncmp(title, L"The Witness", TITLE_SIZE) != 0) _hwnd = GetProcessHwnd(_pid);
-    }
-
-    if (_hwnd == NULL) {
-        assert(false, "Couldn't find the HWND for the game");
+    __int64 entityManager = ReadData<__int64>({_globals}, 1)[0];
+    // Game hasn't loaded yet, we're still sitting on the launcher
+    if (entityManager == 0) {
+        PostMessage(window, message, ProcStatus::NotRunning, NULL);
         return;
     }
 
-    // New game causes the entity manager to re-allocate
+    // If t here are less than 400k total entities, a new game is still starting.
+    int numEntities = ReadData<int>({_globals, 0x10}, 1)[0];
+    if (numEntities < 400'000) {
+        PostMessage(window, message, ProcStatus::Loading, NULL);
+        return;
+    }
+
+    // Saved game is currently loading, do not take any actions.
+    byte isLoading = ReadData<byte>({entityManager, _loadCountOffset - 0x4}, 1, true)[0];
+    if (isLoading == 0x01) {
+        PostMessage(window, message, ProcStatus::Loading, NULL);
+        return;
+    }
+
+    // At this point, we think the game is running... now we have to figure out what, exactly, to say.
+
+    // If this is the first heartbeat we're sending, we just started (and not the game).
+    if (_firstHeartbeat) {
+        PostMessage(window, message, ProcStatus::Running, NULL);
+        return; // We set _firstHeartbeat = false in the caller.
+    }
+
+    // If this is the first heartbeat where the Entity_Manager is allocated, the game just started
+    if (_previousEntityManager == 0) {
+        _previousEntityManager = entityManager;
+        PostMessage(window, message, ProcStatus::Started, NULL);
+        return;
+    }
+
+    // If the Entity_Manager just changed, then this was a reload -- clear our memory addresses.
     if (entityManager != _previousEntityManager) {
         _previousEntityManager = entityManager;
         _computedAddresses.Clear();
-    }
-
-    // Loading a game causes entities to be shuffled
-    int loadCount = ReadAbsoluteData<int>({entityManager, _loadCountOffset}, 1)[0];
-    if (_previousLoadCount != loadCount) {
-        _previousLoadCount = loadCount;
-        _computedAddresses.Clear();
-    }
-
-    int numEntities = ReadData<int>({_globals, 0x10}, 1)[0];
-    if (numEntities != 400'000) {
-        // New game is starting, do not take any actions.
-        _nextStatus = ProcStatus::NewGame;
+        PostMessage(window, message, ProcStatus::Reload, NULL);
         return;
     }
 
-    byte isLoading = ReadAbsoluteData<byte>({entityManager, _loadCountOffset - 0x4}, 1)[0];
-    if (isLoading == 0x01) {
-        // Saved game is currently loading, do not take any actions.
-        _nextStatus = ProcStatus::Reload;
-        return;
-    }
-
-    if (_trainerHasStarted == false) {
-        // If it's the first time we started, and the game appears to be running, return "Running" instead of "Started".
-        PostMessage(window, message, ProcStatus::Running, NULL);
-    } else {
-        // Else, report whatever status we last encountered.
-        PostMessage(window, message, _nextStatus, NULL);
-    }
-    _nextStatus = ProcStatus::Running;
+    // Otherwise, business as usual.
+    PostMessage(window, message, ProcStatus::Running, NULL);
 }
 
-void Memory::Initialize() {
-    HANDLE handle = nullptr;
+HANDLE Memory::Initialize() {
     // First, get the handle of the process
     PROCESSENTRY32W entry;
     entry.dwSize = sizeof(entry);
@@ -160,24 +155,19 @@ void Memory::Initialize() {
     while (Process32NextW(snapshot, &entry)) {
         if (_processName == entry.szExeFile) {
             _pid = entry.th32ProcessID;
-            handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, _pid);
+            _handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, _pid);
             break;
         }
     }
-    if (!handle || !_pid) {
-        // Game likely not opened yet. Don't spam the log.
-        _nextStatus = ProcStatus::Started;
-        return;
-    }
+    if (!_handle || !_pid) return nullptr;
     DebugPrint(L"Found " + _processName + L": PID " + std::to_wstring(_pid));
 
-    _hwnd = NULL; // Will be populated later.
+    std::tie(_baseAddress, _endOfModule) = DebugUtils::GetModuleBounds(_handle);
+    if (_baseAddress == 0) return nullptr;
 
-    std::tie(_baseAddress, _endOfModule) = DebugUtils::GetModuleBounds(handle);
-    if (_baseAddress == 0) {
-        DebugPrint("Couldn't locate base address");
-        return;
-    }
+    BOOL wow64Process = false;
+    IsWow64Process(_handle, &wow64Process);
+    _pointerSize = (wow64Process == TRUE) ? 4 : 8;
 
     // Clear out any leftover sigscans from consumers (e.g. the trainer)
     _sigScans.clear();
@@ -190,12 +180,9 @@ void Memory::Initialize() {
         _loadCountOffset = *(int*)&data[index-1];
     });
 
-    // This little song-and-dance is because we need _handle in order to execute sigscans.
-    // But, we use _handle to indicate success, so we need to reset it.
-    // Note that these sigscans are very lightweight -- they are *only* the scans required to handle loading.
-    _handle = handle;
-    size_t failedScans = ExecuteSigScans(); // Will DebugPrint the failed scans.
-    if (failedScans > 0) _handle = nullptr;
+    size_t failedScans = ExecuteSigScans();
+    if (failedScans > 0) return nullptr;
+    return _handle;
 }
 
 // These functions are much more generic than this witness-specific implementation. As such, I'm keeping them somewhat separated.
@@ -277,14 +264,14 @@ size_t Memory::ExecuteSigScans() {
 }
 
 // Technically this is ReadChar*, but this name makes more sense with the return type.
-std::string Memory::ReadString(const std::vector<__int64>& offsets) {
-    __int64 charAddr = ReadData<__int64>(offsets, 1)[0];
+std::string Memory::ReadString(const std::vector<__int64>& offsets, bool absolute) {
+    uintptr_t charAddr = ComputeOffset(offsets, absolute);
     if (charAddr == 0) return ""; // Handle nullptr for strings
 
     std::vector<char> tmp;
     auto nullTerminator = tmp.begin(); // Value is only for type information.
     for (size_t maxLength = (1 << 6); maxLength < (1 << 10); maxLength *= 2) {
-        tmp = ReadAbsoluteData<char>({charAddr}, maxLength);
+        tmp = ReadData<char>({(__int64)charAddr}, maxLength, true);
         nullTerminator = std::find(tmp.begin(), tmp.end(), '\0');
         // If a null terminator is found, we will strip any trailing data after it.
         if (nullTerminator != tmp.end()) break;
@@ -356,6 +343,10 @@ int32_t Memory::CallFunction(int64_t relativeAddress,
     // Although I don't use it here, argument 5 (lpParameter) can be used to pass a single 8-byte integer to the target process.
     // Note that you cannot transfer data this way; if you pass a pointer it will point to memory in this process, not the target.
     HANDLE thread = CreateRemoteThread(_handle, NULL, 0, (LPTHREAD_START_ROUTINE)_functionPrimitive, 0, 0, 0);
+    if (!thread) {
+        assert(thread, "[Internal error] Failed to allocate a thread in the target process");
+        return 0;
+    }
 	DWORD result = WaitForSingleObject(thread, INFINITE);
 
     // This will be the return value of the called function.
@@ -363,6 +354,11 @@ int32_t Memory::CallFunction(int64_t relativeAddress,
     static_assert(sizeof(DWORD) == sizeof(exitCode));
     GetExitCodeThread(thread, reinterpret_cast<LPDWORD>(&exitCode));
     return exitCode;
+}
+
+void Memory::ClearComputedAddress(const std::vector<__int64>& offsets, bool absolute) {
+    uintptr_t address = ComputeOffset(offsets, absolute);
+    _computedAddresses.Remove(address);
 }
 
 int32_t Memory::CallFunction(__int64 address, const std::string& str, __int64 rdx) {
@@ -394,17 +390,16 @@ void Memory::WriteDataInternal(const void* buffer, uintptr_t computedOffset, siz
     }
 }
 
-uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets, bool absolute) {
+uintptr_t Memory::ComputeOffset(const std::vector<__int64>& offsets, bool absolute) {
     assert(offsets.size() > 0, "[Internal error] Attempting to compute 0 offsets");
     assert(offsets.front() != 0, "[Internal error] First offset to compute was 0");
 
     // Leave off the last offset, since it will be either read/write, and may not be of type uintptr_t.
     const __int64 final_offset = offsets.back();
-    offsets.pop_back();
 
     uintptr_t cumulativeAddress = (absolute ? 0 : _baseAddress);
-    for (const __int64 offset : offsets) {
-        cumulativeAddress += offset;
+    for (int i = 0; i < offsets.size() - 1; i++) {
+        cumulativeAddress += offsets[i];
 
         // If the address was already computed, continue to the next offset.
         uintptr_t foundAddress = _computedAddresses.Find(cumulativeAddress);
@@ -416,15 +411,15 @@ uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets, bool absolute) {
         // If the address was not yet computed, read it from memory.
         uintptr_t computedAddress = 0;
         if (!_handle) return 0;
-        if (ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(cumulativeAddress), &computedAddress, sizeof(computedAddress), NULL) && computedAddress != 0) {
+        if (ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(cumulativeAddress), &computedAddress, _pointerSize, NULL) && computedAddress != 0) {
             // Success!
             _computedAddresses.Set(cumulativeAddress, computedAddress);
             cumulativeAddress = computedAddress;
             continue;
         }
 
+        // ReadProcessMemory failed, investigate:
         MEMORY_BASIC_INFORMATION info;
-        assert(computedAddress != 0, "Attempted to dereference NULL!");
         if (!VirtualQuery(reinterpret_cast<LPVOID>(cumulativeAddress), &info, sizeof(info))) {
             assert(false, "Failed to read process memory, possibly because cumulativeAddress was too large.");
         } else {
@@ -435,6 +430,21 @@ uintptr_t Memory::ComputeOffset(std::vector<__int64> offsets, bool absolute) {
         return 0;
     }
     return cumulativeAddress + final_offset;
+}
+
+uintptr_t Memory::ResolvePointerPath(const std::vector<__int64>& offsets) {
+    uintptr_t cumulativeAddress = 0;
+    for (__int64 offset : offsets) {
+        cumulativeAddress += offset;
+
+        if (!_handle) return 0;
+        uintptr_t computedAddress = 0;
+        if (!ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(cumulativeAddress), &computedAddress, _pointerSize, NULL)) return 0;
+        if (cumulativeAddress == 0) return 0;
+        cumulativeAddress = computedAddress;
+    }
+
+    return cumulativeAddress;
 }
 
 uintptr_t Memory::AllocateArray(__int64 size) {

@@ -14,6 +14,12 @@ public:
         return (search == std::end(_map) ? 0 : search->second);
     }
 
+    bool Remove(uintptr_t key) {
+        std::lock_guard<std::mutex> l(_mutex);
+        size_t numRemoved = _map.erase(key);
+        return numRemoved > 0;
+    }
+
     size_t Size() const {
         std::lock_guard<std::mutex> l(_mutex);
         return _map.size();
