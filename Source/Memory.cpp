@@ -146,6 +146,7 @@ void Memory::Heartbeat(HWND window, UINT message) {
         _previousCombatStats = playerCombatStats;
         _computedAddresses.Clear();
         PostMessage(window, message, ProcStatus::Reload, NULL);
+		return;
     }
 
     // Otherwise, business as usual.
