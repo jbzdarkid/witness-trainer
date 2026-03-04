@@ -26,7 +26,6 @@
 #define SHOW_NEARBY         0x415
 #define EXPORT              0x416
 #define START_TIMER         0x417
-#define CALLSTACK           0x418
 #define SNAP_TO_PANEL       0x419
 #define DISTANCE_GATING     0x420
 #define EP_OVERLAY          0x421
@@ -243,7 +242,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             }
             PostQuitMessage(0);
             return 0;
-        case WM_ERASEBKGND: // ???
+        case WM_ERASEBKGND:
         {
             RECT rc;
             ::GetClientRect(hwnd, &rc);
@@ -256,7 +255,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             // Get rid of the gross gray background. https://stackoverflow.com/a/4495814
             SetTextColor((HDC)wParam, RGB(0, 0, 0));
             SetBkColor((HDC)wParam, RGB(255, 255, 255));
-            SetBkMode((HDC)wParam, OPAQUE); // ???
+            SetBkMode((HDC)wParam, OPAQUE);
             static HBRUSH s_solidBrush = CreateSolidBrush(RGB(255, 255, 255));
             return (LRESULT)s_solidBrush;
         case HEARTBEAT:
@@ -372,7 +371,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         else if (command == OPEN_CONSOLE)       ToggleOption(OPEN_CONSOLE, &Trainer::SetConsoleOpen);
         else if (command == EP_OVERLAY)         ToggleOption(EP_OVERLAY, &Trainer::SetEPOverlay);
         else if (command == CLAMP_AIM)          ToggleOption(CLAMP_AIM, &Trainer::ClampAimingPhi);
-        else if (command == CALLSTACK)          DebugUtils::RegenerateCallstack(GetWindowString(g_fovCurrent));
         else if (command == NOCLIP_ENABLED) {
             // Fix up the player position when exiting noclip
             if (IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED) && trainer) {
@@ -457,7 +455,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     return DefWindowProc(hwnd, message, wParam, lParam);
 }
 
-LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
+LRESULT CALLBACK KeyboardAndMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if (nCode == HC_ACTION) {
         // Only steal hotkeys when we (or the game) are the active window.
         auto foreground = GetForegroundWindow();
@@ -549,6 +547,21 @@ HWND CreateText(int x, int& y, int width, LPCWSTR defaultText = L"", __int64 mes
     return text;
 }
 
+HWND CreateDropdown(int& x, int y, int width, const std::vector<std::wstring>& options, __int64 message) {
+    HWND hwnd = CreateWindow(WC_COMBOBOX, L"",
+        CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_CHILD | WS_OVERLAPPED | WS_VISIBLE | WS_VSCROLL,
+        x, y, width - 5, 100,
+        g_hwnd, (HMENU)message, g_hInstance, NULL);
+
+    for (const auto& option : options) {
+        SendMessage(hwnd, CB_ADDSTRING, NULL, (LPARAM)option.data());
+    }
+    SendMessage(hwnd, CB_SETCURSEL, (WPARAM)0, NULL);
+
+    x += width;
+    return hwnd;
+}
+
 void CreateComponents() {
     // Column 1
     int x = 10;
@@ -629,9 +642,6 @@ void CreateComponents() {
 
     CreateButton(x, y, 200, L"Open nearby doors", OPEN_DOOR, "open_doors");
 
-    // Hotkey for debug purposes, to get addresses based on a reported callstack
-    Hotkeys::Get()->RegisterHotkey("dump_callstack", CALLSTACK);
-
     // Required to 'unselect' any hold-based keybinds
     Hotkeys::Get()->RegisterHotkey("key_released", KEY_RELEASED);
 
@@ -645,6 +655,20 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
     if (FAILED(hr)) return hr;
     LoadLibrary(L"Msftedit.dll");
+
+    // Callstack reconstruction is now operated via cli (and then reads from clipboard).
+    // This is a bit more portable than pasting into a textbox, since not all trainers have a suitable textbox.
+    if (wcsncmp(L"-callstack", lpCmdLine, 11) == 0) {
+        if (IsClipboardFormatAvailable(CF_UNICODETEXT) && OpenClipboard(g_hwnd)) {
+            HGLOBAL hglb = GetClipboardData(CF_UNICODETEXT);
+            WCHAR *data = (WCHAR*)GlobalLock(hglb);
+            std::wstring clipboardContents(data, data + GlobalSize(hglb));
+            RegenerateCallstack(clipboardContents);
+            GlobalUnlock(hglb);
+            CloseClipboard();
+        }
+    }
+
     WNDCLASS wndClass = {
         CS_HREDRAW | CS_VREDRAW,
         WndProc,
@@ -675,16 +699,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     UpdateWindow(g_hwnd);
     g_hInstance = hInstance;
 
-    DebugUtils::version = VERSION_STR;
     CreateComponents();
     Hotkeys::Get()->SanityCheckHotkeys();
 
     g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
     g_witnessProc->StartHeartbeat(g_hwnd, HEARTBEAT);
-    HHOOK hook = NULL;
 #ifndef _DEBUG
     // Don't hook in debug mode. While debugging, we are paused (and thus cannot run the hook). So, we will timeout on every hook call!
-    hook = SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardProc, hInstance, NULL);
+    HHOOK hooks[2] = {
+        SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardAndMouseProc, hInstance, NULL),
+        SetWindowsHookExW(WH_MOUSE_LL, KeyboardAndMouseProc, hInstance, NULL),
+    };
 #endif
 
     MSG msg;
@@ -693,10 +718,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         DispatchMessage(&msg);
     }
 
-    if (hook) UnhookWindowsHookEx(hook);
+#ifndef _DEBUG
+    for (const auto& hook : hooks) UnhookWindowsHookEx(hook);
+#endif
     g_witnessProc->StopHeartbeat();
     g_witnessProc = nullptr;
 
     CoUninitialize();
-    return (int) msg.wParam;
+    return (int)msg.wParam;
 }

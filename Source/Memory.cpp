@@ -114,7 +114,7 @@ void Memory::Heartbeat(HWND window, UINT message) {
     }
 
     // Saved game is currently loading, do not take any actions.
-    byte isLoading = ReadData<byte>({entityManager, _loadCountOffset - 0x4}, 1, true)[0];
+    byte isLoading = ReadData<byte>({entityManager, _loadCountOffset - 0x4}, 1)[0];
     if (isLoading == 0x01) {
         PostMessage(window, message, ProcStatus::Loading, NULL);
         return;
@@ -162,7 +162,7 @@ HANDLE Memory::Initialize() {
     if (!_handle || !_pid) return nullptr;
     DebugPrint(L"Found " + _processName + L": PID " + std::to_wstring(_pid));
 
-    std::tie(_baseAddress, _endOfModule) = DebugUtils::GetModuleBounds(_handle);
+    std::tie(_baseAddress, _endOfModule) = DebugUtils::GetModuleBounds(_handle, _processName);
     if (_baseAddress == 0) return nullptr;
 
     BOOL wow64Process = false;
@@ -172,11 +172,11 @@ HANDLE Memory::Initialize() {
     // Clear out any leftover sigscans from consumers (e.g. the trainer)
     _sigScans.clear();
 
-    AddSigScan({0x74, 0x41, 0x48, 0x85, 0xC0, 0x74, 0x04, 0x48, 0x8B, 0x48, 0x10}, [&](__int64 offset, int index, const std::vector<byte>& data) {
+    AddSigScan("74 41 48 85 C0 74 04 48 8B 48 10", [&](__int64 offset, int index, const std::vector<byte>& data) {
         _globals = Memory::ReadStaticInt(offset, index + 0x14, data);
     });
 
-    AddSigScan({0x01, 0x00, 0x00, 0x66, 0xC7, 0x87}, [&](__int64 offset, int index, const std::vector<byte>& data) {
+    AddSigScan("01 00 00 66 C7 87", [&](__int64 offset, int index, const std::vector<byte>& data) {
         _loadCountOffset = *(int*)&data[index-1];
     });
 
@@ -193,15 +193,33 @@ __int64 Memory::ReadStaticInt(__int64 offset, int index, const std::vector<byte>
 }
 
 // Small wrapper for non-failing scan functions
-void Memory::AddSigScan(const std::vector<byte>& scanBytes, const ScanFunc& scanFunc) {
-    _sigScans[scanBytes] = {false, [scanFunc](__int64 offset, int index, const std::vector<byte>& data) {
+void Memory::AddSigScan(const std::string& scanHex, const ScanFunc& scanFunc) {
+    _sigScans.emplace_back(SigScan{false, SigScan::GetScanBytes(scanHex), [scanFunc](__int64 offset, int index, const std::vector<byte>& data) {
         scanFunc(offset, index, data);
         return true;
-    }};
+    }});
 }
 
-void Memory::AddSigScan2(const std::vector<byte>& scanBytes, const ScanFunc2& scanFunc) {
-    _sigScans[scanBytes] = {false, scanFunc};
+void Memory::AddSigScan2(const std::string& scanHex, const ScanFunc2& scanFunc) {
+    _sigScans.emplace_back(SigScan{false, SigScan::GetScanBytes(scanHex), scanFunc});
+}
+
+std::vector<byte> Memory::SigScan::GetScanBytes(const std::string& scanHex) {
+    std::vector<byte> bytes;
+    byte b = 0x00;
+    bool halfByte = false;
+    for (char ch : scanHex) {
+        if (ch == ' ') continue;
+
+        static std::string HEX_CHARS = "0123456789ABCDEF";
+        b *= 16;
+        b += (byte)HEX_CHARS.find(ch);
+        if (halfByte) bytes.push_back(b);
+        halfByte = !halfByte;
+    }
+    assert(!halfByte, "[INTERNAL ERROR] Could not parse hex bytes");
+
+    return bytes;
 }
 
 int find(const std::vector<byte>& data, const std::vector<byte>& search) {
@@ -227,7 +245,7 @@ int find(const std::vector<byte>& data, const std::vector<byte>& search) {
 #define BUFFER_SIZE 0x10000 // 10 KB
 size_t Memory::ExecuteSigScans() {
     size_t notFound = 0;
-    for (const auto& [_, sigScan] : _sigScans) if (!sigScan.found) notFound++;
+    for (const auto& sigScan : _sigScans) if (!sigScan.found) notFound++;
     std::vector<byte> buff;
     buff.resize(BUFFER_SIZE + 0x100); // padding in case the sigscan is past the end of the buffer
 
@@ -235,11 +253,11 @@ size_t Memory::ExecuteSigScans() {
         SIZE_T numBytesWritten;
         if (!ReadProcessMemory(_handle, reinterpret_cast<void*>(i), &buff[0], buff.size(), &numBytesWritten)) continue;
         buff.resize(numBytesWritten);
-        for (auto& [scanBytes, sigScan] : _sigScans) {
+        for (auto& sigScan : _sigScans) {
             if (sigScan.found) continue;
-            int index = find(buff, scanBytes);
+            int index = find(buff, sigScan.bytes);
             if (index == -1) continue;
-            sigScan.found = sigScan.scanFunc(i - _baseAddress, index, buff); // We're expecting i to be relative to the base address here.
+            sigScan.found = sigScan.scanFunc(i, index, buff);
             if (sigScan.found) notFound--;
         }
         if (notFound == 0) break;
@@ -247,10 +265,10 @@ size_t Memory::ExecuteSigScans() {
 
     if (notFound > 0) {
         DebugPrint("Failed to find " + std::to_string(notFound) + " sigscans:");
-        for (const auto& [scanBytes, sigScan] : _sigScans) {
+        for (const auto& sigScan : _sigScans) {
             if (sigScan.found) continue;
             std::stringstream ss;
-            for (const auto b : scanBytes) {
+            for (const auto b : sigScan.bytes) {
                 ss << "0x" << std::setw(2) << std::setfill('0') << std::hex << std::uppercase << static_cast<int16_t>(b) << ", ";
             }
             DebugPrint(ss.str());
@@ -264,14 +282,14 @@ size_t Memory::ExecuteSigScans() {
 }
 
 // Technically this is ReadChar*, but this name makes more sense with the return type.
-std::string Memory::ReadString(const std::vector<__int64>& offsets, bool absolute) {
-    uintptr_t charAddr = ComputeOffset(offsets, absolute);
+std::string Memory::ReadString(const std::vector<__int64>& offsets) {
+    uintptr_t charAddr = ComputeOffset(offsets);
     if (charAddr == 0) return ""; // Handle nullptr for strings
 
     std::vector<char> tmp;
     auto nullTerminator = tmp.begin(); // Value is only for type information.
     for (size_t maxLength = (1 << 6); maxLength < (1 << 10); maxLength *= 2) {
-        tmp = ReadData<char>({(__int64)charAddr}, maxLength, true);
+        tmp = ReadData<char>({(__int64)charAddr}, maxLength);
         nullTerminator = std::find(tmp.begin(), tmp.end(), '\0');
         // If a null terminator is found, we will strip any trailing data after it.
         if (nullTerminator != tmp.end()) break;
@@ -279,7 +297,7 @@ std::string Memory::ReadString(const std::vector<__int64>& offsets, bool absolut
     return std::string(tmp.begin(), nullTerminator);
 }
 
-int32_t Memory::CallFunction(int64_t relativeAddress,
+int32_t Memory::CallFunction(int64_t address,
     const int64_t rcx, const int64_t rdx, const int64_t r8, const int64_t r9,
     const float xmm0, const float xmm1, const float xmm2, const float xmm3) {
     struct Arguments {
@@ -293,9 +311,8 @@ int32_t Memory::CallFunction(int64_t relativeAddress,
         float xmm2;
         float xmm3;
     };
-    assert((uint64_t)relativeAddress < _baseAddress, "[Internal error] CallFunction must be called with an address *relative to* the base pointer.");
     Arguments args = {
-        ComputeOffset({relativeAddress}),
+        ComputeOffset({address}),
         rcx, rdx, r8, r9,
         xmm0, xmm1, xmm2, xmm3,
     };
@@ -311,7 +328,7 @@ int32_t Memory::CallFunction(int64_t relativeAddress,
         // This primitive contains both a series of instructions and a buffer for arguments.
         // This allows us to write the instructions once, and then just write our new arguments
         // whenever we need to make another call.
-	    const uint8_t instructions[] = {
+        const uint8_t instructions[] = {
             0x48, 0xBB,                                 // mov rbx,  0 ; 0 will be replaced by the address of the arguments struct
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x48, 0x8B, 0x4B, OFFSET_OF(rcx),           // mov rcx,  args.rcx
@@ -347,7 +364,7 @@ int32_t Memory::CallFunction(int64_t relativeAddress,
         assert(thread, "[Internal error] Failed to allocate a thread in the target process");
         return 0;
     }
-	DWORD result = WaitForSingleObject(thread, INFINITE);
+    DWORD result = WaitForSingleObject(thread, INFINITE);
 
     // This will be the return value of the called function.
     int32_t exitCode = 0;
@@ -356,15 +373,15 @@ int32_t Memory::CallFunction(int64_t relativeAddress,
     return exitCode;
 }
 
-void Memory::ClearComputedAddress(const std::vector<__int64>& offsets, bool absolute) {
-    uintptr_t address = ComputeOffset(offsets, absolute);
-    _computedAddresses.Remove(address);
-}
-
 int32_t Memory::CallFunction(__int64 address, const std::string& str, __int64 rdx) {
     uintptr_t addr = AllocateArray(str.size());
     WriteDataInternal(&str[0], addr, str.size());
     return CallFunction(address, addr, rdx, 0, 0);
+}
+
+void Memory::ClearComputedAddress(const std::vector<__int64>& offsets) {
+    uintptr_t address = ComputeOffset(offsets);
+    _computedAddresses.Remove(address);
 }
 
 void Memory::ReadDataInternal(void* buffer, uintptr_t computedOffset, size_t bufferSize) {
@@ -390,14 +407,14 @@ void Memory::WriteDataInternal(const void* buffer, uintptr_t computedOffset, siz
     }
 }
 
-uintptr_t Memory::ComputeOffset(const std::vector<__int64>& offsets, bool absolute) {
+uintptr_t Memory::ComputeOffset(const std::vector<__int64>& offsets) {
     assert(offsets.size() > 0, "[Internal error] Attempting to compute 0 offsets");
     assert(offsets.front() != 0, "[Internal error] First offset to compute was 0");
 
     // Leave off the last offset, since it will be either read/write, and may not be of type uintptr_t.
     const __int64 final_offset = offsets.back();
 
-    uintptr_t cumulativeAddress = (absolute ? 0 : _baseAddress);
+    uintptr_t cumulativeAddress = 0;
     for (int i = 0; i < offsets.size() - 1; i++) {
         cumulativeAddress += offsets[i];
 
@@ -445,6 +462,53 @@ uintptr_t Memory::ResolvePointerPath(const std::vector<__int64>& offsets) {
     }
 
     return cumulativeAddress;
+}
+
+void Memory::Intercept(const std::string& name, __int64 firstLine, __int64 nextLine, const std::vector<byte>& data, bool writeOriginalCode) {
+    std::vector<byte> jumpBack = {
+        0x41, 0x53,                                 // push r11
+        0x49, 0xBB, LONG_TO_BYTES(firstLine + 15),  // mov r11, firstLine + 15
+        0x41, 0xFF, 0xE3,                           // jmp r11
+    };
+
+#pragma warning (push)
+#pragma warning (disable: 4530)
+    std::vector<byte> injectionBytes = {0x41, 0x5B}; // pop r11 (before executing code that might need it)
+    injectionBytes.insert(injectionBytes.end(), data.begin(), data.end());
+    injectionBytes.push_back(0x90); // Padding nop
+    std::vector<byte> replacedCode = ReadData<byte>({firstLine}, nextLine - firstLine);
+    if (writeOriginalCode) {
+        injectionBytes.insert(injectionBytes.end(), replacedCode.begin(), replacedCode.end());
+        injectionBytes.push_back(0x90); // Padding nop
+    }
+    injectionBytes.insert(injectionBytes.end(), jumpBack.begin(), jumpBack.end());
+#pragma warning (pop)
+
+    uintptr_t addr = AllocateArray(injectionBytes.size());
+    WriteData<byte>({(__int64)addr}, injectionBytes);
+
+    std::vector<byte> jumpAway = {
+        0x41, 0x53,                         // push r11
+        0x49, 0xBB, LONG_TO_BYTES(addr),    // mov r11, addr
+        0x41, 0xFF, 0xE3,                   // jmp r11
+        0x41, 0x5B,                         // pop r11 (we return to this opcode)
+    };
+    // We need enough space for the jump in the source code
+    assert(static_cast<int>(nextLine - firstLine) >= jumpAway.size(), "[INTERNAL ERROR] Injection did not have enough space for jump away/jump back");
+
+    // Fill any leftover space with nops
+    for (size_t i=jumpAway.size(); i<static_cast<size_t>(nextLine - firstLine); i++) jumpAway.push_back(0x90);
+    WriteData<byte>({firstLine}, jumpAway);
+
+    _interceptions.push_back({name, firstLine, replacedCode, addr});
+}
+
+void Memory::Unintercept(const std::string& name) {
+    auto search = std::find_if(_interceptions.begin(), _interceptions.end(), [&name](Interception i) { return i.name == name; });
+    if (search != _interceptions.end()) return;
+    Interception interception = *search;
+    WriteData<byte>({interception.firstLine}, interception.replacedCode);
+    VirtualFreeEx(_handle, (void*)interception.addr, 0, MEM_RELEASE);
 }
 
 uintptr_t Memory::AllocateArray(__int64 size) {

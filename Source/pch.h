@@ -1,7 +1,11 @@
 #pragma once
+#include "../App/Version.h"
 
+#pragma region Custom assert override nonsense
+#include <cassert>
 #define W(x)    W_(x)
 #define W_(x)   L ## x
+
 #undef assert
 #define assert(expr, message) \
     if (!(expr)) { \
@@ -11,8 +15,6 @@
 
 #define CLAMP(value, min, max) \
     ((value) < min ? (value) : ((value) > max ? max : (value)))
-
-#define _HAS_EXCEPTIONS 0
 
 // We include the debug headers early, so we can override the assert macros.
 #include <crtdbg.h>
@@ -25,13 +27,13 @@
 #define _RPT_BASE_W(...) \
     void ShowAssertDialogue(const wchar_t*); \
     ShowAssertDialogue(nullptr);
+#pragma endregion
 
 #define WIN32_LEAN_AND_MEAN 1
 #define VC_EXTRALEAN 1
+#define NOMINMAX
 #undef NDEBUG // Enable asserts (even in release mode)
 #include <windows.h>
-#undef min
-#undef max
 
 #include <map>
 #include <functional>

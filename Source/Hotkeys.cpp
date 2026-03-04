@@ -29,8 +29,6 @@ Hotkeys::Hotkeys() {
         _hotkeyNames["open_doors"] = MASK_CONTROL | 'O';
     }
 
-    // Can't be changed, this is for internal debugging only.
-    _hotkeyNames["dump_callstack"] = MASK_CONTROL | MASK_SHIFT | MASK_ALT | VK_OEM_PLUS;
     // Can't be changed, used to signal 'end of hold'
     _hotkeyNames["key_released"] = KEYCODE_RELEASE;
 }
@@ -153,27 +151,27 @@ int64_t Hotkeys::CheckMatchingHotkey(WPARAM wParam, LPARAM lParam) {
             auto search = _hotkeyCodes.find(KEYCODE_RELEASE);
             if (search != std::end(_hotkeyCodes)) return search->second;
         }
-    } else if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
-        auto p = (PKBDLLHOOKSTRUCT)lParam;
-        int32_t fullCode = p->vkCode;
-
-        int64_t found = 0;
-        // For perf, we look at just the keyboard key first (before consulting GetKeyState).
-        if (_hotkeys.find(fullCode) != _hotkeys.end()) {
-            if (GetKeyState(VK_SHIFT) & 0x8000)     fullCode |= MASK_SHIFT;
-            if (GetKeyState(VK_CONTROL) & 0x8000)   fullCode |= MASK_CONTROL;
-            if (GetKeyState(VK_MENU) & 0x8000)      fullCode |= MASK_ALT;
-            if (GetKeyState(VK_LWIN) & 0x8000)      fullCode |= MASK_WIN;
-            if (GetKeyState(VK_RWIN) & 0x8000)      fullCode |= MASK_WIN;
-
-            auto search = _hotkeyCodes.find(fullCode);
-            if (search != std::end(_hotkeyCodes)) found = search->second;
-        }
-        _lastCode = fullCode;
-        return found;
+        return 0;
     }
+    
+    int32_t fullCode = 0;
+    if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) fullCode = ((PKBDLLHOOKSTRUCT)lParam)->vkCode;
+    else if (wParam == WM_XBUTTONDOWN) fullCode = HIWORD(((PMSLLHOOKSTRUCT)lParam)->mouseData) + (VK_XBUTTON1 - XBUTTON1);
 
-    return 0;
+    int64_t found = 0;
+    // For perf, we look at just the keyboard key first (before consulting GetKeyState).
+    if (_hotkeys.find(fullCode) != _hotkeys.end()) {
+        if (GetKeyState(VK_SHIFT) & 0x8000)     fullCode |= MASK_SHIFT;
+        if (GetKeyState(VK_CONTROL) & 0x8000)   fullCode |= MASK_CONTROL;
+        if (GetKeyState(VK_MENU) & 0x8000)      fullCode |= MASK_ALT;
+        if (GetKeyState(VK_LWIN) & 0x8000)      fullCode |= MASK_WIN;
+        if (GetKeyState(VK_RWIN) & 0x8000)      fullCode |= MASK_WIN;
+
+        auto search = _hotkeyCodes.find(fullCode);
+        if (search != std::end(_hotkeyCodes)) found = search->second;
+    }
+    _lastCode = fullCode;
+    return found;
 }
 
 void Hotkeys::RegisterHotkey(LPCSTR hotkeyName, int64_t message) {

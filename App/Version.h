@@ -13,3 +13,4 @@
 #define PRODUCT_NAME L"Witness Trainer"
 #define WINDOW_CLASS L"WitnessTrainer"
 #define WINDOW_TITLE PRODUCT_NAME L" v" VERSION_STR
+#define EXE_NAME	 L"WitnessTrainer.exe"
