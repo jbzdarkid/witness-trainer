@@ -6,34 +6,9 @@
 Memory::Memory(const std::wstring& processName) : _processName(processName) {}
 
 Memory::~Memory() {
-    StopHeartbeat();
-    if (_thread.joinable()) _thread.join();
-
     if (_handle != nullptr) {
         CloseHandle(_handle);
     }
-}
-
-void Memory::StartHeartbeat(HWND window, UINT message) {
-    if (_threadActive) return;
-    _threadActive = true;
-    _thread = std::thread([sharedThis = shared_from_this(), window, message]{
-        SetCurrentThreadName(L"Heartbeat");
-
-        // Run the first heartbeat before setting trainerHasStarted, to detect if we are attaching to a game already in progress.
-        sharedThis->Heartbeat(window, message);
-        sharedThis->_firstHeartbeat = false;
-
-        while (sharedThis->_threadActive) {
-            std::this_thread::sleep_for(s_heartbeat);
-            sharedThis->Heartbeat(window, message);
-        }
-    });
-    _thread.detach();
-}
-
-void Memory::StopHeartbeat() {
-    _threadActive = false;
 }
 
 void Memory::BringToFront() {
@@ -66,14 +41,30 @@ HWND Memory::GetProcessHwnd(DWORD pid) {
     return data.hwnd;
 }
 
-void Memory::Heartbeat(HWND window, UINT message) {
-    if (!_handle) {
-        _handle = Initialize(); // Initialize returns nullptr on failure, which resets _handle for the next heartbeat
-        if (!_handle) {
-            // Couldn't initialize, definitely not running
-            PostMessage(window, message, ProcStatus::NotRunning, NULL);
-            return;
+ProcStatus Memory::TryAttachToProcess() {
+    // First, get the handle of the process. Note that we might attach before the main HWND is opened,
+    // in which case we will save the 'attachment' and only retry for the HWND.
+    if (_handle == nullptr) {
+        HANDLE handle = nullptr;
+        PROCESSENTRY32W entry;
+        entry.dwSize = sizeof(entry);
+        HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        while (Process32NextW(snapshot, &entry)) {
+            if (_processName == entry.szExeFile) {
+                _pid = entry.th32ProcessID;
+                handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, _pid);
+                break;
+            }
         }
+        if (!handle) return ProcStatus::NotRunning;
+
+        std::tie(_baseAddress, _endOfModule) = DebugUtils::GetModuleBounds(handle, _processName);
+        if (_baseAddress == 0) return ProcStatus::NotRunning;
+
+        BOOL wow64Process = false;
+        IsWow64Process(handle, &wow64Process);
+        _pointerSize = (wow64Process == TRUE) ? 4 : 8;
+        _handle = handle; // Save the handle to indicate that we've correctly attached.
     }
 
     DWORD exitCode = 0;
@@ -83,106 +74,18 @@ void Memory::Heartbeat(HWND window, UINT message) {
         _handle = nullptr;
         _pid = 0;
         _hwnd = nullptr;
-        _previousEntityManager = 0;
         _computedAddresses.Clear();
 
-        PostMessage(window, message, ProcStatus::Stopped, NULL);
-        // Wait for the process to fully close; otherwise we might accidentally re-attach to it.
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-        return;
+        // Reset the 'found' state on all sigscans, as they will (often) move when the game reloads.
+        for (auto& sigScan : _sigScans) sigScan.found = false;
+
+        return ProcStatus::Stopped;
     }
 
     if (_hwnd == nullptr) _hwnd = GetProcessHwnd(_pid);
-    if (_hwnd == nullptr) {
-        // Main window hasn't loaded yet
-        PostMessage(window, message, ProcStatus::NotRunning, NULL);
-        return;
-    }
+    if (_hwnd == nullptr) return ProcStatus::NotRunning;
 
-    __int64 entityManager = ReadData<__int64>({_globals}, 1)[0];
-    // Game hasn't loaded yet, we're still sitting on the launcher
-    if (entityManager == 0) {
-        PostMessage(window, message, ProcStatus::NotRunning, NULL);
-        return;
-    }
-
-    // If t here are less than 400k total entities, a new game is still starting.
-    int numEntities = ReadData<int>({_globals, 0x10}, 1)[0];
-    if (numEntities < 400'000) {
-        PostMessage(window, message, ProcStatus::Loading, NULL);
-        return;
-    }
-
-    // Saved game is currently loading, do not take any actions.
-    byte isLoading = ReadData<byte>({entityManager, _loadCountOffset - 0x4}, 1)[0];
-    if (isLoading == 0x01) {
-        PostMessage(window, message, ProcStatus::Loading, NULL);
-        return;
-    }
-
-    // At this point, we think the game is running... now we have to figure out what, exactly, to say.
-
-    // If this is the first heartbeat we're sending, we just started (and not the game).
-    if (_firstHeartbeat) {
-        PostMessage(window, message, ProcStatus::Running, NULL);
-        return; // We set _firstHeartbeat = false in the caller.
-    }
-
-    // If this is the first heartbeat where the Entity_Manager is allocated, the game just started
-    if (_previousEntityManager == 0) {
-        _previousEntityManager = entityManager;
-        PostMessage(window, message, ProcStatus::Started, NULL);
-        return;
-    }
-
-    // If the Entity_Manager just changed, then this was a reload -- clear our memory addresses.
-    if (entityManager != _previousEntityManager) {
-        _previousEntityManager = entityManager;
-        _computedAddresses.Clear();
-        PostMessage(window, message, ProcStatus::Reload, NULL);
-        return;
-    }
-
-    // Otherwise, business as usual.
-    PostMessage(window, message, ProcStatus::Running, NULL);
-}
-
-HANDLE Memory::Initialize() {
-    // First, get the handle of the process
-    PROCESSENTRY32W entry;
-    entry.dwSize = sizeof(entry);
-    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    while (Process32NextW(snapshot, &entry)) {
-        if (_processName == entry.szExeFile) {
-            _pid = entry.th32ProcessID;
-            _handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, _pid);
-            break;
-        }
-    }
-    if (!_handle || !_pid) return nullptr;
-    DebugPrint(L"Found " + _processName + L": PID " + std::to_wstring(_pid));
-
-    std::tie(_baseAddress, _endOfModule) = DebugUtils::GetModuleBounds(_handle, _processName);
-    if (_baseAddress == 0) return nullptr;
-
-    BOOL wow64Process = false;
-    IsWow64Process(_handle, &wow64Process);
-    _pointerSize = (wow64Process == TRUE) ? 4 : 8;
-
-    // Clear out any leftover sigscans from consumers (e.g. the trainer)
-    _sigScans.clear();
-
-    AddSigScan("74 41 48 85 C0 74 04 48 8B 48 10", [&](__int64 offset, int index, const std::vector<byte>& data) {
-        _globals = Memory::ReadStaticInt(offset, index + 0x14, data);
-    });
-
-    AddSigScan("01 00 00 66 C7 87", [&](__int64 offset, int index, const std::vector<byte>& data) {
-        _loadCountOffset = *(int*)&data[index-1];
-    });
-
-    size_t failedScans = ExecuteSigScans();
-    if (failedScans > 0) return nullptr;
-    return _handle;
+    return ProcStatus::Running;
 }
 
 // These functions are much more generic than this witness-specific implementation. As such, I'm keeping them somewhat separated.
@@ -194,14 +97,14 @@ __int64 Memory::ReadStaticInt(__int64 offset, int index, const std::vector<byte>
 
 // Small wrapper for non-failing scan functions
 void Memory::AddSigScan(const std::string& scanHex, const ScanFunc& scanFunc) {
-    _sigScans.emplace_back(SigScan{false, SigScan::GetScanBytes(scanHex), [scanFunc](__int64 offset, int index, const std::vector<byte>& data) {
+    _sigScans.emplace_back(SigScan{false, scanHex, SigScan::GetScanBytes(scanHex), [scanFunc](__int64 offset, int index, const std::vector<byte>& data) {
         scanFunc(offset, index, data);
         return true;
     }});
 }
 
 void Memory::AddSigScan2(const std::string& scanHex, const ScanFunc2& scanFunc) {
-    _sigScans.emplace_back(SigScan{false, SigScan::GetScanBytes(scanHex), scanFunc});
+    _sigScans.emplace_back(SigScan{false, scanHex, SigScan::GetScanBytes(scanHex), scanFunc});
 }
 
 std::vector<byte> Memory::SigScan::GetScanBytes(const std::string& scanHex) {
@@ -246,6 +149,7 @@ int find(const std::vector<byte>& data, const std::vector<byte>& search) {
 size_t Memory::ExecuteSigScans() {
     size_t notFound = 0;
     for (const auto& sigScan : _sigScans) if (!sigScan.found) notFound++;
+    if (notFound == 0) return 0; // Early exit in case we've already found all our scans
     std::vector<byte> buff;
     buff.resize(BUFFER_SIZE + 0x100); // padding in case the sigscan is past the end of the buffer
 
@@ -267,17 +171,12 @@ size_t Memory::ExecuteSigScans() {
         DebugPrint("Failed to find " + std::to_string(notFound) + " sigscans:");
         for (const auto& sigScan : _sigScans) {
             if (sigScan.found) continue;
-            std::stringstream ss;
-            for (const auto b : sigScan.bytes) {
-                ss << "0x" << std::setw(2) << std::setfill('0') << std::hex << std::uppercase << static_cast<int16_t>(b) << ", ";
-            }
-            DebugPrint(ss.str());
+            DebugPrint(sigScan.hex);
         }
     } else {
         DebugPrint("Found all sigscans!");
     }
 
-    _sigScans.clear();
     return notFound;
 }
 
@@ -382,6 +281,10 @@ int32_t Memory::CallFunction(__int64 address, const std::string& str, __int64 rd
 void Memory::ClearComputedAddress(const std::vector<__int64>& offsets) {
     uintptr_t address = ComputeOffset(offsets);
     _computedAddresses.Remove(address);
+}
+
+void Memory::ClearAllComputedAddresses() {
+    _computedAddresses.Clear();
 }
 
 void Memory::ReadDataInternal(void* buffer, uintptr_t computedOffset, size_t bufferSize) {

@@ -1,37 +1,6 @@
 #pragma once
 #include "ThreadSafeAddressMap.h"
-
-/* State graph. Entry states are NotRunning, Running, and Loading.
- * It is not recommended to act on the "Loading" state, except to gray out buttons.
-
-                   Stopped
-                      |
-                      |
-                      v
-                  NotRunning
-                      |
-                      |
-                      v
-        +<-------- Started -------->+
-        |             |             |
-        |             |             |
-        v             v             v
-     Running <---> Loading <---> Reload <---> (Running)
-        |             |             |
-        |             |             |
-        v             v             v
-        +-------> (Stopped) <-------+
-
-*/
-
-enum ProcStatus : WPARAM {
-    NotRunning,
-    Started,
-    Running,
-    Loading,
-    Reload,
-    Stopped,
-};
+#include "ProcStatus.h"
 
 using byte = unsigned char;
 
@@ -67,12 +36,12 @@ using byte = unsigned char;
 #define ARGCOUNT(...) std::tuple_size<decltype(std::make_tuple(__VA_ARGS__))>::value
 #define DO_WHILE_NONZERO(...) __VA_ARGS__, 0x75, static_cast<byte>(-2 - ARGCOUNT(__VA_ARGS__)) // Must end on a 'dec' instruction to set ZF correctly.
 
-class Memory final : public std::enable_shared_from_this<Memory> {
+class Memory final {
 public:
     Memory(const std::wstring& processName);
     ~Memory();
-    void StartHeartbeat(HWND window, UINT message);
-    void StopHeartbeat();
+    ProcStatus TryAttachToProcess();
+
     void BringToFront();
     bool IsForeground();
 
@@ -101,10 +70,13 @@ public:
 
     template <class T>
     inline void WriteData(const std::vector<__int64>& offsets, const std::vector<T>& data) {
+        if (!_handle) return;
         WriteDataInternal(&data[0], ComputeOffset(offsets), sizeof(T) * data.size());
     }
 
     void ClearComputedAddress(const std::vector<__int64>& offsets);
+    void ClearAllComputedAddresses();
+
     void Intercept(const std::string& name, __int64 firstLine, __int64 nextLine, const std::vector<byte>& data, bool writeOriginalCode = true);
     void Unintercept(const std::string& name);
     uintptr_t AllocateArray(__int64 size);
@@ -119,37 +91,19 @@ public:
     int CallFunction(__int64 address, const std::string& str, __int64 rdx);
 
 private:
-    void Heartbeat(HWND window, UINT message);
-    HANDLE Initialize();
-
     void ReadDataInternal(void* buffer, const uintptr_t computedOffset, size_t bufferSize);
     void WriteDataInternal(const void* buffer, uintptr_t computedOffset, size_t bufferSize);
     uintptr_t ComputeOffset(const std::vector<__int64>& offsets);
     uintptr_t ResolvePointerPath(const std::vector<__int64>& offsets);
 
-    // Parts of the constructor / StartHeartbeat
+    // Required for process attachment
     std::wstring _processName;
-    bool _threadActive = false;
-    std::thread _thread;
-
-    // Parts of Initialize / heartbeat
     HANDLE _handle = nullptr;
     DWORD _pid = 0;
     uintptr_t _baseAddress = 0;
     uintptr_t _endOfModule = 0;
     size_t _pointerSize = 0;
     HWND _hwnd = NULL;
-    __int64 _globals = 0;
-    int _loadCountOffset = 0;
-    __int64 _previousEntityManager = 0;
-    bool _firstHeartbeat = true;
-
-#ifdef NDEBUG
-    static constexpr std::chrono::milliseconds s_heartbeat = std::chrono::milliseconds(100);
-#else // Induce more stress in debug, to catch errors more easily.
-    static constexpr std::chrono::milliseconds s_heartbeat = std::chrono::milliseconds(10);
-#endif
-
 
     // Parts of Read / Write / Sigscan / etc
     uintptr_t _functionPrimitive = 0;
@@ -157,6 +111,7 @@ private:
 
     struct SigScan {
         bool found = false;
+        std::string hex;
         std::vector<byte> bytes;
         ScanFunc2 scanFunc;
 

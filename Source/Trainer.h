@@ -1,8 +1,12 @@
 #pragma once
+#include "ProcStatus.h"
 
-class Trainer final {
+class Trainer final : public std::enable_shared_from_this<Trainer> {
 public:
-    static std::shared_ptr<Trainer> Create(const std::shared_ptr<Memory>& memory);
+    Trainer(std::shared_ptr<Memory> memory);
+    void StartHeartbeat(HWND window, UINT message);
+    void StopHeartbeat();
+    ProcStatus Heartbeat();
     ~Trainer();
 
     int GetActivePanel();
@@ -71,6 +75,19 @@ public:
 
 private:
     std::shared_ptr<Memory> _memory;
+
+    // TODO: Categorize/organize
+    bool _threadActive = false;
+    std::thread _thread;
+    int _loadCountOffset = 0;
+    __int64 _previousEntityManager = 0;
+    bool _firstHeartbeat = true;
+
+#ifdef NDEBUG
+    static constexpr std::chrono::milliseconds s_heartbeat = std::chrono::milliseconds(100);
+#else // Induce more stress in debug, to catch errors more easily.
+    static constexpr std::chrono::milliseconds s_heartbeat = std::chrono::milliseconds(10);
+#endif
 
     // Relative to globals
     __int64 _globals = 0; // globals

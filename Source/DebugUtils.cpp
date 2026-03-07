@@ -48,7 +48,6 @@ std::pair<uint64_t, uint64_t> DebugUtils::GetModuleBounds(HANDLE process, const 
         return {startOfModule, endOfModule};
     }
 
-    assert(false, "Failed to find module bounds");
     return {};
 }
 

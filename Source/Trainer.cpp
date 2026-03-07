@@ -2,60 +2,62 @@
 #include "Trainer.h"
 #include "Panels.h"
 
-std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) {
-    auto trainer = std::make_shared<Trainer>();
-
-    memory->AddSigScan("84 C0 75 59 BA 20 00 00 00", [trainer](__int64 offset, int index, const std::vector<byte>& data) {
+Trainer::Trainer(std::shared_ptr<Memory> memory) : _memory(memory) {
+    _memory->AddSigScan("84 C0 75 59 BA 20 00 00 00", [this](__int64 offset, int index, const std::vector<byte>& data) {
         // This int is actually desired_movement_direction, which immediately preceeds camera_position
-        trainer->_cameraPos = Memory::ReadStaticInt(offset, index + 0x19, data) + 0x10;
+        _cameraPos = Memory::ReadStaticInt(offset, index + 0x19, data) + 0x10;
 
         // This doesn't have a consistent offset from the scan, so search until we find "mov eax, [addr]"
         for (; index < data.size(); index++) {
             if (data[index - 2] == 0x8B && data[index - 1] == 0x05) {
-                trainer->_noclipEnabled = Memory::ReadStaticInt(offset, index, data);
+                _noclipEnabled = Memory::ReadStaticInt(offset, index, data);
                 return true;
             }
         }
         return false;
     });
 
-    memory->AddSigScan("C7 45 77 00 00 80 3F C7 45 7F 00 00 80 3F", [trainer](__int64 offset, int index, const std::vector<byte>& data) {
-        trainer->_cameraAng = Memory::ReadStaticInt(offset, index + 0x17, data);
+    _memory->AddSigScan("C7 45 77 00 00 80 3F C7 45 7F 00 00 80 3F", [this](__int64 offset, int index, const std::vector<byte>& data) {
+        _cameraAng = Memory::ReadStaticInt(offset, index + 0x17, data);
     });
 
-    memory->AddSigScan("0F 29 7C 24 70 44 0F 29 54 24 60", [trainer](__int64 offset, int index, const std::vector<byte>& data) {
-        trainer->_noclipSpeed = Memory::ReadStaticInt(offset, index + 0x4F, data);
+    _memory->AddSigScan("0F 29 7C 24 70 44 0F 29 54 24 60", [this](__int64 offset, int index, const std::vector<byte>& data) {
+        _noclipSpeed = Memory::ReadStaticInt(offset, index + 0x4F, data);
     });
 
-    memory->AddSigScan("74 41 48 85 C0 74 04 48 8B 48 10", [trainer](__int64 offset, int index, const std::vector<byte>& data) {
-        trainer->_globals = Memory::ReadStaticInt(offset, index + 0x14, data);
+    _memory->AddSigScan("74 41 48 85 C0 74 04 48 8B 48 10", [this](__int64 offset, int index, const std::vector<byte>& data) {
+        _globals = Memory::ReadStaticInt(offset, index + 0x14, data);
     });
 
-    memory->AddSigScan("84 C0 74 19 0F 2F B7", [trainer](__int64 offset, int index, const std::vector<byte>& data) {
-        trainer->_doorOpen = offset + index + 0x0B;
-        trainer->_solvedTargetOffset = *(int*)&data[index + 0x07];
+    _memory->AddSigScan("01 00 00 66 C7 87", [this](__int64 offset, int index, const std::vector<byte>& data) {
+        _loadCountOffset = *(int*)&data[index-1];
     });
 
-    memory->AddSigScan("84 C0 74 11 0F 2F BF", [trainer](__int64 offset, int index, const std::vector<byte>& data) {
-        trainer->_doorClose = offset + index + 0x0B;
+    _memory->AddSigScan("84 C0 74 19 0F 2F B7", [this](__int64 offset, int index, const std::vector<byte>& data) {
+        _doorOpen = offset + index + 0x0B;
+        _solvedTargetOffset = *(int*)&data[index + 0x07];
+    });
+
+    _memory->AddSigScan("84 C0 74 11 0F 2F BF", [this](__int64 offset, int index, const std::vector<byte>& data) {
+        _doorClose = offset + index + 0x0B;
     });
 
     // This sigscan is rather awkward, it's not pointing to the start of a line, because I modify that line.
-    memory->AddSigScan("18 48 8B CF 89 9F", [trainer](__int64 offset, int index, const std::vector<byte>& data) {
-        trainer->_powerOn = offset + index - 0x05;
+    _memory->AddSigScan("18 48 8B CF 89 9F", [this](__int64 offset, int index, const std::vector<byte>& data) {
+        _powerOn = offset + index - 0x05;
     });
 
-    memory->AddSigScan("48 89 58 08 48 89 70 10 48 89 78 18 48 8B 3D", [trainer](__int64 offset, int index, const std::vector<byte>& data) {
-        trainer->_campaignState = Memory::ReadStaticInt(offset, index + 0x27, data);
+    _memory->AddSigScan("48 89 58 08 48 89 70 10 48 89 78 18 48 8B 3D", [this](__int64 offset, int index, const std::vector<byte>& data) {
+        _campaignState = Memory::ReadStaticInt(offset, index + 0x27, data);
     });
 
-    memory->AddSigScan2("F3 0F 59 FD F3 0F 5C C8", [trainer](__int64 offset, int index, const std::vector<byte>& data) {
+    _memory->AddSigScan2("F3 0F 59 FD F3 0F 5C C8", [this](__int64 offset, int index, const std::vector<byte>& data) {
         int found = 0;
         // This doesn't have a consistent offset from the scan, so search until we find "jmp +08"
         for (; index < data.size(); index++) {
             if (data[index - 2] == 0xEB && data[index - 1] == 0x08) {
-                trainer->_walkAcceleration = Memory::ReadStaticInt(offset, index - 0x06, data);
-                trainer->_walkDeceleration = Memory::ReadStaticInt(offset, index + 0x04, data);
+                _walkAcceleration = Memory::ReadStaticInt(offset, index - 0x06, data);
+                _walkDeceleration = Memory::ReadStaticInt(offset, index + 0x04, data);
                 found++;
                 break;
             }
@@ -64,7 +66,7 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         // Once again, there's no consistent offset, so we read until "movss xmm1, [addr]"
         for (; index < data.size(); index++) {
             if (data[index - 4] == 0xF3 && data[index - 3] == 0x0F && data[index - 2] == 0x10 && data[index - 1] == 0x0D) {
-                trainer->_runSpeed = Memory::ReadStaticInt(offset, index, data);
+                _runSpeed = Memory::ReadStaticInt(offset, index, data);
                 found++;
                 break;
             }
@@ -72,91 +74,161 @@ std::shared_ptr<Trainer> Trainer::Create(const std::shared_ptr<Memory>& memory) 
         return (found == 2);
     });
 
-    memory->AddSigScan("00 00 00 05 00 00 00 E9 B3", [trainer](__int64 offset, int index, const std::vector<byte>& data) {
-        trainer->_recordPlayerUpdate = offset + index - 0x0C;
+    _memory->AddSigScan("00 00 00 05 00 00 00 E9 B3", [this](__int64 offset, int index, const std::vector<byte>& data) {
+        _recordPlayerUpdate = offset + index - 0x0C;
     });
 
-    memory->AddSigScan("F2 0F 58 C8 66 0F 5A C1 F2", [trainer](__int64 offset, int index, const std::vector<byte>& data) {
-        trainer->_activePanelOffsets.push_back(Memory::ReadStaticInt(offset, index + 0x36, data, 5));
-        trainer->_activePanelOffsets.push_back(data[index + 0x5A]); // This is 0x10 in both versions I have, but who knows.
-        trainer->_activePanelOffsets.push_back(*(int*)&data[index + 0x54]);
+    _memory->AddSigScan("F2 0F 58 C8 66 0F 5A C1 F2", [this](__int64 offset, int index, const std::vector<byte>& data) {
+        _activePanelOffsets.push_back(Memory::ReadStaticInt(offset, index + 0x36, data, 5));
+        _activePanelOffsets.push_back(data[index + 0x5A]); // This is 0x10 in both versions I have, but who knows.
+        _activePanelOffsets.push_back(*(int*)&data[index + 0x54]);
     });
 
     // This scan intentionally fails if the injection has been applied. It makes this a bit unstable for development, but adds safety in case another trainer is attached.
-    memory->AddSigScan2("41 B8 61 00 00 00 48 8B D3", [trainer](__int64 offset, int index, const std::vector<byte>& data) {
+    _memory->AddSigScan2("41 B8 61 00 00 00 48 8B D3", [this](__int64 offset, int index, const std::vector<byte>& data) {
         for (; index > 0; index--) {
             if (data[index] == 0x44 && data[index + 8] == 0x74 && data[index + 9] == 0x10) {
-                trainer->_mainMenuColor = offset + index;
+                _mainMenuColor = offset + index;
                 return true;
             }
         }
+#if _DEBUG
+        return true;
+#else
         return false;
+#endif
     });
 
-    memory->AddSigScan("0F 57 C0 0F 2F 80 B4 00 00 00 0F 92 C0 C3", [trainer](__int64 offset, int index, const std::vector<byte>& data) {
+    _memory->AddSigScan("0F 57 C0 0F 2F 80 B4 00 00 00 0F 92 C0 C3", [this](__int64 offset, int index, const std::vector<byte>& data) {
         auto console = Memory::ReadStaticInt(offset, index-4, data);
-        trainer->_consoleWindowYB = {console, 0x4C};
-        trainer->_consoleOpenTarget = {console, 0xB4};
+        _consoleWindowYB = {console, 0x4C};
+        _consoleOpenTarget = {console, 0xB4};
     });
 
-    memory->AddSigScan("83 F8 03 7C 41 84 C9 74 1F", [trainer](__int64 offset, int index, const std::vector<byte>& data) {
-        trainer->_wantCampaignSave = Memory::ReadStaticInt(offset, index + 0x2A, data, 5);
+    _memory->AddSigScan("83 F8 03 7C 41 84 C9 74 1F", [this](__int64 offset, int index, const std::vector<byte>& data) {
+        _wantCampaignSave = Memory::ReadStaticInt(offset, index + 0x2A, data, 5);
     });
 
-    memory->AddSigScan("74 14 48 8B 95", [trainer](__int64 offset, int index, const std::vector<byte>& data) {
-        trainer->_epNameOffset = *(int*)&data[index + 0x05];
+    _memory->AddSigScan("74 14 48 8B 95", [this](__int64 offset, int index, const std::vector<byte>& data) {
+        _epNameOffset = *(int*)&data[index + 0x05];
     });
 
-    memory->AddSigScan("74 0B 0F 28 D0", [trainer](__int64 offset, int index, const std::vector<byte>& data) {
-        trainer->_menuOpenTarget = Memory::ReadStaticInt(offset, index + 0x19, data);
+    _memory->AddSigScan("74 0B 0F 28 D0", [this](__int64 offset, int index, const std::vector<byte>& data) {
+        _menuOpenTarget = Memory::ReadStaticInt(offset, index + 0x19, data);
     });
 
     // This scan will actually succeed on older patches, but _fovCurrent will still be 0.
-    memory->AddSigScan("48 85 C0 74 0A C7 80 28 03", [trainer](__int64 offset, int index, const std::vector<byte>& data) {
+    _memory->AddSigScan("48 85 C0 74 0A C7 80 28 03", [this](__int64 offset, int index, const std::vector<byte>& data) {
         for (; index > 0; index--) {
             if (data[index+4] == 0x33 && data[index+5] == 0xC9) {
-                trainer->_fovCurrent = Memory::ReadStaticInt(offset, index, data);
+                _fovCurrent = Memory::ReadStaticInt(offset, index, data);
                 return;
             }
         }
     });
 
-    memory->AddSigScan("0F 84 38 06 00 00 48 89 58 F0", [trainer](__int64 offset, int index, const std::vector<byte>& data) {
-        trainer->_showPatternStatus = Memory::ReadStaticInt(offset, index - 5, data, 5);
+    _memory->AddSigScan("0F 84 38 06 00 00 48 89 58 F0", [this](__int64 offset, int index, const std::vector<byte>& data) {
+        _showPatternStatus = Memory::ReadStaticInt(offset, index - 5, data, 5);
     });
 
-    memory->AddSigScan("41 3B FC 41 0F 4F FC", [trainer](__int64 offset, int index, const std::vector<byte>& data) {
-        trainer->_drawPatternManager = offset + index + 0x16;
+    _memory->AddSigScan("41 3B FC 41 0F 4F FC", [this](__int64 offset, int index, const std::vector<byte>& data) {
+        _drawPatternManager = offset + index + 0x16;
     });
 
-    memory->AddSigScan("83 F8 01 75 0E 33 C0", [trainer](__int64 offset, int index, const std::vector<byte>& data) {
-        trainer->_debugMode = Memory::ReadStaticInt(offset, index - 4, data);
+    _memory->AddSigScan("83 F8 01 75 0E 33 C0", [this](__int64 offset, int index, const std::vector<byte>& data) {
+        _debugMode = Memory::ReadStaticInt(offset, index - 4, data);
     });
 
-    memory->AddSigScan("F2 0F 10 41 24 48 89 68 10", [trainer](int64_t offset, int index, const std::vector<uint8_t>& data) {
-        trainer->_doorOpenStart = offset + index - 15;
+    _memory->AddSigScan("F2 0F 10 41 24 48 89 68 10", [this](int64_t offset, int index, const std::vector<uint8_t>& data) {
+        _doorOpenStart = offset + index - 15;
     });
 
 #if _DEBUG
-    memory->AddSigScan("8B DD 8B F5 66 0F 1F 84 00 00 00 00 00", [trainer](int64_t offset, int index, const std::vector<uint8_t>& data) {
+    _memory->AddSigScan("8B DD 8B F5 66 0F 1F 84 00 00 00 00 00", [this](int64_t offset, int index, const std::vector<uint8_t>& data) {
         __int64 allBinkInfos = Memory::ReadStaticInt(offset, index + 0x0F, data);
-        trainer->_binkInfoData = allBinkInfos + 0x8;
+        _binkInfoData = allBinkInfos + 0x8;
     });
 
-    memory->AddSigScan("48 8B FA 48 8B D9 85 C0 74 08", [trainer](int64_t offset, int index, const std::vector<uint8_t>& data) {
-        trainer->_unusedIdsOffset = *(int*)&data[index + 0x21];
+    _memory->AddSigScan("48 8B FA 48 8B D9 85 C0 74 08", [this](int64_t offset, int index, const std::vector<uint8_t>& data) {
+        _unusedIdsOffset = *(int*)&data[index + 0x21];
     });
 #endif
+}
 
-    // We need to save _memory before we exit, otherwise we can't destroy properly.
-    trainer->_memory = memory;
+void Trainer::StartHeartbeat(HWND window, UINT message) {
+    if (_threadActive) return;
+    _threadActive = true;
+    _thread = std::thread([sharedThis = shared_from_this(), window, message]{
+        SetCurrentThreadName(L"Heartbeat");
 
-    size_t numFailedScans = memory->ExecuteSigScans();
-    if (numFailedScans != 0) return nullptr; // Sigscans failed, we'll try again later.
+        do {
+            ProcStatus status = sharedThis->Heartbeat();
+            sharedThis->_firstHeartbeat = false;
 
-    trainer->SetMainMenuColor(true); // Recolor the menu
-    trainer->SetEPOverlayMinSize(true); // Prevent the solvability overlay from getting subpixel
-    return trainer;
+            PostMessage(window, message, status, NULL);
+            std::this_thread::sleep_for(s_heartbeat);
+        } while (sharedThis->_threadActive);
+    });
+    _thread.detach();
+}
+
+void Trainer::StopHeartbeat() {
+    _threadActive = false;
+}
+
+ProcStatus Trainer::Heartbeat() {
+    ProcStatus memoryStatus = _memory->TryAttachToProcess();
+    if (memoryStatus == ProcStatus::NotRunning) return ProcStatus::NotRunning;
+    if (memoryStatus == ProcStatus::Stopped) {
+        // Wait for the process to fully close; otherwise we might accidentally re-attach to it.
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        return ProcStatus::Stopped;
+    }
+
+    // Note that sigscans are idempotent -- each should only "succeed" once.
+    // Ergo, it is OK to have sigscans which are not available until after a few game actions are taken.
+    size_t failedScans = _memory->ExecuteSigScans();
+    if (failedScans > 0) return ProcStatus::NotRunning;
+
+    __int64 entityManager = _memory->ReadData<__int64>({_globals}, 1)[0];
+    // Game hasn't loaded yet, we're still sitting on the launcher
+    if (entityManager == 0) return ProcStatus::NotRunning;
+
+    // If there are less than 400k total entities, a new game is still starting.
+    int numEntities = _memory->ReadData<int>({_globals, 0x10}, 1)[0];
+    if (numEntities < 400'000) return ProcStatus::Loading;
+
+    // Saved game is currently loading, do not take any actions.
+    byte isLoading = _memory->ReadData<byte>({entityManager, _loadCountOffset - 0x4}, 1)[0];
+    if (isLoading == 0x01) return ProcStatus::Loading;
+
+    // At this point, we think the game is running... now we have to figure out what, exactly, to say.
+
+    // If this is the first heartbeat we're sending, we just started (and the game was already running).
+    // We set _firstHeartbeat = false in the caller after we return.
+    if (_firstHeartbeat) {
+        SetMainMenuColor(true); // Recolor the menu
+        SetEPOverlayMinSize(true); // Prevent the solvability overlay from getting sub-pixel
+        return ProcStatus::AlreadyRunning;
+    }
+
+    // If this is the first heartbeat where the Entity_Manager is allocated, the game just started
+    if (_previousEntityManager == 0) {
+        _previousEntityManager = entityManager;
+        SetMainMenuColor(true); // Recolor the menu
+        SetEPOverlayMinSize(true); // Prevent the solvability overlay from getting sub-pixel
+        return ProcStatus::Started;
+    }
+
+    // If the Entity_Manager just changed, then this was a reload -- clear our memory addresses.
+    if (entityManager != _previousEntityManager) {
+        _previousEntityManager = entityManager;
+        _memory->ClearAllComputedAddresses();
+        return ProcStatus::Reload;
+    }
+
+    // Otherwise, business as usual.
+    return ProcStatus::Running;
 }
 
 // Restore default game settings when shutting down the trainer.
@@ -175,6 +247,9 @@ Trainer::~Trainer() {
     SetEPOverlay(false);
     SetEPOverlayMinSize(false);
     ClampAimingPhi(true);
+
+    StopHeartbeat();
+    if (_thread.joinable()) _thread.join();
 }
 
 int Trainer::GetActivePanel() {
