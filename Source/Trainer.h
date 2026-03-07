@@ -7,6 +7,7 @@ public:
     void StartHeartbeat(HWND window, UINT message);
     void StopHeartbeat();
     ProcStatus Heartbeat();
+    void OnGameStart();
     ~Trainer();
 
     int GetActivePanel();

@@ -24,11 +24,18 @@
 */
 
 enum ProcStatus {
+    // The game is not currently running (steady state).
     NotRunning,
+    // The game has just started.
     Started,
+    // We have just started; the game was already running.
     AlreadyRunning,
+    // The game is running (steady state).
     Running,
+    // The game is loading (steady state).
     Loading,
+    // The game has just reloaded.
     Reload,
+    // The game has just stopped.
     Stopped,
 };

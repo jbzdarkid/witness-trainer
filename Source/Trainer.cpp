@@ -79,9 +79,11 @@ Trainer::Trainer(std::shared_ptr<Memory> memory) : _memory(memory) {
     });
 
     _memory->AddSigScan("F2 0F 58 C8 66 0F 5A C1 F2", [this](__int64 offset, int index, const std::vector<byte>& data) {
-        _activePanelOffsets.push_back(Memory::ReadStaticInt(offset, index + 0x36, data, 5));
-        _activePanelOffsets.push_back(data[index + 0x5A]); // This is 0x10 in both versions I have, but who knows.
-        _activePanelOffsets.push_back(*(int*)&data[index + 0x54]);
+        _activePanelOffsets = {
+            Memory::ReadStaticInt(offset, index + 0x36, data, 5),
+            data[index + 0x5A], // This is 0x10 in both versions I have, but who knows.
+            *(int*)&data[index + 0x54],
+        };
     });
 
     // This scan intentionally fails if the injection has been applied. It makes this a bit unstable for development, but adds safety in case another trainer is attached.
@@ -93,7 +95,7 @@ Trainer::Trainer(std::shared_ptr<Memory> memory) : _memory(memory) {
             }
         }
 #if _DEBUG
-        return true;
+        return true; // TODO: Is this... smart?
 #else
         return false;
 #endif
@@ -207,16 +209,14 @@ ProcStatus Trainer::Heartbeat() {
     // If this is the first heartbeat we're sending, we just started (and the game was already running).
     // We set _firstHeartbeat = false in the caller after we return.
     if (_firstHeartbeat) {
-        SetMainMenuColor(true); // Recolor the menu
-        SetEPOverlayMinSize(true); // Prevent the solvability overlay from getting sub-pixel
+        OnGameStart();
         return ProcStatus::AlreadyRunning;
     }
 
     // If this is the first heartbeat where the Entity_Manager is allocated, the game just started
     if (_previousEntityManager == 0) {
         _previousEntityManager = entityManager;
-        SetMainMenuColor(true); // Recolor the menu
-        SetEPOverlayMinSize(true); // Prevent the solvability overlay from getting sub-pixel
+        OnGameStart();
         return ProcStatus::Started;
     }
 
@@ -229,6 +229,20 @@ ProcStatus Trainer::Heartbeat() {
 
     // Otherwise, business as usual.
     return ProcStatus::Running;
+}
+
+void Trainer::OnGameStart() {
+    SetEPOverlayMinSize(true); // Prevent the solvability overlay from getting sub-pixel
+    SetChallengePillarsPractice(true); // Enable pillars retry via vault box
+
+    SetMainMenuColor(true); // Recolor the menu
+    std::thread t([this]{
+        Sleep(0x100);
+        // TODO: Maybe I need a better safety check here. Sometimes this  pause comes through even though we're not "laoding",
+        // but we're still on the loading screen, and this is a softlocked game.
+        SetMainMenuState(true); // Pause the game (shows the menu color)
+    });
+    t.detach();
 }
 
 // Restore default game settings when shutting down the trainer.

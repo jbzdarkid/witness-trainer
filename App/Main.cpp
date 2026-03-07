@@ -224,10 +224,11 @@ void LaunchSteamGame(int gameId) {
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_DESTROY:
-            // Free the global reference, so the only remaining reference should be in command threads.
-            // No new threads should be able to start while the trainer is null.
             {
+                g_trainer->StopHeartbeat();
                 std::weak_ptr<Trainer> trainer = g_trainer;
+                // Free the global reference, so the only remaining reference should be in command threads.
+                // Commands are also blocked when the trainer is null.
                 g_trainer = nullptr;
 
                 // Wait to actually quit until all background threads have finished their work.
@@ -269,9 +270,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 SetStringText(g_hwnd, WINDOW_TITLE);
                 SetStringText(g_activateGame, L"Launch game");
                 break;
-            case ProcStatus::Loading:
-                SetStringText(g_activateGame, L"Game is loading...");
-                break;
             case ProcStatus::Started:
                 // Process just started (or reloaded), enforce our settings.
                 SetStringText(g_hwnd, L"Attaching to The Witness...");
@@ -309,8 +307,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 CheckDlgButton(hwnd, OPEN_CONSOLE, g_trainer->GetConsoleOpen());
                 CheckDlgButton(hwnd, EP_OVERLAY, g_trainer->GetEPOverlay());
                 SetStringText(g_activateGame, L"Switch to game");
-                // g_trainer->SetMainMenuState(true); // TODO: I broke it again
-                g_trainer->SetChallengePillarsPractice(true);
                 break;
             case ProcStatus::Running:
                 // Process was already running, and so were we (this recurs every heartbeat). Enforce settings and apply repeated actions.
@@ -698,7 +694,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     g_hInstance = hInstance;
 
     CreateComponents();
-    // Hotkeys::Get()->SanityCheckHotkeys();
+    Hotkeys::Get()->SanityCheckHotkeys();
 
     g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
     g_trainer = std::make_shared<Trainer>(g_witnessProc);
@@ -720,8 +716,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 #ifndef _DEBUG
     for (const auto& hook : hooks) UnhookWindowsHookEx(hook);
 #endif
-    g_trainer->StopHeartbeat();
-    g_witnessProc = nullptr;
 
     CoUninitialize();
     return (int)msg.wParam;
