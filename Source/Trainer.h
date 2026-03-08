@@ -50,6 +50,7 @@ public:
     float GetSprintSpeed();
     bool GetInfiniteChallenge();
     bool GetConsoleOpen();
+    bool GetMainMenuState();
     bool GetRandomDoorsPractice();
     bool GetEPOverlay();
     bool GetEPOverlayMinSize();

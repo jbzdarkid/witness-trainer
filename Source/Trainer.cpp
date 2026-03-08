@@ -95,7 +95,8 @@ Trainer::Trainer(std::shared_ptr<Memory> memory) : _memory(memory) {
             }
         }
 #if _DEBUG
-        return true; // TODO: Is this... smart?
+        assert(false, "[DEBUG MODE] Anti-double-trainer injection failed, ignoring");
+        return true;
 #else
         return false;
 #endif
@@ -182,6 +183,7 @@ ProcStatus Trainer::Heartbeat() {
     ProcStatus memoryStatus = _memory->TryAttachToProcess();
     if (memoryStatus == ProcStatus::NotRunning) return ProcStatus::NotRunning;
     if (memoryStatus == ProcStatus::Stopped) {
+        _previousEntityManager = 0; // Used to detect if the game just started
         // Wait for the process to fully close; otherwise we might accidentally re-attach to it.
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         return ProcStatus::Stopped;
@@ -209,14 +211,20 @@ ProcStatus Trainer::Heartbeat() {
     // If this is the first heartbeat we're sending, we just started (and the game was already running).
     // We set _firstHeartbeat = false in the caller after we return.
     if (_firstHeartbeat) {
-        OnGameStart();
+        _previousEntityManager = entityManager;
+        std::thread([sharedThis = shared_from_this()] {
+            sharedThis->OnGameStart();
+        }).detach();
         return ProcStatus::AlreadyRunning;
     }
 
     // If this is the first heartbeat where the Entity_Manager is allocated, the game just started
     if (_previousEntityManager == 0) {
         _previousEntityManager = entityManager;
-        OnGameStart();
+        std::thread([sharedThis = shared_from_this()] {
+            Sleep(0x1000); // Slight delay since (apparently) the loading status is 0 even though the game isn't quite ready.
+            sharedThis->OnGameStart();
+        }).detach();
         return ProcStatus::Started;
     }
 
@@ -236,13 +244,15 @@ void Trainer::OnGameStart() {
     SetChallengePillarsPractice(true); // Enable pillars retry via vault box
 
     SetMainMenuColor(true); // Recolor the menu
-    std::thread t([this]{
-        Sleep(0x100);
-        // TODO: Maybe I need a better safety check here. Sometimes this  pause comes through even though we're not "laoding",
-        // but we're still on the loading screen, and this is a softlocked game.
-        SetMainMenuState(true); // Pause the game (shows the menu color)
-    });
-    t.detach();
+    // Pause the game (shows the menu color).
+    SetMainMenuState(true);
+    Sleep(0x1000);
+    // If the game is still paused, we might have softlocked. Toggle pause off and on just in case.
+    if (GetMainMenuState() == true) {
+        SetMainMenuState(false);
+        Sleep(0x500);
+        SetMainMenuState(true);
+    }
 }
 
 // Restore default game settings when shutting down the trainer.
@@ -586,6 +596,13 @@ bool Trainer::GetInfiniteChallenge() {
 
 bool Trainer::GetConsoleOpen() {
     return _memory->ReadData<float>(_consoleOpenTarget, 1)[0] == 1.0f;
+}
+
+bool Trainer::GetMainMenuState() {
+    float target = _memory->ReadData<float>({_menuOpenTarget}, 1)[0];
+    DebugPrint("Menu open target: " + std::to_string(target));
+    DebugPrint("Menu open: " + std::string(target == 1.0f ? "true" : "false"));
+    return _memory->ReadData<float>({_menuOpenTarget}, 1)[0] == 1.0f;
 }
 
 bool Trainer::GetRandomDoorsPractice() {
