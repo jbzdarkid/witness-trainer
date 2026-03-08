@@ -182,13 +182,13 @@ size_t Memory::ExecuteSigScans() {
 
 // Technically this is ReadChar*, but this name makes more sense with the return type.
 std::string Memory::ReadString(const std::vector<__int64>& offsets) {
-    uintptr_t charAddr = ComputeOffset(offsets);
+    __int64 charAddr = ReadData<__int64>(offsets, 1)[0];
     if (charAddr == 0) return ""; // Handle nullptr for strings
 
     std::vector<char> tmp;
     auto nullTerminator = tmp.begin(); // Value is only for type information.
     for (size_t maxLength = (1 << 6); maxLength < (1 << 10); maxLength *= 2) {
-        tmp = ReadData<char>({(__int64)charAddr}, maxLength);
+        tmp = ReadData<char>({charAddr}, maxLength);
         nullTerminator = std::find(tmp.begin(), tmp.end(), '\0');
         // If a null terminator is found, we will strip any trailing data after it.
         if (nullTerminator != tmp.end()) break;
@@ -314,9 +314,7 @@ uintptr_t Memory::ComputeOffset(const std::vector<__int64>& offsets) {
     assert(offsets.size() > 0, "[Internal error] Attempting to compute 0 offsets");
     assert(offsets.front() != 0, "[Internal error] First offset to compute was 0");
 
-    // Leave off the last offset, since it will be either read/write, and may not be of type uintptr_t.
-    const __int64 final_offset = offsets.back();
-
+    // Leave off the last offset since it's the address of the actual data (and may not be of size _pointerSize).
     uintptr_t cumulativeAddress = 0;
     for (int i = 0; i < offsets.size() - 1; i++) {
         cumulativeAddress += offsets[i];
@@ -349,7 +347,7 @@ uintptr_t Memory::ComputeOffset(const std::vector<__int64>& offsets) {
         }
         return 0;
     }
-    return cumulativeAddress + final_offset;
+    return cumulativeAddress + offsets.back();
 }
 
 uintptr_t Memory::ResolvePointerPath(const std::vector<__int64>& offsets) {

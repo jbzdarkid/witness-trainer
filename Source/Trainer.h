@@ -77,12 +77,8 @@ public:
 
 private:
     std::shared_ptr<Memory> _memory;
-
-    // TODO: Categorize/organize
     bool _threadActive = false;
     std::thread _thread;
-    int _loadCountOffset = 0;
-    __int64 _previousEntityManager = 0;
     bool _firstHeartbeat = true;
 
 #ifdef NDEBUG
@@ -93,6 +89,7 @@ private:
 
     // Relative to globals
     __int64 _globals = 0; // globals
+    __int64 _previousEntityManager = 0; // globals.entity_manager
     __int64 _noclipSpeed = 0; // globals.free_camera_speed
     __int64 _debugMode = 0; // globals.debug_mode
     __int64 _walkAcceleration = 0; // globals.walk_acceleration
@@ -118,6 +115,7 @@ private:
     __int64 _recordPlayerUpdate = 0; // Entity_Record_Player.play_state
     int _epNameOffset = 0; // Entity_Pattern_Point.pattern_name
     int _unusedIdsOffset = 0; // Entity_Manager.unused_ids
+    int _loadCountOffset = 0; // Entity_Manager.load_count
 
     // Function pointers
     __int64 _doorOpen = 0; // Entity_Door::open(), somewhere in the middle

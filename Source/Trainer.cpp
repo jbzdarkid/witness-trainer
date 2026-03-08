@@ -287,6 +287,7 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetEntityData(int id) {
     int readId = _memory->ReadData<int>({_globals, 0x18, id * 8, 0x10}, 1)[0];
     if (id != (readId - 1)) return nullptr; // Entity is no longer a valid object (or is not the entity we expected to read)
 
+    // _memory->ClearComputedAddress({_globals, 0x18, id * 8, 0x08, 0x08});
     std::string typeName = _memory->ReadString({_globals, 0x18, id * 8, 0x08, 0x08});
     auto entityData = std::make_shared<EntityData>();
     entityData->id = id;
@@ -533,8 +534,7 @@ void Trainer::DisableDistanceGating() {
         std::shared_ptr<EntityData> entityData = GetEntityData(id);
         if (!entityData || entityData->type != "Machine_Panel") continue;
 
-        // TODO: Audit this, it's probably wrong now that we're not relative ptr.
-        assert(_globals == 0x62D0A0, "DisableDistanceGating is only supported on the latest version");
+        assert(_globals == 0x140'62D0A0, "DisableDistanceGating is only available on the latest version");
         float distanceGated = _memory->ReadData<float>({entityData->entity, 0x3BC}, 1)[0];
         if (distanceGated != 0.0f) _memory->WriteData<float>({_globals, 0x18, id * 8, 0x3BC}, {0.0f});
     }
