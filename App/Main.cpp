@@ -360,8 +360,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         SetCurrentThreadName(L"Command Helper");
         if (!g_trainer) return; // We are shutting down, do not process any actions
 
-        WORD foo = HIWORD(wParam);
-        if (foo == 0x400) return; // ???
+        if (HIWORD(wParam) != 0) return; // Message was not triggered by the user.
         WORD command = LOWORD(wParam);
         if (command == INFINITE_CHALLENGE)      ToggleOption(INFINITE_CHALLENGE, &Trainer::SetInfiniteChallenge);
         else if (command == DOORS_PRACTICE)     ToggleOption(DOORS_PRACTICE, &Trainer::SetRandomDoorsPractice);
