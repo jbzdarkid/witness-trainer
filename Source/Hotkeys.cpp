@@ -113,6 +113,11 @@ bool Hotkeys::ParseHotkeyFile() {
             else if (CompareNoCase(segment, "down"))     keyCode |= VK_DOWN;
             else if (CompareNoCase(segment, "left"))     keyCode |= VK_LEFT;
             else if (CompareNoCase(segment, "right"))    keyCode |= VK_RIGHT;
+            else if (CompareNoCase(segment, "mouse1"))   keyCode |= VK_LBUTTON;
+            else if (CompareNoCase(segment, "mouse2"))   keyCode |= VK_RBUTTON;
+            else if (CompareNoCase(segment, "mouse3"))   keyCode |= VK_MBUTTON;
+            else if (CompareNoCase(segment, "mouse4"))   keyCode |= VK_XBUTTON1;
+            else if (CompareNoCase(segment, "mouse5"))   keyCode |= VK_XBUTTON2;
             else {
                 ASSERT(false, L"Unable to parse segment: " + std::wstring(segment.begin(), segment.end()));
             }
@@ -144,27 +149,27 @@ int64_t Hotkeys::CheckMatchingHotkey(WPARAM wParam, LPARAM lParam) {
             auto search = _hotkeyCodes.find(KEYCODE_RELEASE);
             if (search != std::end(_hotkeyCodes)) return search->second;
         }
-    } else if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
-        auto p = (PKBDLLHOOKSTRUCT)lParam;
-        int32_t fullCode = p->vkCode;
-
-        int64_t found = 0;
-        // For perf, we look at just the keyboard key first (before consulting GetKeyState).
-        if (_hotkeys.find(fullCode) != _hotkeys.end()) {
-            if (GetKeyState(VK_SHIFT) & 0x8000)     fullCode |= MASK_SHIFT;
-            if (GetKeyState(VK_CONTROL) & 0x8000)   fullCode |= MASK_CONTROL;
-            if (GetKeyState(VK_MENU) & 0x8000)      fullCode |= MASK_ALT;
-            if (GetKeyState(VK_LWIN) & 0x8000)      fullCode |= MASK_WIN;
-            if (GetKeyState(VK_RWIN) & 0x8000)      fullCode |= MASK_WIN;
-
-            auto search = _hotkeyCodes.find(fullCode);
-            if (search != std::end(_hotkeyCodes)) found = search->second;
-        }
-        _lastCode = fullCode;
-        return found;
+        return 0;
     }
+    
+    int32_t fullCode = 0;
+    if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) fullCode = ((PKBDLLHOOKSTRUCT)lParam)->vkCode;
+    else if (wParam == WM_XBUTTONDOWN) fullCode = HIWORD(((PMSLLHOOKSTRUCT)lParam)->mouseData) + (VK_XBUTTON1 - XBUTTON1);
 
-    return 0;
+    int64_t found = 0;
+    // For perf, we look at just the keyboard key first (before consulting GetKeyState).
+    if (_hotkeys.find(fullCode) != _hotkeys.end()) {
+        if (GetKeyState(VK_SHIFT) & 0x8000)     fullCode |= MASK_SHIFT;
+        if (GetKeyState(VK_CONTROL) & 0x8000)   fullCode |= MASK_CONTROL;
+        if (GetKeyState(VK_MENU) & 0x8000)      fullCode |= MASK_ALT;
+        if (GetKeyState(VK_LWIN) & 0x8000)      fullCode |= MASK_WIN;
+        if (GetKeyState(VK_RWIN) & 0x8000)      fullCode |= MASK_WIN;
+
+        auto search = _hotkeyCodes.find(fullCode);
+        if (search != std::end(_hotkeyCodes)) found = search->second;
+    }
+    _lastCode = fullCode;
+    return found;
 }
 
 void Hotkeys::RegisterHotkey(LPCSTR hotkeyName, int64_t message) {
@@ -209,6 +214,11 @@ std::wstring Hotkeys::GetHoverText(keycode keyCode) {
     else if (keyCode == VK_DOWN)                ss << "DownArrow";
     else if (keyCode == VK_LEFT)                ss << "LeftArrow";
     else if (keyCode == VK_RIGHT)               ss << "RightArrow";
+    else if (keyCode == VK_LBUTTON)             ss << "Mouse1";
+    else if (keyCode == VK_RBUTTON)             ss << "Mouse2";
+    else if (keyCode == VK_MBUTTON)             ss << "Mouse3";
+    else if (keyCode == VK_XBUTTON1)            ss << "Mouse4";
+    else if (keyCode == VK_XBUTTON2)            ss << "Mouse5";
 
     return ss.str();
 }

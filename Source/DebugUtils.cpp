@@ -11,7 +11,7 @@ void DebugUtils::DebugPrint(const std::string& text) {
     std::cout << text;
     if (text[text.size()-1] != '\n') {
         OutputDebugStringA("\n");
-        std::cout << std::endl;
+        std::cout << '\n';
     }
 }
 
@@ -20,10 +20,37 @@ void DebugUtils::DebugPrint(const std::wstring& text) {
     std::wcout << text;
     if (text[text.size()-1] != L'\n') {
         OutputDebugStringW(L"\n");
-        std::wcout << std::endl;
+        std::wcout << L'\n';
     }
 }
 #pragma pop_macro("DebugPrint")
+
+std::pair<uint64_t, uint64_t> DebugUtils::GetModuleBounds(HANDLE process, const std::wstring& moduleName) {
+    DWORD requiredBytes = sizeof(HMODULE);
+    std::vector<HMODULE> modules(1, nullptr);
+
+    EnumProcessModules(process, &modules[0], sizeof(HMODULE) * (DWORD)modules.size(), &requiredBytes);
+    modules.resize(requiredBytes / sizeof(HMODULE));
+    EnumProcessModules(process, &modules[0], sizeof(HMODULE) * (DWORD)modules.size(), &requiredBytes);
+
+    std::wstring baseName(moduleName.size(), '\0');
+    for (const auto& module : modules)
+    {
+        int size = GetModuleBaseNameW(process, module, &baseName[0], sizeof(baseName));
+        baseName.resize(size);
+        if (baseName != moduleName) continue;
+
+        MODULEINFO moduleInfo;
+        GetModuleInformation(process, module, &moduleInfo, sizeof(moduleInfo));
+
+        uint64_t startOfModule = reinterpret_cast<uint64_t>(moduleInfo.lpBaseOfDll);
+        uint64_t endOfModule = startOfModule + moduleInfo.SizeOfImage;
+        return {startOfModule, endOfModule};
+    }
+
+    return {};
+}
+
 
 void SetCurrentThreadName(const wchar_t* name) {
     HMODULE module = GetModuleHandleA("Kernel32.dll");
@@ -36,7 +63,7 @@ void SetCurrentThreadName(const wchar_t* name) {
     setThreadDescription(GetCurrentThread(), name);
 }
 
-std::wstring DebugUtils::GetStackTrace() {
+std::wstring GetStackTrace() {
     HANDLE process = GetCurrentProcess();
     HANDLE thread = GetCurrentThread();
     SymInitialize(process, NULL, TRUE); // For some reason, this is required in order to make StackWalk work.
@@ -53,7 +80,7 @@ std::wstring DebugUtils::GetStackTrace() {
     std::wstringstream ss;
     ss << std::hex << std::showbase << std::nouppercase;
 
-    uint64_t baseAddress = GetModuleBounds(process).first;
+    uint64_t baseAddress = DebugUtils::GetModuleBounds(process, EXE_NAME).first;
     BOOL result = FALSE;
     do {
         ss << (stackFrame.AddrPC.Offset - baseAddress) << L' '; // Normalize offsets relative to the base address
@@ -62,40 +89,29 @@ std::wstring DebugUtils::GetStackTrace() {
     return ss.str();
 }
 
-std::wstring DebugUtils::version = L"(unknown)"; // Slight hack. Will be overwritten by main during startup.
-time_t lastShownAssert = ~0ULL; // MAXINT
-void DebugUtils::ShowAssertDialogue(const wchar_t* message) {
+void ShowAssertDialogue(const wchar_t* message) {
     // Only show an assert every 30 seconds. This prevents assert loops inside the WndProc, as well as adding a grace period after an assert fires.
+    static time_t lastShownAssert = ~0ULL; // MAXINT
     if (time(nullptr) - lastShownAssert < 30) return;
     lastShownAssert = time(nullptr);
-    std::wstring msg = L"HobTrainer version " + version + L" has encountered an error.\n";
+    std::wstring msg = EXE_NAME L" version " VERSION_STR L" has encountered an error.\n";
     msg += L"Please press Control C to copy this error, and paste it to darkid.\n";
-    if (message) msg += message;
+    msg += message;
     msg += L"\n";
     msg += GetStackTrace();
-    MessageBox(NULL, msg.c_str(), L"HobTrainer encountered an error.", MB_TASKMODAL | MB_ICONHAND | MB_OK | MB_SETFOREGROUND);
-}
-
-std::pair<uint64_t, uint64_t> DebugUtils::GetModuleBounds(HANDLE process) {
-    DWORD unused;
-    HMODULE modules[1];
-    EnumProcessModules(process, &modules[0], sizeof(HMODULE), &unused);
-    MODULEINFO moduleInfo;
-    BOOL success = GetModuleInformation(process, modules[0], &moduleInfo, sizeof(moduleInfo));
-    if (success == FALSE) return {0, 0};
-
-    uint64_t startOfModule = reinterpret_cast<uint64_t>(moduleInfo.lpBaseOfDll);
-    uint64_t endOfModule = startOfModule + moduleInfo.SizeOfImage;
-    return {startOfModule, endOfModule};
+    MessageBox(NULL, msg.c_str(), EXE_NAME L" encountered an error.", MB_TASKMODAL | MB_ICONHAND | MB_OK | MB_SETFOREGROUND);
 }
 
 // Note: This function must work properly even in release mode, since we will need to generate callbacks for release exes.
-void DebugUtils::RegenerateCallstack(const std::wstring& callstack) {
+void RegenerateCallstack(const std::wstring& callstack) {
     if (callstack.empty()) return;
-    uint64_t baseAddress = GetModuleBounds(GetCurrentProcess()).first;
+    if (callstack[0] != '0') return; // Callstacks should always start with '0x'
+    HANDLE process = GetCurrentProcess();
+    uint64_t baseAddress = DebugUtils::GetModuleBounds(process, EXE_NAME).first;
     std::vector<uint64_t> addrs;
     std::wstring buffer;
     for (const wchar_t c : callstack) {
+        if (c == L'\0') break;
         if (c == L' ') {
             addrs.push_back(baseAddress + std::stoull(buffer, nullptr, 16));
             buffer.clear();
@@ -114,7 +130,6 @@ void DebugUtils::RegenerateCallstack(const std::wstring& callstack) {
         symbolInfo->SizeOfStruct = sizeof(SYMBOL_INFO);
         symbolInfo->MaxNameLen = MAX_SYM_NAME;
     }
-    HANDLE process = GetCurrentProcess();
     SymInitialize(process, NULL, TRUE);
     std::wstringstream ss;
     ss << std::hex << std::showbase << std::nouppercase;
@@ -122,10 +137,11 @@ void DebugUtils::RegenerateCallstack(const std::wstring& callstack) {
         ss << addr;
         if (symbolInfo != nullptr && SymFromAddr(process, addr, NULL, symbolInfo)) {
             ss << L' ' << symbolInfo->Name;
+            ss << L" +" << (addr - symbolInfo->Address);
         }
         ss << L'\n';
     }
 
-    OutputDebugStringW(ss.str().c_str());
+    DebugPrint(ss.str());
     if (IsDebuggerPresent()) __debugbreak();
 }
