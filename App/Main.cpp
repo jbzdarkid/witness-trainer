@@ -357,7 +357,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
 
     // All commands should execute on a background thread, to avoid hanging the UI.
     std::thread t([wParam] {
-#pragma warning (suppress: 4101)
         SetCurrentThreadName(L"Command Helper");
         if (!g_trainer) return; // We are shutting down, do not process any actions
 
