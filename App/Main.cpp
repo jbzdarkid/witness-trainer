@@ -293,7 +293,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 break;
             case ProcStatus::AlreadyRunning:
                 // Process was already running, and we just started. Load settings from the game.
-                SetStringText(g_hwnd, L"Attaching to The Witness...");
                 SetStringText(g_hwnd, WINDOW_TITLE);
                 SetFloatText(g_noclipSpeed, g_trainer->GetNoclipSpeed());
                 SetFloatText(g_sprintSpeed, g_trainer->GetSprintSpeed());
