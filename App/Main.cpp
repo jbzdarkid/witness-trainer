@@ -271,7 +271,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 SetStringText(g_activateGame, L"Launch game");
                 break;
             case ProcStatus::Started:
-                // Process just started (or reloaded), enforce our settings.
+                // Process just started, enforce our settings.
                 SetStringText(g_hwnd, L"Attaching to The Witness...");
                 [[fallthrough]];
             case ProcStatus::Reload:
