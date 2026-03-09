@@ -74,6 +74,7 @@ public:
         WriteDataInternal(&data[0], ComputeOffset(offsets), sizeof(T) * data.size());
     }
 
+    uintptr_t ResolvePointerPath(const std::vector<__int64>& offsets);
     void ClearComputedAddress(const std::vector<__int64>& offsets);
     void ClearAllComputedAddresses();
 
@@ -94,7 +95,6 @@ private:
     void ReadDataInternal(void* buffer, const uintptr_t computedOffset, size_t bufferSize);
     void WriteDataInternal(const void* buffer, uintptr_t computedOffset, size_t bufferSize);
     uintptr_t ComputeOffset(const std::vector<__int64>& offsets);
-    uintptr_t ResolvePointerPath(const std::vector<__int64>& offsets);
 
     // Required for process attachment
     std::wstring _processName;
