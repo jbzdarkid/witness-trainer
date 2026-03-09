@@ -118,24 +118,27 @@ void LaunchSteamGame(int gameId) {
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_DESTROY:
-            if (g_trainer) {
-                auto trainer = g_trainer;
-                g_trainer = nullptr; // Close the trainer, which undoes any modifications to the game.
+        {
+            g_trainer->StopHeartbeat();
+            std::weak_ptr<Trainer> trainer = g_trainer;
+            // Free the global reference, so the only remaining reference should be in command threads.
+            // Commands are also blocked when the trainer is null.
+            g_trainer = nullptr;
 
-                // Wait to actually quit until all background threads have finished their work.
-                // Note that we do need to pump messages here, since said work may require the message pump,
-                // which we are currently holding hostage.
-                while (trainer.use_count() > 1) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                    MSG msg;
-                    if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
-                        TranslateMessage(&msg);
-                        DispatchMessage(&msg);
-                    }
+            // Wait to actually quit until all background threads have finished their work.
+            // Note that we do need to pump messages here, since said work may require the message pump,
+            // which we are currently holding hostage.
+            while (trainer.use_count() > 1) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                MSG msg;
+                if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+                    TranslateMessage(&msg);
+                    DispatchMessage(&msg);
                 }
             }
             PostQuitMessage(0);
             return 0;
+        }
         case WM_ERASEBKGND:
         {
             RECT rc;
