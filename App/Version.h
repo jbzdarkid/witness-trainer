@@ -4,8 +4,8 @@
 #define TO_STRING(s) TO_STRING2(s)
 
 #define MAJOR 1
-#define MINOR 0
-#define PATCH 4
+#define MINOR 1
+#define PATCH 0
 
 #define VERSION_STR     TO_STRING(MAJOR) L"." TO_STRING(MINOR) L"." TO_STRING(PATCH)
 #define VERSION         MAJOR, MINOR, PATCH
@@ -13,3 +13,4 @@
 #define PRODUCT_NAME L"Hob Trainer"
 #define WINDOW_CLASS L"HobTrainer"
 #define WINDOW_TITLE PRODUCT_NAME L" v" VERSION_STR
+#define EXE_NAME L"HobTrainer.exe"

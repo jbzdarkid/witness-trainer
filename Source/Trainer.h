@@ -1,12 +1,18 @@
 #pragma once
+#include "ProcStatus.h"
 #include <memory>
 #include <vector>
 
 class Memory;
 
-class Trainer final {
+class Trainer final : public std::enable_shared_from_this<Trainer> {
 public:
-    static std::shared_ptr<Trainer> Create(const std::shared_ptr<Memory>& memory);
+    Trainer(std::shared_ptr<Memory> memory);
+    void StartHeartbeat(HWND window, UINT message);
+    void StopHeartbeat();
+    ProcStatus Heartbeat();
+    void OnGameStart();
+    ~Trainer();
 
     bool GetNoclip();
     std::vector<float> GetPlayerPos();
@@ -31,6 +37,18 @@ public:
 
 private:
     std::shared_ptr<Memory> _memory;
+    bool _threadActive = false;
+    std::thread _thread;
+    bool _firstHeartbeat = true;
+
+#ifdef NDEBUG
+    static constexpr std::chrono::milliseconds s_heartbeat = std::chrono::milliseconds(100);
+#else // Induce more stress in debug, to catch errors more easily.
+    static constexpr std::chrono::milliseconds s_heartbeat = std::chrono::milliseconds(10);
+#endif
+
+    uintptr_t _previousCombatStats = 0;
+
     int _gameWorldPtr = 0;
     int _globalSettingsPtr = 0;
 };

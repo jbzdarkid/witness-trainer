@@ -136,7 +136,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             }
             PostQuitMessage(0);
             return 0;
-        case WM_ERASEBKGND: // ???
+        case WM_ERASEBKGND:
         {
             RECT rc;
             ::GetClientRect(hwnd, &rc);
@@ -149,25 +149,24 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             // Get rid of the gross gray background. https://stackoverflow.com/a/4495814
             SetTextColor((HDC)wParam, RGB(0, 0, 0));
             SetBkColor((HDC)wParam, RGB(255, 255, 255));
-            SetBkMode((HDC)wParam, OPAQUE); // ???
+            SetBkMode((HDC)wParam, OPAQUE);
             static HBRUSH s_solidBrush = CreateSolidBrush(RGB(255, 255, 255));
             return (LRESULT)s_solidBrush;
         case HEARTBEAT:
+            if (!g_trainer) break; // We are shutting down, do not process any actions
             switch ((ProcStatus)wParam) {
             case ProcStatus::Stopped:
-                // Don't discard any settings, just free the trainer.
-                g_trainer = nullptr;
-                // Also reset the title & launch text, since they can get stuck
+            case ProcStatus::NotRunning:
+                // Reset the title & launch text but nothing else (trainer manages itself).
                 SetStringText(g_hwnd, WINDOW_TITLE);
                 SetStringText(g_activateGame, L"Launch game");
                 break;
             case ProcStatus::Started:
+                // Process just started, enforce our settings.
                 SetStringText(g_hwnd, L"Attaching to HOB...");
-                g_trainer = Trainer::Create(g_hobProc);
                 [[fallthrough]];
             case ProcStatus::Reload:
-                if (!g_trainer) break; // It's possible that trainer failed to attach before a new game was started.
-                // Process just started (or reloaded), enforce our settings.
+                // Or, we started a new game / loaded a save, in which case some of the entity data might have been reset. Basically the same.
                 SetStringText(g_hwnd, WINDOW_TITLE);
                 if (IsDlgButtonChecked(hwnd, INFINITE_HEALTH))  g_trainer->SetMaxHealth(100);
                 if (IsDlgButtonChecked(hwnd, INFINITE_CHARGE))  g_trainer->SetMaxCharge(100);
@@ -175,36 +174,34 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 if (IsDlgButtonChecked(hwnd, SHOW_COLLISION))   g_trainer->SetShowCollision(true);
                 SetStringText(g_activateGame, L"Switch to game");
                 break;
+            case ProcStatus::AlreadyRunning:
+                // Process was already running, and we just started. Load settings from the game.
+                SetStringText(g_hwnd, WINDOW_TITLE);
+                CheckDlgButton(hwnd, INFINITE_HEALTH, g_trainer->GetHealth() == 100);
+                CheckDlgButton(hwnd, INFINITE_CHARGE, g_trainer->GetCharge() == 100);
+                CheckDlgButton(hwnd, GOD_MODE, g_trainer->GetGodMode());
+                CheckDlgButton(hwnd, SHOW_COLLISION, g_trainer->GetShowCollision());
+                SetStringText(g_activateGame, L"Switch to game");
+                break;
             case ProcStatus::Running:
-                if (!g_trainer) {
-                    // Process was already running, and we haven't attached yet. Try to attach, then load settings from the game once we do.
-                    SetStringText(g_hwnd, L"Attaching to HOB...");
-                    g_trainer = Trainer::Create(g_hobProc);
-                    if (!g_trainer) break;
-                    SetStringText(g_hwnd, WINDOW_TITLE);
-                    CheckDlgButton(hwnd, INFINITE_HEALTH, g_trainer->GetHealth() == 100);
-                    CheckDlgButton(hwnd, INFINITE_CHARGE, g_trainer->GetCharge() == 100);
-                    CheckDlgButton(hwnd, GOD_MODE, g_trainer->GetGodMode());
-                    CheckDlgButton(hwnd, SHOW_COLLISION, g_trainer->GetShowCollision());
-                    SetStringText(g_activateGame, L"Switch to game");
+                // Process was already running, and so were we (this recurs every heartbeat). Enforce settings and apply repeated actions.
+                SetPosText(g_currentPos, g_trainer->GetPlayerPos(), g_trainer->GetPlayerAngle());
+                if (IsDlgButtonChecked(g_hwnd, INFINITE_HEALTH) == TRUE) {
+                    // Note: We still need to allow the player to die to instakill effects like fall damage.
+                    // Otherwise, Hob just gets stuck in the "dying" state.
+                    // (Don't bother setting HP if it's already full, to avoid churn)
+                    int currentHealth = g_trainer->GetHealth();
+                    if (currentHealth != 0 && currentHealth != 100) g_trainer->SetHealth(100);
+                }
+
+                if (IsDlgButtonChecked(g_hwnd, INFINITE_CHARGE) == TRUE) {
+                    g_trainer->SetCharge(100);
                 }
 
                 // Settings which are always sourced from the game, since they are not editable in the trainer.
-                // For performance reasons (redrawing text is expensive), these update 10x slower than other display fields.
+                // For performance reasons (redrawing text is expensive), these display fields update 10x slower.
                 static int64_t update = 0;
                 if (++update % 10 == 0) {
-                    SetPosText(g_currentPos, g_trainer->GetPlayerPos(), g_trainer->GetPlayerAngle());
-                    if (IsDlgButtonChecked(g_hwnd, INFINITE_HEALTH) == TRUE) {
-                        // Note: We still need to allow the player to die to instakill effects like fall damage.
-                        // Otherwise, Hob just gets stuck in the "dying" state.
-                        // (Don't bother setting HP if it's already full, to avoid churn)
-                        int currentHealth = g_trainer->GetHealth();
-                        if (currentHealth != 0 && currentHealth != 100) g_trainer->SetHealth(100);
-                    }
-                    if (IsDlgButtonChecked(g_hwnd, INFINITE_CHARGE) == TRUE) {
-                        g_trainer->SetCharge(100);
-                    }
-
                     std::string levelName = g_trainer->GetLevelName();
                     levelName = levelName.substr(13); // Trim leading MEDIA/LEVELS/ (common to all levels)
                     SetStringText(g_levelName, levelName);
@@ -219,14 +216,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     }
 
     // All commands should execute on a background thread, to avoid hanging the UI.
-    std::thread t([trainer = g_trainer, wParam] {
-#pragma warning (suppress: 4101)
-        void* g_trainer; // Prevent access to the global variable in this scope
+    std::thread t([wParam] {
         SetCurrentThreadName(L"Command Helper");
+        if (!g_trainer) return; // We are shutting down, do not process any actions
 
+        if (HIWORD(wParam) != 0) return; // Message was not triggered by the user.
         WORD command = LOWORD(wParam);
         if (command == ACTIVATE_GAME) {
-            if (!trainer) LaunchSteamGame(404680);
+            if (!g_trainer) LaunchSteamGame(404680);
             else g_hobProc->BringToFront();
         } else if (command == OPEN_SAVES) {
             const wchar_t* savesFolder = LR"(C:\Users\localhost\Documents\my games\runic games\hob\saves)";
@@ -234,45 +231,40 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         } else if (command == OPEN_KEYBINDS) {
             std::wstring hotkeyFile = Hotkeys::Get()->GetHotkeyFilePath();
             ShellExecute(NULL, L"open", hotkeyFile.c_str(), NULL, NULL, SW_SHOWDEFAULT);
-        } else if (!trainer && HIWORD(wParam) == 0) { // Message was triggered by the user
-            MessageBox(g_hwnd, L"The process must be running in order to use this button", L"", MB_OK);
         }
 
-        // All other messages need the trainer to be live in order to execute.
-        if (!trainer) return;
-
         if (command == SAVE_POS) {
-            g_savedPlayerPos = trainer->GetPlayerPos();
-            g_savedPlayerAngle = trainer->GetPlayerAngle();
+            g_savedPlayerPos = g_trainer->GetPlayerPos();
+            g_savedPlayerAngle = g_trainer->GetPlayerAngle();
             SetPosText(g_savedPos, g_savedPlayerPos, g_savedPlayerAngle);
         } else if (command == LOAD_POS) {
             if (g_savedPlayerPos[0] != 0.0f || g_savedPlayerPos[1] != 0.0f || g_savedPlayerPos[2] != 0.0f) { // Prevent TP to origin (i.e. if the user hasn't set a position yet)
-                trainer->SetPlayerPos(g_savedPlayerPos);
-                trainer->SetPlayerAngle(g_savedPlayerAngle);
+                g_trainer->SetPlayerPos(g_savedPlayerPos);
+                g_trainer->SetPlayerAngle(g_savedPlayerAngle);
                 SetPosText(g_currentPos, g_savedPlayerPos, g_savedPlayerAngle);
             }
         } else if (command == INFINITE_HEALTH) {
             if (IsDlgButtonChecked(g_hwnd, INFINITE_HEALTH)) {
-                trainer->SetMaxHealth(3);
-                if (trainer->GetHealth() > 0) trainer->SetHealth(3);
+                g_trainer->SetMaxHealth(3);
+                if (g_trainer->GetHealth() > 0) g_trainer->SetHealth(3);
                 CheckDlgButton(g_hwnd, INFINITE_HEALTH, false);
             } else {
-                trainer->SetMaxHealth(100);
-                if (trainer->GetHealth() > 0) trainer->SetHealth(100);
+                g_trainer->SetMaxHealth(100);
+                if (g_trainer->GetHealth() > 0) g_trainer->SetHealth(100);
                 CheckDlgButton(g_hwnd, INFINITE_HEALTH, true);
             }
         } else if (command == INFINITE_CHARGE) {
             if (IsDlgButtonChecked(g_hwnd, INFINITE_CHARGE)) {
-                trainer->SetMaxCharge(1);
-                trainer->SetCharge(1);
+                g_trainer->SetMaxCharge(1);
+                g_trainer->SetCharge(1);
                 CheckDlgButton(g_hwnd, INFINITE_CHARGE, false);
             } else {
-                trainer->SetMaxCharge(100);
-                trainer->SetCharge(100);
+                g_trainer->SetMaxCharge(100);
+                g_trainer->SetCharge(100);
                 CheckDlgButton(g_hwnd, INFINITE_CHARGE, true);
             }
         } else if (command == RESPAWN) {
-            trainer->SetHealth(0);
+            g_trainer->SetHealth(0);
         } else if (command == GOD_MODE) {
             ToggleOption(GOD_MODE, &Trainer::SetGodMode);
         } else if (command == SHOW_COLLISION) {
@@ -284,7 +276,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     return DefWindowProc(hwnd, message, wParam, lParam);
 }
 
-LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
+LRESULT CALLBACK KeyboardAndMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if (nCode == HC_ACTION) {
         // Only steal hotkeys when we (or the game) are the active window.
         auto foreground = GetForegroundWindow();
@@ -420,6 +412,20 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
     if (FAILED(hr)) return hr;
     LoadLibrary(L"Msftedit.dll");
+
+    // Callstack reconstruction is now operated via cli (and then reads from clipboard).
+    // This is a bit more portable than pasting into a textbox, since not all trainers have a suitable textbox.
+    if (wcsncmp(L"-callstack", lpCmdLine, 11) == 0) {
+        if (IsClipboardFormatAvailable(CF_UNICODETEXT) && OpenClipboard(g_hwnd)) {
+            HGLOBAL hglb = GetClipboardData(CF_UNICODETEXT);
+            WCHAR *data = (WCHAR*)GlobalLock(hglb);
+            std::wstring clipboardContents(data, data + GlobalSize(hglb));
+            RegenerateCallstack(clipboardContents);
+            GlobalUnlock(hglb);
+            CloseClipboard();
+        }
+    }
+
     WNDCLASS wndClass = {
         CS_HREDRAW | CS_VREDRAW,
         WndProc,
@@ -444,16 +450,19 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     UpdateWindow(g_hwnd);
     g_hInstance = hInstance;
 
-    DebugUtils::version = VERSION_STR;
     CreateComponents();
     Hotkeys::Get()->SanityCheckHotkeys();
 
     g_hobProc = std::make_shared<Memory>(L"HOB.exe");
-    g_hobProc->StartHeartbeat(g_hwnd, HEARTBEAT);
-    HHOOK hook = NULL;
+    g_trainer = std::make_shared<Trainer>(g_hobProc);
+    g_trainer->StartHeartbeat(g_hwnd, HEARTBEAT);
+
 #ifndef _DEBUG
     // Don't hook in debug mode. While debugging, we are paused (and thus cannot run the hook). So, we will timeout on every hook call!
-    hook = SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardProc, hInstance, NULL);
+    HHOOK hooks[2] = {
+        SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardAndMouseProc, hInstance, NULL),
+        SetWindowsHookExW(WH_MOUSE_LL, KeyboardAndMouseProc, hInstance, NULL),
+    };
 #endif
 
     MSG msg;
@@ -462,9 +471,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         DispatchMessage(&msg);
     }
 
-    if (hook) UnhookWindowsHookEx(hook);
-    g_hobProc->StopHeartbeat();
-    g_hobProc = nullptr;
+#ifndef _DEBUG
+    for (const auto& hook : hooks) UnhookWindowsHookEx(hook);
+#endif
 
     CoUninitialize();
     return (int) msg.wParam;
