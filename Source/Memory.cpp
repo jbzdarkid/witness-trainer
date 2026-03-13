@@ -3,8 +3,6 @@
 #include <psapi.h>
 #include <tlhelp32.h>
 
-Memory::Memory(const std::wstring& processName) : _processName(processName) {}
-
 Memory::~Memory() {
     if (_handle != nullptr) {
         CloseHandle(_handle);
@@ -58,7 +56,7 @@ ProcStatus Memory::TryAttachToProcess() {
         }
         if (!handle) return ProcStatus::NotRunning;
 
-        std::tie(_baseAddress, _endOfModule) = DebugUtils::GetModuleBounds(handle, _processName);
+        std::tie(_baseAddress, _endOfModule) = DebugUtils::GetModuleBounds(handle, _moduleName);
         if (_baseAddress == 0) return ProcStatus::NotRunning;
 
         BOOL wow64Process = false;

@@ -31,10 +31,6 @@ void Trainer::StartHeartbeat(HWND window, UINT message) {
     _thread.detach();
 }
 
-void Trainer::StopHeartbeat() {
-    _threadActive = false;
-}
-
 ProcStatus Trainer::Heartbeat() {
     ProcStatus memoryStatus = _memory->TryAttachToProcess();
     if (memoryStatus == ProcStatus::NotRunning) return ProcStatus::NotRunning;
@@ -143,7 +139,7 @@ bool Trainer::GetShowCollision() {
 
 std::string Trainer::GetLevelName() {
     _memory->ClearComputedAddress({_gameWorldPtr, 0x4C}); // Level pointer cannot be cached
-    return _memory->ReadString({_gameWorldPtr, 0x4C, 0xD4, 0});
+    return _memory->ReadString({_gameWorldPtr, 0x4C, 0xD4});
 }
 
 void Trainer::SetNoclip(bool enable) {

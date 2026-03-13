@@ -33,10 +33,9 @@ std::pair<uint64_t, uint64_t> DebugUtils::GetModuleBounds(HANDLE process, const 
     modules.resize(requiredBytes / sizeof(HMODULE));
     EnumProcessModules(process, &modules[0], sizeof(HMODULE) * (DWORD)modules.size(), &requiredBytes);
 
-    std::wstring baseName(moduleName.size(), '\0');
-    for (const auto& module : modules)
-    {
-        int size = GetModuleBaseNameW(process, module, &baseName[0], sizeof(baseName));
+    for (const auto& module : modules) {
+        std::wstring baseName(256, '\0');
+        int size = GetModuleBaseNameW(process, module, &baseName[0], 256);
         baseName.resize(size);
         if (baseName != moduleName) continue;
 

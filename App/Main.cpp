@@ -101,12 +101,10 @@ float GetWindowFloat(HWND hwnd) {
     return wcstof(GetWindowString(hwnd).c_str(), nullptr);
 }
 
-// https://stackoverflow.com/a/12662950
-void ToggleOption(int message, void (Trainer::*setter)(bool)) {
+bool ToggleOptionAndReturnNewState(int message) {
     bool enabled = IsDlgButtonChecked(g_hwnd, message);
     CheckDlgButton(g_hwnd, message, !enabled);
-    // Note that this allows options to be toggled even when the trainer (i.e. game) isn't running.
-    if (g_trainer) (*g_trainer.*setter)(!enabled);
+    return !enabled;
 }
 
 void LaunchSteamGame(int gameId) {
@@ -156,7 +154,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             static HBRUSH s_solidBrush = CreateSolidBrush(RGB(255, 255, 255));
             return (LRESULT)s_solidBrush;
         case HEARTBEAT:
-            if (!g_trainer) break; // We are shutting down, do not process any actions
+            if (!g_trainer || !g_trainer->HeartbeatActive()) break; // We are shutting down, do not process any actions
             switch ((ProcStatus)wParam) {
             case ProcStatus::Stopped:
             case ProcStatus::NotRunning:
@@ -188,7 +186,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 break;
             case ProcStatus::Running:
                 // Process was already running, and so were we (this recurs every heartbeat). Enforce settings and apply repeated actions.
-                SetPosText(g_currentPos, g_trainer->GetPlayerPos(), g_trainer->GetPlayerAngle());
                 if (IsDlgButtonChecked(g_hwnd, INFINITE_HEALTH) == TRUE) {
                     // Note: We still need to allow the player to die to instakill effects like fall damage.
                     // Otherwise, Hob just gets stuck in the "dying" state.
@@ -205,6 +202,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 // For performance reasons (redrawing text is expensive), these display fields update 10x slower.
                 static int64_t update = 0;
                 if (++update % 10 == 0) {
+                    SetPosText(g_currentPos, g_trainer->GetPlayerPos(), g_trainer->GetPlayerAngle());
+
                     std::string levelName = g_trainer->GetLevelName();
                     levelName = levelName.substr(13); // Trim leading MEDIA/LEVELS/ (common to all levels)
                     SetStringText(g_levelName, levelName);
@@ -219,14 +218,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     }
 
     // All commands should execute on a background thread, to avoid hanging the UI.
-    std::thread t([wParam] {
+    std::thread t([trainer = g_trainer, wParam] {
+#pragma warning (disable: 4101)
+        void* g_trainer = nullptr; // This thread must hold a local reference to g_trainer, to avoid it being freed while the thread is running.
         SetCurrentThreadName(L"Command Helper");
-        if (!g_trainer) return; // We are shutting down, do not process any actions
+        if (!trainer || !trainer->HeartbeatActive()) return; // We are shutting down, do not process any actions
 
         if (HIWORD(wParam) != 0) return; // Message was not triggered by the user.
         WORD command = LOWORD(wParam);
         if (command == ACTIVATE_GAME) {
-            if (!g_trainer) LaunchSteamGame(404680);
+            if (GetWindowString(g_activateGame) == L"Launch game") LaunchSteamGame(404680);
             else g_hobProc->BringToFront();
         } else if (command == OPEN_SAVES) {
             const wchar_t* savesFolder = LR"(C:\Users\localhost\Documents\my games\runic games\hob\saves)";
@@ -237,41 +238,41 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         }
 
         if (command == SAVE_POS) {
-            g_savedPlayerPos = g_trainer->GetPlayerPos();
-            g_savedPlayerAngle = g_trainer->GetPlayerAngle();
+            g_savedPlayerPos = trainer->GetPlayerPos();
+            g_savedPlayerAngle = trainer->GetPlayerAngle();
             SetPosText(g_savedPos, g_savedPlayerPos, g_savedPlayerAngle);
         } else if (command == LOAD_POS) {
             if (g_savedPlayerPos[0] != 0.0f || g_savedPlayerPos[1] != 0.0f || g_savedPlayerPos[2] != 0.0f) { // Prevent TP to origin (i.e. if the user hasn't set a position yet)
-                g_trainer->SetPlayerPos(g_savedPlayerPos);
-                g_trainer->SetPlayerAngle(g_savedPlayerAngle);
+                trainer->SetPlayerPos(g_savedPlayerPos);
+                trainer->SetPlayerAngle(g_savedPlayerAngle);
                 SetPosText(g_currentPos, g_savedPlayerPos, g_savedPlayerAngle);
             }
         } else if (command == INFINITE_HEALTH) {
             if (IsDlgButtonChecked(g_hwnd, INFINITE_HEALTH)) {
-                g_trainer->SetMaxHealth(3);
-                if (g_trainer->GetHealth() > 0) g_trainer->SetHealth(3);
+                trainer->SetMaxHealth(3);
+                if (trainer->GetHealth() > 0) trainer->SetHealth(3);
                 CheckDlgButton(g_hwnd, INFINITE_HEALTH, false);
             } else {
-                g_trainer->SetMaxHealth(100);
-                if (g_trainer->GetHealth() > 0) g_trainer->SetHealth(100);
+                trainer->SetMaxHealth(100);
+                if (trainer->GetHealth() > 0) trainer->SetHealth(100);
                 CheckDlgButton(g_hwnd, INFINITE_HEALTH, true);
             }
         } else if (command == INFINITE_CHARGE) {
             if (IsDlgButtonChecked(g_hwnd, INFINITE_CHARGE)) {
-                g_trainer->SetMaxCharge(1);
-                g_trainer->SetCharge(1);
+                trainer->SetMaxCharge(1);
+                trainer->SetCharge(1);
                 CheckDlgButton(g_hwnd, INFINITE_CHARGE, false);
             } else {
-                g_trainer->SetMaxCharge(100);
-                g_trainer->SetCharge(100);
+                trainer->SetMaxCharge(100);
+                trainer->SetCharge(100);
                 CheckDlgButton(g_hwnd, INFINITE_CHARGE, true);
             }
         } else if (command == RESPAWN) {
-            g_trainer->SetHealth(0);
+            trainer->SetHealth(0);
         } else if (command == GOD_MODE) {
-            ToggleOption(GOD_MODE, &Trainer::SetGodMode);
+            trainer->SetGodMode(ToggleOptionAndReturnNewState(GOD_MODE));
         } else if (command == SHOW_COLLISION) {
-            ToggleOption(SHOW_COLLISION, &Trainer::SetShowCollision);
+            trainer->SetShowCollision(ToggleOptionAndReturnNewState(SHOW_COLLISION));
         }
     });
     t.detach();
@@ -456,7 +457,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     CreateComponents();
     Hotkeys::Get()->SanityCheckHotkeys();
 
-    g_hobProc = std::make_shared<Memory>(L"HOB.exe");
+    g_hobProc = std::make_shared<Memory>(L"HOB.exe", L"Hob.exe");
     g_trainer = std::make_shared<Trainer>(g_hobProc);
     g_trainer->StartHeartbeat(g_hwnd, HEARTBEAT);
 
