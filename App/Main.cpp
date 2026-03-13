@@ -270,7 +270,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             static HBRUSH s_solidBrush = CreateSolidBrush(RGB(255, 255, 255));
             return (LRESULT)s_solidBrush;
         case HEARTBEAT:
-            if (!g_trainer) break; // We are shutting down, do not process any actions
+            if (!g_trainer || !g_trainer->HeartbeatActive()) break; // We are shutting down, do not process any actions
             switch ((ProcStatus)wParam) {
             case ProcStatus::Stopped:
             case ProcStatus::NotRunning:
