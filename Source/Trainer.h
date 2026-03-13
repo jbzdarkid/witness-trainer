@@ -5,9 +5,8 @@ class Trainer final : public std::enable_shared_from_this<Trainer> {
 public:
     Trainer(std::shared_ptr<Memory> memory);
     void StartHeartbeat(HWND window, UINT message);
-    void StopHeartbeat();
-    ProcStatus Heartbeat();
-    void OnGameStart();
+    bool HeartbeatActive() const { return _threadActive; }
+    void StopHeartbeat() { _threadActive = false; }
     ~Trainer();
 
     int GetActivePanel();
@@ -76,6 +75,9 @@ public:
     void ClampAimingPhi(bool clamp);
 
 private:
+    ProcStatus Heartbeat();
+    void OnGameStart();
+
     std::shared_ptr<Memory> _memory;
     bool _threadActive = false;
     std::thread _thread;

@@ -207,12 +207,10 @@ void SetActivePanel(int activePanel) {
     SetStringText(g_activePanel, ss.str());
 }
 
-// https://stackoverflow.com/a/12662950
-void ToggleOption(int message, void (Trainer::*setter)(bool)) {
+bool ToggleOptionAndReturnNewState(int message) {
     bool enabled = IsDlgButtonChecked(g_hwnd, message);
     CheckDlgButton(g_hwnd, message, !enabled);
-    // Note that this allows options to be toggled even when the trainer (i.e. game) isn't running.
-    if (g_trainer) (*g_trainer.*setter)(!enabled);
+    return !enabled;
 }
 
 void LaunchSteamGame(int gameId) {
@@ -225,23 +223,33 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     switch (message) {
         case WM_DESTROY:
         {
-            g_trainer->StopHeartbeat();
             std::weak_ptr<Trainer> trainer = g_trainer;
-            // Free the global reference, so the only remaining reference should be in command threads.
-            // Commands are also blocked when the trainer is null.
-            g_trainer = nullptr;
 
-            // Wait to actually quit until all background threads have finished their work.
-            // Note that we do need to pump messages here, since said work may require the message pump,
-            // which we are currently holding hostage.
+            // Signal to stop all work on background threads (and not start new work)
+            g_trainer->StopHeartbeat();
+
+            // Pump messages until (presumably) all threads are done with work
             while (trainer.use_count() > 1) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 MSG msg;
                 if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
                     TranslateMessage(&msg);
                     DispatchMessage(&msg);
                 }
             }
+
+            // Free the (presumed) last reference
+            g_trainer = nullptr;
+
+            // Pump messages until all threads are *actually* done with work.
+            while (trainer.use_count() > 0) {
+                MSG msg;
+                if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+                    TranslateMessage(&msg);
+                    DispatchMessage(&msg);
+                }
+            }
+
+            // Now that the trainer's destructor has finally run, we are safe to tear down the system.
             PostQuitMessage(0);
             return 0;
         }
@@ -356,39 +364,41 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
     }
 
     // All commands should execute on a background thread, to avoid hanging the UI.
-    std::thread t([wParam] {
+    std::thread t([trainer = g_trainer, wParam] {
+#pragma warning (disable: 4101)
+        void* g_trainer; // This thread must hold a local reference to g_trainer, to avoid it being freed while the thread is running.
         SetCurrentThreadName(L"Command Helper");
-        if (!g_trainer) return; // We are shutting down, do not process any actions
+        if (!trainer || !trainer->HeartbeatActive()) return; // We are shutting down, do not process any actions
 
         if (HIWORD(wParam) != 0) return; // Message was not triggered by the user.
         WORD command = LOWORD(wParam);
-        if (command == INFINITE_CHALLENGE)      ToggleOption(INFINITE_CHALLENGE, &Trainer::SetInfiniteChallenge);
-        else if (command == DOORS_PRACTICE)     ToggleOption(DOORS_PRACTICE, &Trainer::SetRandomDoorsPractice);
-        else if (command == OPEN_CONSOLE)       ToggleOption(OPEN_CONSOLE, &Trainer::SetConsoleOpen);
-        else if (command == EP_OVERLAY)         ToggleOption(EP_OVERLAY, &Trainer::SetEPOverlay);
-        else if (command == CLAMP_AIM)          ToggleOption(CLAMP_AIM, &Trainer::ClampAimingPhi);
+        if (command == INFINITE_CHALLENGE)      trainer->SetInfiniteChallenge(ToggleOptionAndReturnNewState(INFINITE_CHALLENGE));
+        else if (command == DOORS_PRACTICE)     trainer->SetRandomDoorsPractice(ToggleOptionAndReturnNewState(DOORS_PRACTICE));
+        else if (command == OPEN_CONSOLE)       trainer->SetConsoleOpen(ToggleOptionAndReturnNewState(OPEN_CONSOLE));
+        else if (command == EP_OVERLAY)         trainer->SetEPOverlay(ToggleOptionAndReturnNewState(EP_OVERLAY));
+        else if (command == CLAMP_AIM)          trainer->ClampAimingPhi(ToggleOptionAndReturnNewState(CLAMP_AIM));
         else if (command == NOCLIP_ENABLED) {
             // Fix up the player position when exiting noclip
-            if (IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED) && g_trainer) {
+            if (IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED)) {
                 // The player position is from the feet, not the eyes, so we have to adjust slightly.
-                auto playerPos = g_trainer->GetCameraPos();
+                auto playerPos = trainer->GetCameraPos();
                 playerPos[2] -= 1.69f;
-                g_trainer->SetPlayerPos(playerPos);
+                trainer->SetPlayerPos(playerPos);
             }
-            ToggleOption(NOCLIP_ENABLED, &Trainer::SetNoclip);
+            trainer->SetNoclip(ToggleOptionAndReturnNewState(NOCLIP_ENABLED));
             EnableWindow(g_flyUp, IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED));
             EnableWindow(g_flyDown, IsDlgButtonChecked(g_hwnd, NOCLIP_ENABLED));
         } else if (command == CAN_SAVE) {
             if (IsDlgButtonChecked(g_hwnd, CAN_SAVE)) {
                 // If the game is running, request one last save before disabling saving
-                if (g_trainer) {
+                if (trainer) {
                     EnableWindow(g_canSave, false); // This can take a little while, prevent accidental re-clicks by disabling the checkbox.
-                    bool saved = g_trainer->SaveCampaign();
+                    bool saved = trainer->SaveCampaign();
                     EnableWindow(g_canSave, true);
                     if (!saved) return; // If we failed to save after the timeout, don't toggle the checkbox.
                 }
             }
-            ToggleOption(CAN_SAVE, &Trainer::SetCanSave);
+            trainer->SetCanSave(ToggleOptionAndReturnNewState(CAN_SAVE));
         } else if (command == ACTIVATE_GAME) {
             if (GetWindowString(g_activateGame) == L"Launch game") LaunchSteamGame(210970);
             else g_witnessProc->BringToFront();
@@ -416,27 +426,27 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             PostMessage(g_flyDown, BM_SETSTATE, false, NULL);
         }
 
-        if (command == NOCLIP_SPEED)         g_trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
+        if (command == NOCLIP_SPEED)         trainer->SetNoclipSpeed(GetWindowFloat(g_noclipSpeed));
         else if (command == FOV_CURRENT)     {} // Because we constantly update FOV, we should not respond to this command here.
-        else if (command == SPRINT_SPEED)    g_trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
-        else if (command == SHOW_PANELS)     g_trainer->ShowMissingPanels();
-        else if (command == SHOW_NEARBY)     g_trainer->ShowNearbyEntities();
-        else if (command == EXPORT)          g_trainer->ExportEntities();
-        else if (command == DISTANCE_GATING) g_trainer->DisableDistanceGating();
-        else if (command == OPEN_DOOR)       g_trainer->OpenNearbyDoors();
+        else if (command == SPRINT_SPEED)    trainer->SetSprintSpeed(GetWindowFloat(g_sprintSpeed));
+        else if (command == SHOW_PANELS)     trainer->ShowMissingPanels();
+        else if (command == SHOW_NEARBY)     trainer->ShowNearbyEntities();
+        else if (command == EXPORT)          trainer->ExportEntities();
+        else if (command == DISTANCE_GATING) trainer->DisableDistanceGating();
+        else if (command == OPEN_DOOR)       trainer->OpenNearbyDoors();
         else if (command == SAVE_POS) {
-            g_savedCameraPos = g_trainer->GetCameraPos();
-            g_savedCameraAng = g_trainer->GetCameraAng();
+            g_savedCameraPos = trainer->GetCameraPos();
+            g_savedCameraAng = trainer->GetCameraAng();
             SetPosAndAngText(g_savedPos, g_savedCameraPos, g_savedCameraAng);
         } else if (command == LOAD_POS) {
-            if (g_savedCameraPos[0] != 0 ||  g_savedCameraPos[1] != 0 || g_savedCameraPos[2] != 0) { // Prevent TP to origin (i.e. if the user hasn't set a position yet)
-                g_trainer->SetCameraPos(g_savedCameraPos);
-                g_trainer->SetCameraAng(g_savedCameraAng);
+            if (g_savedCameraPos[0] != 0 || g_savedCameraPos[1] != 0 || g_savedCameraPos[2] != 0) { // Prevent TP to origin (i.e. if the user hasn't set a position yet)
+                trainer->SetCameraPos(g_savedCameraPos);
+                trainer->SetCameraAng(g_savedCameraAng);
 
                 // The player position is from the feet, not the eyes, so we have to adjust slightly.
                 auto playerPos = g_savedCameraPos;
                 playerPos[2] -= 1.69f;
-                g_trainer->SetPlayerPos(playerPos);
+                trainer->SetPlayerPos(playerPos);
                 SetPosAndAngText(g_currentPos, g_savedCameraPos, g_savedCameraAng);
             }
         }

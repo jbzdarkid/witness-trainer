@@ -175,10 +175,6 @@ void Trainer::StartHeartbeat(HWND window, UINT message) {
     _thread.detach();
 }
 
-void Trainer::StopHeartbeat() {
-    _threadActive = false;
-}
-
 ProcStatus Trainer::Heartbeat() {
     ProcStatus memoryStatus = _memory->TryAttachToProcess();
     if (memoryStatus == ProcStatus::NotRunning) return ProcStatus::NotRunning;
@@ -288,7 +284,7 @@ std::shared_ptr<Trainer::EntityData> Trainer::GetEntityData(int id) {
     if (id != (readId - 1)) return nullptr; // Entity is no longer a valid object (or is not the entity we expected to read)
 
     // _memory->ClearComputedAddress({_globals, 0x18, id * 8, 0x08, 0x08});
-    std::string typeName = _memory->ReadString({_globals, 0x18, id * 8, 0x08, 0x08});
+    std::string typeName = _memory->ReadString({_globals, 0x18, id * 8, 0x08, 0x08}, 4);
     auto entityData = std::make_shared<EntityData>();
     entityData->id = id;
     entityData->type = typeName;
@@ -323,7 +319,7 @@ void Trainer::GetPanelData(const std::shared_ptr<Trainer::EntityData>& data) {
     int stateOffset = _solvedTargetOffset - 0x14;
     int hasEverBeenSolvedOffset = _solvedTargetOffset + 0x04;
 
-    data->name = _memory->ReadString({_globals, 0x18, data->id * 8, nameOffset});
+    data->name = _memory->ReadString({_globals, 0x18, data->id * 8, nameOffset}, 4);
     int state = _memory->ReadData<int>({_globals, 0x18, data->id * 8, stateOffset}, 1)[0];
     int hasEverBeenSolved = _memory->ReadData<int>({_globals, 0x18, data->id * 8, hasEverBeenSolvedOffset}, 1)[0];
     if (hasEverBeenSolved) {
@@ -358,21 +354,21 @@ void Trainer::GetPanelData(const std::shared_ptr<Trainer::EntityData>& data) {
 }
 
 void Trainer::GetEPData(const std::shared_ptr<Trainer::EntityData>& data) {
-    data->name = _memory->ReadString({_globals, 0x18, data->id * 8, _epNameOffset});
+    data->name = _memory->ReadString({_globals, 0x18, data->id * 8, _epNameOffset}, 4);
     data->startPoint = _memory->ReadData<float>({_globals, 0x18, data->id * 8, 0x24}, 3);
 }
 
 void Trainer::GetDoorData(const std::shared_ptr<Trainer::EntityData>& data) {
     if (_globals != 0x5B28C0) return; // I'm lazy and don't care to find real sigscans
-    // data->name = _memory->ReadString({_globals, 0x18, data->id * 8, 0x58}); // entity_name
-    data->name = _memory->ReadString({_globals, 0x18, data->id * 8, 0x168}); // start_opening_sound
+    // data->name = _memory->ReadString({_globals, 0x18, data->id * 8, 0x58}, 4); // entity_name
+    data->name = _memory->ReadString({_globals, 0x18, data->id * 8, 0x168}, 4); // start_opening_sound
 }
 
 Trainer::VideoData Trainer::GetVideoData() {
     if (_binkInfoData == 0) return {};
 
     VideoData videoData;
-    videoData.fileName = _memory->ReadString({_binkInfoData, 0x0, 0x18});
+    videoData.fileName = _memory->ReadString({_binkInfoData, 0x0, 0x18}, 4);
     if (!videoData.fileName.empty()) {
         videoData.totalFrames = _memory->ReadData<int>({_binkInfoData, 0x0, 0x0, 0x8}, 1)[0];
         videoData.currentFrame = _memory->ReadData<int>({_binkInfoData, 0x0, 0x0, 0xC}, 1)[0];
@@ -467,22 +463,22 @@ void Trainer::ExportEntities() {
     for (int32_t id = 1; id < maxId; id++) {
         int32_t entity = _memory->ReadData<int>({_globals, 0x18, id * 8}, 1)[0];
         if (entity == 0) continue;
-        std::string typeName = _memory->ReadString({_globals, 0x18, id * 8, 0x08, 0x08});
-        std::string entityName = _memory->ReadString({_globals, 0x18, id * 8, 0x58});
+        std::string typeName = _memory->ReadString({_globals, 0x18, id * 8, 0x08, 0x08}, 4);
+        std::string entityName = _memory->ReadString({_globals, 0x18, id * 8, 0x58}, 4);
         std::vector<float> pos = _memory->ReadData<float>({_globals, 0x18, id * 8, 0x24}, 3);
 
         if (typeName != "Power_Cable") continue;
 
         std::vector<int> ids = _memory->ReadData<int>({_globals, 0x18, id * 8, 0xD4}, 4);
-        std::string textureName = _memory->ReadString({_globals, 0x18, id * 8, 0x140});
-        std::string materialName = _memory->ReadString({_globals, 0x18, id * 8, 0x148});
+        std::string textureName = _memory->ReadString({_globals, 0x18, id * 8, 0x140}, 4);
+        std::string materialName = _memory->ReadString({_globals, 0x18, id * 8, 0x148}, 4);
         std::vector<float> colorData = _memory->ReadData<float>({_globals, 0x18, id * 8, 0x150}, 8);
-        std::string meshName = _memory->ReadString({_globals, 0x18, id * 8, 0x188});
-        std::string poweredOnTexture = _memory->ReadString({_globals, 0x18, id * 8, 0x190});
-        std::string powered_on_sound_name = _memory->ReadString({_globals, 0x18, id * 8, 0x198});
-        std::string powered_off_sound_name = _memory->ReadString({_globals, 0x18, id * 8, 0x1A0});
-        std::string ambient_sound_name = _memory->ReadString({_globals, 0x18, id * 8, 0x1A8});
-        std::string powered_on_texture_name = _memory->ReadString({_globals, 0x18, id * 8, 0x1B0});
+        std::string meshName = _memory->ReadString({_globals, 0x18, id * 8, 0x188}, 4);
+        std::string poweredOnTexture = _memory->ReadString({_globals, 0x18, id * 8, 0x190}, 4);
+        std::string powered_on_sound_name = _memory->ReadString({_globals, 0x18, id * 8, 0x198}, 4);
+        std::string powered_off_sound_name = _memory->ReadString({_globals, 0x18, id * 8, 0x1A0}, 4);
+        std::string ambient_sound_name = _memory->ReadString({_globals, 0x18, id * 8, 0x1A8}, 4);
+        std::string powered_on_texture_name = _memory->ReadString({_globals, 0x18, id * 8, 0x1B0}, 4);
 
         std::stringstream message;
         message << "0x" << std::hex << std::setfill('0') << std::setw(5) << id << '\t';
