@@ -178,17 +178,15 @@ size_t Memory::ExecuteSigScans() {
 
 // Technically this is ReadChar*, but this name makes more sense with the return type.
 std::string Memory::ReadString(const std::vector<__int64>& offsets, size_t pointerSize) {
-    if (pointerSize == 0) pointerSize = _pointerSize; // Dynamic default value
-    std::vector<byte> charAddrBytes = ReadData<byte>(offsets, pointerSize);
-    charAddrBytes.resize(8);
-    __int64 charAddr = *(__int64*)charAddrBytes.data();
-    // __int64 charAddr = ReadData<__int64>(offsets, 1)[0];
+    // if (pointerSize == 0) pointerSize = _pointerSize; // Dynamic default value... TODO pass into ResolvePointerPath?
+
+    uintptr_t charAddr = ResolvePointerPath(offsets);
     if (charAddr == 0) return ""; // Handle nullptr for strings
 
     std::vector<char> tmp;
     auto nullTerminator = tmp.begin(); // Value is only for type information.
     for (size_t maxLength = (1 << 6); maxLength < (1 << 10); maxLength *= 2) {
-        tmp = ReadData<char>({charAddr}, maxLength);
+        tmp = ReadData<char>({(__int64)charAddr}, maxLength);
         nullTerminator = std::find(tmp.begin(), tmp.end(), '\0');
         // If a null terminator is found, we will strip any trailing data after it.
         if (nullTerminator != tmp.end()) break;

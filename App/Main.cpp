@@ -7,6 +7,7 @@
 #include "Trainer.h"
 #include "Hotkeys.h"
 
+#include <fstream>
 #include <unordered_set>
 
 #define HEARTBEAT           0x401
@@ -21,16 +22,28 @@
 #define RESPAWN             0x430
 #define GOD_MODE            0x431
 #define SHOW_COLLISION      0x432
+#define LOG_MOVEMENT        0x433
+#define DUMP_MOVEMENT       0x434
 
 // Globals
 HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
 std::shared_ptr<Memory> g_hobProc;
-HWND g_currentPos, g_savedPos, g_activateGame, g_levelName;
+HWND g_currentPos, g_savedPos, g_activateGame, g_levelName, g_animationName;
 
 std::vector<float> g_savedPlayerPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> g_savedPlayerAngle = {0.0f, 0.0f, 0.0f, 0.0f};
+std::vector<float> g_position;
+double g_startTime = 0;
+
+double GetCurrentTimeInSeconds() {
+    LARGE_INTEGER Frequency;
+    QueryPerformanceFrequency(&Frequency);
+    LARGE_INTEGER StartingTime;
+    QueryPerformanceCounter(&StartingTime);
+    return (double)StartingTime.QuadPart / Frequency.QuadPart;
+}
 
 #define SetWindowTextA(...) static_assert(false, "Call SetStringText instead of SetWindowTextA");
 #define SetWindowTextW(...) static_assert(false, "Call SetStringText instead of SetWindowTextW");
@@ -198,6 +211,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     g_trainer->SetCharge(100);
                 }
 
+                if (IsDlgButtonChecked(g_hwnd, LOG_MOVEMENT) == TRUE) {
+                    double current = GetCurrentTimeInSeconds();
+
+                    auto position = g_trainer->GetPlayerPos();
+                    g_position.push_back((float)(current - g_startTime));
+                    g_position.push_back(position[0]);
+                    g_position.push_back(position[1]);
+                    g_position.push_back(position[2]);
+                }
+
                 // Settings which are always sourced from the game, since they are not editable in the trainer.
                 // For performance reasons (redrawing text is expensive), these display fields update 10x slower.
                 static int64_t update = 0;
@@ -205,7 +228,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     SetPosText(g_currentPos, g_trainer->GetPlayerPos(), g_trainer->GetPlayerAngle());
 
                     std::string levelName = g_trainer->GetLevelName();
-                    levelName = levelName.substr(13); // Trim leading MEDIA/LEVELS/ (common to all levels)
+                    if (levelName.size() > 0) levelName = levelName.substr(13); // Trim leading MEDIA/LEVELS/ (common to all levels)
                     SetStringText(g_levelName, levelName);
                 }
                 break;
@@ -273,6 +296,21 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             trainer->SetGodMode(ToggleOptionAndReturnNewState(GOD_MODE));
         } else if (command == SHOW_COLLISION) {
             trainer->SetShowCollision(ToggleOptionAndReturnNewState(SHOW_COLLISION));
+        } else if (command == LOG_MOVEMENT) {
+            auto enabled = ToggleOptionAndReturnNewState(LOG_MOVEMENT);
+            if (enabled) {
+                g_position.clear();
+                g_startTime = GetCurrentTimeInSeconds();
+            }
+        } else if (command == DUMP_MOVEMENT) {
+            std::ofstream file("movement.csv");
+            file << "Time,X,Y,Z\n";
+            for (int i = 0; i < g_position.size(); i += 4) {
+                file << g_position[i+0] << ',';
+                file << g_position[i+1] << ',';
+                file << g_position[i+2] << ',';
+                file << g_position[i+3] << '\n';
+            }
         }
     });
     t.detach();
@@ -379,7 +417,9 @@ void CreateComponents() {
 
     CreateLabelAndCheckbox(x, y, 100, L"God Mode", GOD_MODE, "god_mode");
 
+#ifdef _DEBUG
     CreateLabelAndCheckbox(x, y, 250, L"Show Collision (requires reload)", SHOW_COLLISION, "show_collision");
+#endif
 
     CreateLabelAndCheckbox(x, y, 100, L"Infinite Health", INFINITE_HEALTH, "infinite_health");
 
@@ -399,6 +439,12 @@ void CreateComponents() {
     CreateLabel(x, y, 200, L"Level name:");
     y += 20;
     g_levelName = CreateLabel(x, y, 1000, L"");
+    y += 20;
+
+    CreateLabel(x, y, 200, L"Animation:");
+    y += 20;
+    g_animationName = CreateLabel(x, y, 1000, L"");
+    y += 20;
 
     // Column 2
     x = 270;
@@ -407,6 +453,11 @@ void CreateComponents() {
     g_activateGame = CreateButton(x, y, 200, L"Launch game", ACTIVATE_GAME, "launch_game");
     CreateButton(x, y, 200, L"Open save folder", OPEN_SAVES, "open_save_folder");
     CreateButton(x, y, 200, L"Open keybinds file", OPEN_KEYBINDS, "open_keybinds");
+
+#ifdef _DEBUG
+    CreateLabelAndCheckbox(x, y, 200, L"Capture movement data", LOG_MOVEMENT, "log_movement");
+    CreateButton(x, y, 200, L"Dump movement data", DUMP_MOVEMENT, "dump_movement");
+#endif
 
     // Required to 'unselect' any hold-based keybinds
     Hotkeys::Get()->RegisterHotkey("key_released", KEY_RELEASED);

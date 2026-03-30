@@ -138,7 +138,6 @@ bool Trainer::GetShowCollision() {
 }
 
 std::string Trainer::GetLevelName() {
-    _memory->ClearComputedAddress({_gameWorldPtr, 0x4C}); // Level pointer cannot be cached
     return _memory->ReadString({_gameWorldPtr, 0x4C, 0xD4});
 }
 
