@@ -30,7 +30,7 @@ HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
 std::shared_ptr<Memory> g_hobProc;
-HWND g_currentPos, g_savedPos, g_activateGame, g_levelName, g_animationName;
+HWND g_currentPos, g_savedPos, g_grapplePos, g_activateGame, g_levelName, g_animationName;
 
 std::vector<float> g_savedPlayerPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> g_savedPlayerAngle = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -84,13 +84,16 @@ void SetStringText(HWND hwnd, const std::wstring& text) {
 
 void SetPosText(HWND hwnd, const std::vector<float>& pos, const std::vector<float>& angle) {
     assert(pos.size() == 3, "[Internal error] Attempted to set position of <> 3 elements");
-    assert(angle.size() == 4, "[Internal error] Attempted to set position of <> 4 elements");
     std::wstring text(128, '\0');
-    // Do some math to convert the angle into a polar coordinate (0-360 degrees).
-    // I don't know why this is correct, this isn't how quat math works usually.
-    double x = angle[3], y = angle[1];
-    double degrees = atan(y / x) * 360.0 / 3.14159 + 90.0;
-    swprintf_s(text.data(), text.size(), L"X %.3f\nY %.3f\nZ %.3f\n\u0398 %.3f", pos[0], pos[1], pos[2], degrees);
+    if (angle.size() == 4) {
+        // Do some math to convert the angle into a polar coordinate (0-360 degrees).
+        // I don't know why this is correct, this isn't how quat math works usually.
+        double x = angle[3], y = angle[1];
+        double degrees = atan(y / x) * 360.0 / 3.14159 + 90.0;
+        swprintf_s(text.data(), text.size(), L"X %.3f\nY %.3f\nZ %.3f\n\u0398 %.3f", pos[0], pos[1], pos[2], degrees);
+    } else {
+        swprintf_s(text.data(), text.size(), L"X %.3f\nY %.3f\nZ %.3f", pos[0], pos[1], pos[2]);
+    }
     SetStringText(hwnd, text);
 }
 
@@ -230,6 +233,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     std::string levelName = g_trainer->GetLevelName();
                     if (levelName.size() > 0) levelName = levelName.substr(13); // Trim leading MEDIA/LEVELS/ (common to all levels)
                     SetStringText(g_levelName, levelName);
+
+                    SetPosText(g_grapplePos, g_trainer->GetGrapplePos(), {});
                 }
                 break;
             }
@@ -430,11 +435,16 @@ void CreateComponents() {
     CreateButton(x, y, 110, L"Save Position", SAVE_POS, "save_position");
     y -= 30;
     CreateButton(x + 120, y, 110, L"Load Position", LOAD_POS, "load_position");
-    g_currentPos = CreateLabel(x + 5,   y, 110, 80);
-    g_savedPos   = CreateLabel(x + 125, y, 110, 80);
+    g_currentPos = CreateLabel(x + 5,   y, 110, 70);
+    g_savedPos   = CreateLabel(x + 125, y, 110, 70);
     SetPosText(g_currentPos, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f, 1.0f });
     SetPosText(g_savedPos,   { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f, 1.0f });
-    y += 90;
+    y += 70;
+
+    CreateLabel(x, y, 200, L"Grapple point:");
+    g_grapplePos = CreateLabel(x + 125, y, 110, 50);
+    SetPosText(g_grapplePos, { 0.0f, 0.0f, 0.0f }, {});
+    y += 50;
 
     CreateLabel(x, y, 200, L"Level name:");
     y += 20;

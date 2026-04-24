@@ -23,6 +23,7 @@ public:
     bool GetGodMode();
     bool GetShowCollision();
     std::string GetLevelName();
+    std::vector<float> GetGrapplePos();
 
     void SetNoclip(bool enable);
     void SetPlayerPos(const std::vector<float>& pos);

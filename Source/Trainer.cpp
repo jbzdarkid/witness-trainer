@@ -141,6 +141,14 @@ std::string Trainer::GetLevelName() {
     return _memory->ReadString({_gameWorldPtr, 0x4C, 0xD4});
 }
 
+std::vector<float> Trainer::GetGrapplePos() {
+    int grapplePoint = _memory->ReadData<int>({_gameWorldPtr, 0x50, 0xA8, 0x120, 0x14, 0x4, 0x10, 0x510}, 1)[0];
+    if (grapplePoint == 0) return {0, 0, 0};
+    int vtable = _memory->ReadData<int>({grapplePoint}, 1)[0];
+    if (vtable == 0x03434DEC) return {0, 0, 0};
+    return _memory->ReadData<float>({grapplePoint + 0x78, 0x74}, 3);
+}
+
 void Trainer::SetNoclip(bool enable) {
     // TODO: Some sigscan here to defy gravity
 }
