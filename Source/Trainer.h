@@ -24,6 +24,7 @@ public:
     bool GetShowCollision();
     std::string GetLevelName();
     std::vector<float> GetGrapplePos();
+    int GetMoney();
 
     void SetNoclip(bool enable);
     void SetPlayerPos(const std::vector<float>& pos);
@@ -34,10 +35,15 @@ public:
     void SetMaxCharge(int maxCharge);
     void SetGodMode(bool enable);
     void SetShowCollision(bool enable);
+    void SetMoney(int money);
+
+    void SetCameraOverride(bool enable);
+    void SetCameraPosition(float x, float y, float z);
 
 private:
     ProcStatus Heartbeat();
     void OnGameStart();
+    void AddCameraHooks();
 
     std::shared_ptr<Memory> _memory;
     bool _threadActive = false;
@@ -54,4 +60,9 @@ private:
 
     int _gameWorldPtr = 0;
     int _globalSettingsPtr = 0;
+    int _cameraPos = 0;
+    int _cameraPosFunc = 0;
+    int _cameraOri = 0;
+    int _cameraOriFunc = 0;
+    int _cameraBuffer = 0;
 };

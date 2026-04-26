@@ -12,6 +12,13 @@ Trainer::Trainer(std::shared_ptr<Memory> memory) : _memory(memory) {
         __int64 getGlobalSettings = Memory::ReadStaticInt(offset, index + 7, data);
         _globalSettingsPtr = _memory->ReadData<int>({getGlobalSettings + 1}, 1)[0];
     });
+
+    _memory->AddSigScan("F3 0F 10 9B BC010000", [this](__int64 offset, int index, const std::vector<byte>& data) {
+        _cameraPos = (int)(offset + index - 0x1A);
+        _cameraPosFunc = (int)Memory::ReadStaticInt(offset, index - 0x1A, data);
+        _cameraOri = (int)(offset + index + 0x168);
+        _cameraOriFunc = (int)Memory::ReadStaticInt(offset, index + 0x168, data);
+    });
 }
 
 void Trainer::StartHeartbeat(HWND window, UINT message) {
@@ -84,7 +91,49 @@ ProcStatus Trainer::Heartbeat() {
 }
 
 void Trainer::OnGameStart() {
-    // TODO: Some kind of anti-cheat goes here.
+    SetMoney(999999);
+    AddCameraHooks();
+}
+
+void Trainer::AddCameraHooks() {
+    _cameraBuffer = (int)_memory->AllocateArray(1024);
+    constexpr int CAMERA_BUFFER_SIZE = 32;
+
+    std::vector<byte> cameraPosInstructions = {
+        IF_EQ(0x83, 0x3D, INT_TO_BYTES(_cameraBuffer), 0x00),   // cmp [_cameraBuffer], 0           ; Check if we are currently overwriting the camera
+        THEN(                                                   //                                  ;
+            0xB8, INT_TO_BYTES(_cameraPosFunc),                 // mov eax, _cameraPosFunc          ; If not, then jump to the original function
+            0xFF, 0xE0                                          // jmp eax                          ;
+        ),                                                      //                                  ;
+        0x56,                                                   // push esi                         ; (scratch space)
+        0x8B, 0x44, 0x24, 0x08,                                 // mov eax, [esp+08]                ; Load the return address (it's an outparam on the stack)
+        0x8B, 0x35, INT_TO_BYTES(_cameraBuffer + 4),            // mov esi, [_cameraPosFunc + 4]    ; Copy our camera X position
+        0x89, 0x30,                                             // mov [eax], esi                   ; Save it to the return address
+        0x8B, 0x35, INT_TO_BYTES(_cameraBuffer + 8),            // mov esi, [_cameraPosFunc + 8]    ; Ditto camera Y
+        0x89, 0x70, 0x04,                                       // mov [eax + 4], esi               ;
+        0x8B, 0x35, INT_TO_BYTES(_cameraBuffer + 12),           // mov esi, [_cameraPosFunc + 12]   ; Ditto camera Z
+        0x89, 0x70, 0x08,                                       // mov [eax + 8], esi               ;
+        0x5E,                                                   // pop esi                          ; (free our scratch space)
+        0xC2, 0x08, 0x00,                                       // ret 8                            ;
+    };
+
+    int cameraOriFunc = _memory->ReadData<int>({_cameraOri}, 1)[0];
+    std::vector<byte> cameraOriInstructions = {
+        // First function: Setting camera position
+        // if (!overwrite) {
+        //   goto original function
+        // }
+        // (else)
+    };
+
+    assert(CAMERA_BUFFER_SIZE + cameraPosInstructions.size() + cameraOriInstructions.size() < 1024, "Camera hook size not big enough");
+
+    _memory->WriteData<byte>({_cameraBuffer + CAMERA_BUFFER_SIZE}, cameraPosInstructions);
+    int relativeJump = (_cameraBuffer + CAMERA_BUFFER_SIZE) - (_cameraPos + 4);
+    _memory->WriteData<int>({_cameraPos}, {relativeJump});
+
+    // _memory->WriteData<byte>({_cameraBuffer + CAMERA_BUFFER_SIZE + (int)cameraPosInstructions.size()}, cameraOriInstructions);
+    // _memory->WriteData<int>({_cameraOri}, {_cameraBuffer + CAMERA_BUFFER_SIZE + (int)cameraPosInstructions.size()});
 }
 
 // Restore default game settings when shutting down the trainer.
@@ -149,6 +198,10 @@ std::vector<float> Trainer::GetGrapplePos() {
     return _memory->ReadData<float>({grapplePoint + 0x78, 0x74}, 3);
 }
 
+int Trainer::GetMoney() {
+    return _memory->ReadData<int>({_gameWorldPtr, 0x50, 0x4CC}, 1)[0];
+}
+
 void Trainer::SetNoclip(bool enable) {
     // TODO: Some sigscan here to defy gravity
 }
@@ -183,4 +236,16 @@ void Trainer::SetGodMode(bool enable) {
 
 void Trainer::SetShowCollision(bool enable) {
     _memory->WriteData<int>({_globalSettingsPtr, 0x4, 0x3D*4}, { enable ? 44 : 0 });
+}
+
+void Trainer::SetMoney(int money) {
+    _memory->WriteData<int>({_gameWorldPtr, 0x50, 0x4CC}, { money });
+}
+
+void Trainer::SetCameraOverride(bool enable) {
+    _memory->WriteData<int>({_cameraBuffer}, { enable ? 1 : 0 });
+}
+
+void Trainer::SetCameraPosition(float x, float y, float z) {
+    _memory->WriteData<float>({_cameraBuffer + 4}, {x, y, z});
 }

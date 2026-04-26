@@ -24,6 +24,7 @@
 #define SHOW_COLLISION      0x432
 #define LOG_MOVEMENT        0x433
 #define DUMP_MOVEMENT       0x434
+#define TEST_CAMERA         0x435
 
 // Globals
 HWND g_hwnd;
@@ -316,6 +317,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 file << g_position[i+2] << ',';
                 file << g_position[i+3] << '\n';
             }
+        } else if (command == TEST_CAMERA) {
+            trainer->SetCameraPosition(-350, 11, -290);
+            trainer->SetCameraOverride(true);
         }
     });
     t.detach();
@@ -467,6 +471,8 @@ void CreateComponents() {
 #ifdef _DEBUG
     CreateLabelAndCheckbox(x, y, 200, L"Capture movement data", LOG_MOVEMENT, "log_movement");
     CreateButton(x, y, 200, L"Dump movement data", DUMP_MOVEMENT, "dump_movement");
+
+    CreateButton(x, y, 200, L"TEST CAMERA", TEST_CAMERA, "open_keybinds");
 #endif
 
     // Required to 'unselect' any hold-based keybinds
