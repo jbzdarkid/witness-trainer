@@ -27,19 +27,22 @@
 #define ENABLE_CAMERA       0x435
 #define CAMERA_CW           0x436
 #define CAMERA_CCW          0x437
+#define CAMERA_ZOOM_IN      0x438
+#define CAMERA_ZOOM_OUT     0x439
 
 // Globals
 HWND g_hwnd;
 HINSTANCE g_hInstance;
 std::shared_ptr<Trainer> g_trainer;
 std::shared_ptr<Memory> g_hobProc;
-HWND g_currentPos, g_savedPos, g_grapplePos, g_activateGame, g_levelName, g_animationName;
+HWND g_currentPos, g_savedPos, g_grapplePos, g_activateGame, g_levelName, g_animationName, g_cameraText;
 
 std::vector<float> g_savedPlayerPos = {0.0f, 0.0f, 0.0f};
 std::vector<float> g_savedPlayerAngle = {0.0f, 0.0f, 0.0f, 0.0f};
 std::vector<float> g_position;
 double g_startTime = 0;
-double g_cameraAngle = 180; // 0 - 360 (degrees); 180 is forwards.
+int g_cameraAngle = 180; // 0 - 360 (degrees); 180 is forwards.
+int g_cameraDistance = 13;
 
 double GetCurrentTimeInSeconds() {
     LARGE_INTEGER Frequency;
@@ -229,9 +232,29 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 }
 
                 if (IsDlgButtonChecked(g_hwnd, ENABLE_CAMERA) == TRUE) {
-                    auto position = g_trainer->GetPlayerPos();
+                    double radians = g_cameraAngle * 3.14159 / 360;
 
-                    g_trainer->SetCameraPosition(position[0], position[1] + 13, position[2] - 13);
+                    {
+                        auto position = g_trainer->GetPlayerPos();
+                        // The camera will always sit a little above hob's head.
+                        double y = position[1] + g_cameraDistance;
+
+                        // The camera should rest about 13 units behind hob, in the direction its facing.
+                        // For no apparently reason, this computation uses a double angle.
+                        double x = position[0] + g_cameraDistance * sin(2 * radians);
+                        double z = position[2] + g_cameraDistance * cos(2 * radians);
+                        g_trainer->SetCameraPosition((float)x, (float)y, (float)z);
+                    }
+
+                    {
+                        // Do some math to convert the polar coordinate (0-360 degrees) into an angle.
+                        // I don't know why this is correct, this isn't how quat math works usually.
+                        double w = cos(radians);
+                        double y = sin(radians);
+                        double x = -(0.4) * w; // Default distance: 13 == 0.4 (???)
+                        double z = (0.4) * y;
+                        g_trainer->SetCameraOrientation((float)w, (float)x, (float)y, (float)z);
+                    }
                 }
 
                 // Settings which are always sourced from the game, since they are not editable in the trainer.
@@ -245,6 +268,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     SetStringText(g_levelName, levelName);
 
                     SetPosText(g_grapplePos, g_trainer->GetGrapplePos(), {});
+
+                    if (IsDlgButtonChecked(g_hwnd, ENABLE_CAMERA) == TRUE) {
+                        SetStringText(g_cameraText, "Custom camera angle: " + std::to_string((int)g_cameraAngle) + "°");
+                    } else {
+                        SetStringText(g_cameraText, "Camera angle: 180°");
+                    }
                 }
                 break;
             }
@@ -329,19 +358,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         } else if (command == ENABLE_CAMERA) {
             bool enable = ToggleOptionAndReturnNewState(ENABLE_CAMERA);
             trainer->SetCameraOverride(enable);
-            if (enable) {
-                trainer->SetCameraOrientation(0, 0, 1, 0.4f); // Approximately the default game angle
-            }
-        } else if (command == CAMERA_CW || command == CAMERA_CCW) {
-            // Do some math to convert the polar coordinate (0-360 degrees) into an angle.
-            // I don't know why this is correct, this isn't how quat math works usually.
-            g_cameraAngle += (command == CAMERA_CCW ? -5 : 5); // Rotating in 5 degree increments
-            double radians = g_cameraAngle * 3.14159 / 360;
-            double w = cos(radians);
-            double y = sin(radians);
-            double x = -0.4 * w;
-            double z = 0.4 * y;
-            trainer->SetCameraOrientation((float)w, (float)x, (float)y, (float)z);
+        } else if (command == CAMERA_CW) {
+            g_cameraAngle = (g_cameraAngle + 5) % 360;
+        } else if (command == CAMERA_CCW) {
+            g_cameraAngle = (g_cameraAngle + 355) % 360;
+        } else if (command == CAMERA_ZOOM_IN) {
+            g_cameraDistance = CLAMP(g_cameraDistance - 1, 3, 100);
+        } else if (command == CAMERA_ZOOM_OUT) {
+            g_cameraDistance = CLAMP(g_cameraDistance + 1, 3, 100);
         }
     });
     t.detach();
@@ -490,10 +514,14 @@ void CreateComponents() {
     CreateButton(x, y, 200, L"Open save folder", OPEN_SAVES, "open_save_folder");
     CreateButton(x, y, 200, L"Open keybinds file", OPEN_KEYBINDS, "open_keybinds");
 
-    CreateLabelAndCheckbox(x, y, 200, L"Camera hack", ENABLE_CAMERA, "camera_hack");
+    g_cameraText = CreateLabelAndCheckbox(x, y, 200, L"Camera angle: 180°", ENABLE_CAMERA, "custom_camera").first;
     CreateButton(x, y, 100, L"Rotate CCW", CAMERA_CCW, "camera_ccw");
     y -= 30;
     CreateButton(x + 100, y, 100, L"Rotate CW", CAMERA_CW, "camera_cw");
+
+    CreateButton(x, y, 100, L"Zoom in", CAMERA_ZOOM_IN, "camera_zoom_in");
+    y -= 30;
+    CreateButton(x + 100, y, 100, L"Zoom out", CAMERA_ZOOM_OUT, "camera_zoom_out");
 
 #ifdef _DEBUG
     CreateLabelAndCheckbox(x, y, 200, L"Capture movement data", LOG_MOVEMENT, "log_movement");
