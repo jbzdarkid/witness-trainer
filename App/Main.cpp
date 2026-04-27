@@ -251,11 +251,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                         // I don't know why this is correct, this isn't how quat math works usually.
                         double w = cos(radians);
                         double y = sin(radians);
-                        // 0 == no angle
-                        // 0.4 == looking down
-                        // zoom == 3 -> 0.0 (no angle) Good
-                        // zoom == 13 -> 0.4 (default) Good
-                        // zoom == 33 -> 0.8 (???)
                         double angle = (g_cameraDistance - 3) / 10.0 * 0.4;
                         angle = CLAMP(angle, 0.0, 0.6);
                         double x = -angle * w;
