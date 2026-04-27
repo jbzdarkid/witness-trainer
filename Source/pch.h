@@ -14,7 +14,7 @@
     }
 
 #define CLAMP(value, min, max) \
-    ((value) < min ? (value) : ((value) > max ? max : (value)))
+    ((value) < min ? min : ((value) > max ? max : (value)))
 
 // We include the debug headers early, so we can override the assert macros.
 #include <crtdbg.h>

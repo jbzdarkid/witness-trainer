@@ -239,10 +239,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                         // The camera will always sit a little above hob's head.
                         double y = position[1] + g_cameraDistance;
 
-                        // The camera should rest about 13 units behind hob, in the direction its facing.
+                        // The camera is always a fixed distance behind hob, in the direction its facing.
                         // For no apparently reason, this computation uses a double angle.
-                        double x = position[0] + g_cameraDistance * sin(2 * radians);
-                        double z = position[2] + g_cameraDistance * cos(2 * radians);
+                        double x = position[0] + 13 * sin(2 * radians);
+                        double z = position[2] + 13 * cos(2 * radians);
                         g_trainer->SetCameraPosition((float)x, (float)y, (float)z);
                     }
 
@@ -251,8 +251,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                         // I don't know why this is correct, this isn't how quat math works usually.
                         double w = cos(radians);
                         double y = sin(radians);
-                        double x = -(0.4) * w; // Default distance: 13 == 0.4 (???)
-                        double z = (0.4) * y;
+                        // 0 == no angle
+                        // 0.4 == looking down
+                        // zoom == 3 -> 0.0 (no angle) Good
+                        // zoom == 13 -> 0.4 (default) Good
+                        // zoom == 33 -> 0.8 (???)
+                        double angle = (g_cameraDistance - 3) / 10.0 * 0.4;
+                        angle = CLAMP(angle, 0.0, 0.6);
+                        double x = -angle * w;
+                        double z = angle * y;
                         g_trainer->SetCameraOrientation((float)w, (float)x, (float)y, (float)z);
                     }
                 }
@@ -264,7 +271,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     SetPosText(g_currentPos, g_trainer->GetPlayerPos(), g_trainer->GetPlayerAngle());
 
                     std::string levelName = g_trainer->GetLevelName();
-                    if (levelName.size() > 0) levelName = levelName.substr(13); // Trim leading MEDIA/LEVELS/ (common to all levels)
+                    if (levelName.size() > 13) levelName = levelName.substr(13); // Trim leading MEDIA/LEVELS/ (common to all levels)
                     SetStringText(g_levelName, levelName);
 
                     SetPosText(g_grapplePos, g_trainer->GetGrapplePos(), {});
@@ -356,16 +363,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 file << g_position[i+3] << '\n';
             }
         } else if (command == ENABLE_CAMERA) {
-            bool enable = ToggleOptionAndReturnNewState(ENABLE_CAMERA);
-            trainer->SetCameraOverride(enable);
-        } else if (command == CAMERA_CW) {
-            g_cameraAngle = (g_cameraAngle + 5) % 360;
-        } else if (command == CAMERA_CCW) {
-            g_cameraAngle = (g_cameraAngle + 355) % 360;
-        } else if (command == CAMERA_ZOOM_IN) {
-            g_cameraDistance = CLAMP(g_cameraDistance - 1, 3, 100);
-        } else if (command == CAMERA_ZOOM_OUT) {
-            g_cameraDistance = CLAMP(g_cameraDistance + 1, 3, 100);
+            trainer->SetCameraOverride(ToggleOptionAndReturnNewState(ENABLE_CAMERA));
+        } else if (command == CAMERA_CW && IsDlgButtonChecked(g_hwnd, ENABLE_CAMERA) == TRUE) {
+            g_cameraAngle = (g_cameraAngle + 10) % 360;
+        } else if (command == CAMERA_CCW && IsDlgButtonChecked(g_hwnd, ENABLE_CAMERA) == TRUE) {
+            g_cameraAngle = (g_cameraAngle + 350) % 360;
+        } else if (command == CAMERA_ZOOM_IN && IsDlgButtonChecked(g_hwnd, ENABLE_CAMERA) == TRUE) {
+            g_cameraDistance = CLAMP(g_cameraDistance - 2, 3, 100);
+        } else if (command == CAMERA_ZOOM_OUT && IsDlgButtonChecked(g_hwnd, ENABLE_CAMERA) == TRUE) {
+            g_cameraDistance = CLAMP(g_cameraDistance + 2, 3, 100);
         }
     });
     t.detach();
