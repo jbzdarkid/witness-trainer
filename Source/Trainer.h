@@ -39,6 +39,7 @@ public:
 
     void SetCameraOverride(bool enable);
     void SetCameraPosition(float x, float y, float z);
+    void SetCameraOrientation(float w, float x, float y, float z);
 
 private:
     ProcStatus Heartbeat();

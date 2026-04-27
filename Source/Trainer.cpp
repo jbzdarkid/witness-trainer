@@ -97,7 +97,7 @@ void Trainer::OnGameStart() {
 
 void Trainer::AddCameraHooks() {
     _cameraBuffer = (int)_memory->AllocateArray(1024);
-    constexpr int CAMERA_BUFFER_SIZE = 32;
+    constexpr int CAMERA_BUFFER_SIZE = sizeof(int) * 8; // [mode, XYZ position, WXYZ orientation]
 
     std::vector<byte> cameraPosInstructions = {
         IF_EQ(0x83, 0x3D, INT_TO_BYTES(_cameraBuffer), 0x00),   // cmp [_cameraBuffer], 0           ; Check if we are currently overwriting the camera
@@ -107,11 +107,11 @@ void Trainer::AddCameraHooks() {
         ),                                                      //                                  ;
         0x56,                                                   // push esi                         ; (scratch space)
         0x8B, 0x44, 0x24, 0x08,                                 // mov eax, [esp+08]                ; Load the return address (it's an outparam on the stack)
-        0x8B, 0x35, INT_TO_BYTES(_cameraBuffer + 4),            // mov esi, [_cameraPosFunc + 4]    ; Copy our camera X position
+        0x8B, 0x35, INT_TO_BYTES(_cameraBuffer + 0x04),         // mov esi, [_cameraBuffer + 4]     ; Copy our camera X position
         0x89, 0x30,                                             // mov [eax], esi                   ; Save it to the return address
-        0x8B, 0x35, INT_TO_BYTES(_cameraBuffer + 8),            // mov esi, [_cameraPosFunc + 8]    ; Ditto camera Y
+        0x8B, 0x35, INT_TO_BYTES(_cameraBuffer + 0x08),         // mov esi, [_cameraBuffer + 8]     ; Ditto camera Y
         0x89, 0x70, 0x04,                                       // mov [eax + 4], esi               ;
-        0x8B, 0x35, INT_TO_BYTES(_cameraBuffer + 12),           // mov esi, [_cameraPosFunc + 12]   ; Ditto camera Z
+        0x8B, 0x35, INT_TO_BYTES(_cameraBuffer + 0x0C),         // mov esi, [_cameraBuffer + C]     ; Ditto camera Z
         0x89, 0x70, 0x08,                                       // mov [eax + 8], esi               ;
         0x5E,                                                   // pop esi                          ; (free our scratch space)
         0xC2, 0x08, 0x00,                                       // ret 8                            ;
@@ -119,21 +119,34 @@ void Trainer::AddCameraHooks() {
 
     int cameraOriFunc = _memory->ReadData<int>({_cameraOri}, 1)[0];
     std::vector<byte> cameraOriInstructions = {
-        // First function: Setting camera position
-        // if (!overwrite) {
-        //   goto original function
-        // }
-        // (else)
+        IF_EQ(0x83, 0x3D, INT_TO_BYTES(_cameraBuffer), 0x00),   // cmp [_cameraBuffer], 0           ; Check if we are currently overwriting the camera
+        THEN(                                                   //                                  ;
+            0xB8, INT_TO_BYTES(_cameraOriFunc),                 // mov eax, _cameraOriFunc          ; If not, then jump to the original function
+            0xFF, 0xE0                                          // jmp eax                          ;
+        ),                                                      //                                  ;
+        0x56,                                                   // push esi                         ; (scratch space)
+        0x8B, 0x44, 0x24, 0x08,                                 // mov eax, [esp+08]                ; Load the return address (it's an outparam on the stack)
+        0x8B, 0x35, INT_TO_BYTES(_cameraBuffer + 0x10),         // mov esi, [_cameraBuffer + 10]    ; Copy our camera W orientation
+        0x89, 0x30,                                             // mov [eax], esi                   ; Save it to the return address
+        0x8B, 0x35, INT_TO_BYTES(_cameraBuffer + 0x14),         // mov esi, [_cameraBuffer + 14]    ; Ditto camera X
+        0x89, 0x70, 0x04,                                       // mov [eax + 4], esi               ;
+        0x8B, 0x35, INT_TO_BYTES(_cameraBuffer + 0x18),         // mov esi, [_cameraBuffer + 18]    ; Ditto camera Y
+        0x89, 0x70, 0x08,                                       // mov [eax + 8], esi               ;
+        0x8B, 0x35, INT_TO_BYTES(_cameraBuffer + 0x1C),         // mov esi, [_cameraBuffer + 1C]    ; Ditto camera Z
+        0x89, 0x70, 0x0C,                                       // mov [eax + C], esi               ;
+        0x5E,                                                   // pop esi                          ; (free our scratch space)
+        0xC2, 0x08, 0x00,                                       // ret 8                            ;
     };
 
-    assert(CAMERA_BUFFER_SIZE + cameraPosInstructions.size() + cameraOriInstructions.size() < 1024, "Camera hook size not big enough");
+    assert(CAMERA_BUFFER_SIZE + cameraPosInstructions.size() + cameraOriInstructions.size() < 1024, "[Internal error] Camera hook buffer is not big enough for the functions we need");
 
     _memory->WriteData<byte>({_cameraBuffer + CAMERA_BUFFER_SIZE}, cameraPosInstructions);
     int relativeJump = (_cameraBuffer + CAMERA_BUFFER_SIZE) - (_cameraPos + 4);
     _memory->WriteData<int>({_cameraPos}, {relativeJump});
 
-    // _memory->WriteData<byte>({_cameraBuffer + CAMERA_BUFFER_SIZE + (int)cameraPosInstructions.size()}, cameraOriInstructions);
-    // _memory->WriteData<int>({_cameraOri}, {_cameraBuffer + CAMERA_BUFFER_SIZE + (int)cameraPosInstructions.size()});
+    _memory->WriteData<byte>({_cameraBuffer + CAMERA_BUFFER_SIZE + (int)cameraPosInstructions.size()}, cameraOriInstructions);
+    relativeJump = (_cameraBuffer + CAMERA_BUFFER_SIZE + (int)cameraPosInstructions.size()) - (_cameraOri + 4);
+    _memory->WriteData<int>({_cameraOri}, {relativeJump});
 }
 
 // Restore default game settings when shutting down the trainer.
@@ -145,6 +158,7 @@ Trainer::~Trainer() {
     SetMaxCharge(1);
     SetGodMode(false);
     SetShowCollision(false);
+    SetCameraOverride(false);
 
     StopHeartbeat();
     if (_thread.joinable()) _thread.join();
@@ -248,4 +262,8 @@ void Trainer::SetCameraOverride(bool enable) {
 
 void Trainer::SetCameraPosition(float x, float y, float z) {
     _memory->WriteData<float>({_cameraBuffer + 4}, {x, y, z});
+}
+
+void Trainer::SetCameraOrientation(float w, float x, float y, float z) {
+    _memory->WriteData<float>({_cameraBuffer + 16}, {w, x, y, z});
 }
