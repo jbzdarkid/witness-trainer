@@ -38,7 +38,7 @@ using byte = unsigned char;
 
 class Memory final {
 public:
-    Memory(const std::wstring& processName);
+    Memory(const std::wstring& processName, const std::wstring& moduleName) : _processName(processName), _moduleName(moduleName) { }
     ~Memory();
     ProcStatus TryAttachToProcess();
 
@@ -98,6 +98,7 @@ private:
 
     // Required for process attachment
     std::wstring _processName;
+    std::wstring _moduleName;
     HANDLE _handle = nullptr;
     DWORD _pid = 0;
     uintptr_t _baseAddress = 0;

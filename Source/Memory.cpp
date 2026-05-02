@@ -3,8 +3,6 @@
 #include <psapi.h>
 #include <tlhelp32.h>
 
-Memory::Memory(const std::wstring& processName) : _processName(processName) {}
-
 Memory::~Memory() {
     if (_handle != nullptr) {
         CloseHandle(_handle);
@@ -58,7 +56,7 @@ ProcStatus Memory::TryAttachToProcess() {
         }
         if (!handle) return ProcStatus::NotRunning;
 
-        std::tie(_baseAddress, _endOfModule) = DebugUtils::GetModuleBounds(handle, _processName);
+        std::tie(_baseAddress, _endOfModule) = DebugUtils::GetModuleBounds(handle, _moduleName);
         if (_baseAddress == 0) return ProcStatus::NotRunning;
 
         BOOL wow64Process = false;
@@ -184,7 +182,6 @@ std::string Memory::ReadString(const std::vector<__int64>& offsets, size_t point
     std::vector<byte> charAddrBytes = ReadData<byte>(offsets, pointerSize);
     charAddrBytes.resize(8);
     __int64 charAddr = *(__int64*)charAddrBytes.data();
-    // __int64 charAddr = ReadData<__int64>(offsets, 1)[0];
     if (charAddr == 0) return ""; // Handle nullptr for strings
 
     std::vector<char> tmp;
