@@ -370,7 +370,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         SetCurrentThreadName(L"Command Helper");
         if (!trainer || !trainer->HeartbeatActive()) return; // We are shutting down, do not process any actions
 
-        if (HIWORD(wParam) != 0) return; // Message was not triggered by the user.
+        if (HIWORD(wParam) == 0x400) return; // Message was not triggered by the user.
         WORD command = LOWORD(wParam);
         if (command == INFINITE_CHALLENGE)      trainer->SetInfiniteChallenge(ToggleOptionAndReturnNewState(INFINITE_CHALLENGE));
         else if (command == DOORS_PRACTICE)     trainer->SetRandomDoorsPractice(ToggleOptionAndReturnNewState(DOORS_PRACTICE));
@@ -703,7 +703,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     CreateComponents();
     Hotkeys::Get()->SanityCheckHotkeys();
 
-    g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe");
+    g_witnessProc = std::make_shared<Memory>(L"witness64_d3d11.exe", L"witness64_d3d11.exe");
     g_trainer = std::make_shared<Trainer>(g_witnessProc);
     g_trainer->StartHeartbeat(g_hwnd, HEARTBEAT);
 #ifndef _DEBUG
