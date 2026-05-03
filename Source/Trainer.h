@@ -59,11 +59,11 @@ private:
 
     uintptr_t _previousCombatStats = 0;
 
-    int _gameWorldPtr = 0;
-    int _globalSettingsPtr = 0;
-    int _cameraPos = 0;
-    int _cameraPosFunc = 0;
-    int _cameraOri = 0;
-    int _cameraOriFunc = 0;
-    int _cameraBuffer = 0;
+    uint32_t _gameWorldPtr = 0;
+    uint32_t _globalSettingsPtr = 0;
+    uint32_t _cameraPos = 0;
+    uint32_t _cameraPosFunc = 0;
+    uint32_t _cameraOri = 0;
+    uint32_t _cameraOriFunc = 0;
+    uint32_t _cameraBuffer = 0;
 };

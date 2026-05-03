@@ -5,19 +5,19 @@
 Trainer::Trainer(std::shared_ptr<Memory> memory) : _memory(memory) {
     _memory->AddSigScan("80 BD 00 01 00 00 00", [this](__int64 offset, int index, const std::vector<byte>& data) {
         __int64 getGameWorld = Memory::ReadStaticInt(offset, index + 11, data);
-        _gameWorldPtr = _memory->ReadData<int>({getGameWorld + 1}, 1)[0];
+        _gameWorldPtr = _memory->ReadData<uint32_t>({getGameWorld + 1}, 1)[0];
     });
 
     _memory->AddSigScan("83 EC 1C 56 6A 2C", [this](__int64 offset, int index, const std::vector<byte>& data) {
         __int64 getGlobalSettings = Memory::ReadStaticInt(offset, index + 7, data);
-        _globalSettingsPtr = _memory->ReadData<int>({getGlobalSettings + 1}, 1)[0];
+        _globalSettingsPtr = _memory->ReadData<uint32_t>({getGlobalSettings + 1}, 1)[0];
     });
 
     _memory->AddSigScan("F3 0F 10 9B BC010000", [this](__int64 offset, int index, const std::vector<byte>& data) {
-        _cameraPos = (int)(offset + index - 0x1A);
-        _cameraPosFunc = (int)Memory::ReadStaticInt(offset, index - 0x1A, data);
-        _cameraOri = (int)(offset + index + 0x168);
-        _cameraOriFunc = (int)Memory::ReadStaticInt(offset, index + 0x168, data);
+        _cameraPos = (uint32_t)(offset + index - 0x1A);
+        _cameraPosFunc = (uint32_t)Memory::ReadStaticInt(offset, index - 0x1A, data);
+        _cameraOri = (uint32_t)(offset + index + 0x168);
+        _cameraOriFunc = (uint32_t)Memory::ReadStaticInt(offset, index + 0x168, data);
     });
 }
 
@@ -117,7 +117,6 @@ void Trainer::AddCameraHooks() {
         0xC2, 0x08, 0x00,                                       // ret 8                            ;
     };
 
-    int cameraOriFunc = _memory->ReadData<int>({_cameraOri}, 1)[0];
     std::vector<byte> cameraOriInstructions = {
         IF_EQ(0x83, 0x3D, INT_TO_BYTES(_cameraBuffer), 0x00),   // cmp [_cameraBuffer], 0           ; Check if we are currently overwriting the camera
         THEN(                                                   //                                  ;
@@ -205,9 +204,9 @@ std::string Trainer::GetLevelName() {
 }
 
 std::vector<float> Trainer::GetGrapplePos() {
-    int grapplePoint = _memory->ReadData<int>({_gameWorldPtr, 0x50, 0xA8, 0x120, 0x14, 0x4, 0x10, 0x510}, 1)[0];
+    uint32_t grapplePoint = _memory->ReadData<uint32_t>({_gameWorldPtr, 0x50, 0xA8, 0x120, 0x14, 0x4, 0x10, 0x510}, 1)[0];
     if (grapplePoint == 0) return {0, 0, 0};
-    int vtable = _memory->ReadData<int>({grapplePoint}, 1)[0];
+    uint32_t vtable = _memory->ReadData<uint32_t>({grapplePoint}, 1)[0];
     if (vtable == 0x03434DEC) return {0, 0, 0};
     return _memory->ReadData<float>({grapplePoint + 0x78, 0x74}, 3);
 }
@@ -216,7 +215,7 @@ int Trainer::GetMoney() {
     return _memory->ReadData<int>({_gameWorldPtr, 0x50, 0x4CC}, 1)[0];
 }
 
-void Trainer::SetNoclip(bool enable) {
+void Trainer::SetNoclip(bool) {
     // TODO: Some sigscan here to defy gravity
 }
 

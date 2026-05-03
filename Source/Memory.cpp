@@ -25,7 +25,7 @@ HWND Memory::GetProcessHwnd(DWORD pid) {
     };
     Data data = Data{pid, NULL};
 
-    BOOL result = EnumWindows([](HWND hwnd, LPARAM data) {
+    EnumWindows([](HWND hwnd, LPARAM data) {
         DWORD pid;
         GetWindowThreadProcessId(hwnd, &pid);
         DWORD targetPid = reinterpret_cast<Data*>(data)->pid;
@@ -178,9 +178,10 @@ size_t Memory::ExecuteSigScans() {
 
 // Technically this is ReadChar*, but this name makes more sense with the return type.
 std::string Memory::ReadString(const std::vector<__int64>& offsets, size_t pointerSize) {
-    // if (pointerSize == 0) pointerSize = _pointerSize; // Dynamic default value... TODO pass into ResolvePointerPath?
-
-    uintptr_t charAddr = ResolvePointerPath(offsets);
+    if (pointerSize == 0) pointerSize = _pointerSize; // Dynamic default value
+    std::vector<byte> charAddrBytes = ReadData<byte>(offsets, pointerSize);
+    charAddrBytes.resize(8);
+    __int64 charAddr = *(__int64*)charAddrBytes.data();
     if (charAddr == 0) return ""; // Handle nullptr for strings
 
     std::vector<char> tmp;
@@ -261,7 +262,7 @@ int32_t Memory::CallFunction(int64_t address,
         assert(thread, "[Internal error] Failed to allocate a thread in the target process");
         return 0;
     }
-    DWORD result = WaitForSingleObject(thread, INFINITE);
+    WaitForSingleObject(thread, INFINITE);
 
     // This will be the return value of the called function.
     int32_t exitCode = 0;
