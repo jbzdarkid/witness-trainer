@@ -1,6 +1,5 @@
 #include "pch.h"
 #include "Trainer.h"
-#include "Panels.h"
 
 Trainer::Trainer(std::shared_ptr<Memory> memory) : _memory(memory) {
     _memory->AddSigScan("80 BD 00 01 00 00 00", [this](__int64 offset, int index, const std::vector<byte>& data) {

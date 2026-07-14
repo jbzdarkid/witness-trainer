@@ -178,10 +178,7 @@ size_t Memory::ExecuteSigScans() {
 
 // Technically this is ReadChar*, but this name makes more sense with the return type.
 std::string Memory::ReadString(const std::vector<__int64>& offsets, size_t pointerSize) {
-    if (pointerSize == 0) pointerSize = _pointerSize; // Dynamic default value
-    std::vector<byte> charAddrBytes = ReadData<byte>(offsets, pointerSize);
-    charAddrBytes.resize(8);
-    __int64 charAddr = *(__int64*)charAddrBytes.data();
+    uintptr_t charAddr = ResolvePointerPath(offsets, pointerSize);
     if (charAddr == 0) return ""; // Handle nullptr for strings
 
     std::vector<char> tmp;
@@ -349,14 +346,15 @@ uintptr_t Memory::ComputeOffset(const std::vector<__int64>& offsets) {
     return cumulativeAddress + offsets.back();
 }
 
-uintptr_t Memory::ResolvePointerPath(const std::vector<__int64>& offsets) {
-    uintptr_t cumulativeAddress = 0;
+uintptr_t Memory::ResolvePointerPath(const std::vector<__int64>& offsets, size_t pointerSize) {
+  if (pointerSize == 0) pointerSize = _pointerSize; // Dynamic default value
+  uintptr_t cumulativeAddress = 0;
     for (__int64 offset : offsets) {
         cumulativeAddress += offset;
 
         if (!_handle) return 0;
         uintptr_t computedAddress = 0;
-        if (!ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(cumulativeAddress), &computedAddress, _pointerSize, NULL)) return 0;
+        if (!ReadProcessMemory(_handle, reinterpret_cast<LPCVOID>(cumulativeAddress), &computedAddress, pointerSize, NULL)) return 0;
         if (cumulativeAddress == 0) return 0;
         cumulativeAddress = computedAddress;
     }
