@@ -37,8 +37,13 @@ std::shared_ptr<Trainer> g_trainer;
 std::shared_ptr<Memory> g_hobProc;
 HWND g_currentPos, g_savedPos, g_grapplePos, g_activateGame, g_levelName, g_animationName, g_cameraText;
 
-std::vector<float> g_savedPlayerPos = {0.0f, 0.0f, 0.0f};
-std::vector<float> g_savedPlayerAngle = {0.0f, 0.0f, 0.0f, 0.0f};
+struct SavedState {
+  std::vector<float> pos = {0.0f, 0.0f, 0.0f};
+  std::vector<float> ang = {0.0f, 0.0f, 0.0f, 0.0f};
+  int health = 0;
+  int charge = 0;
+} g_savedState;
+
 std::vector<float> g_position;
 double g_startTime = 0;
 int g_cameraAngle = 180; // 0 - 360 (degrees); 180 is forwards.
@@ -241,8 +246,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
 
                         // The camera is always a fixed distance behind hob, in the direction its facing.
                         // For no apparently reason, this computation uses a double angle.
-                        double x = position[0] + 13 * sin(2 * radians);
-                        double z = position[2] + 13 * cos(2 * radians);
+                        double x = position[0] + 10 * sin(2 * radians);
+                        double z = position[2] + 10 * cos(2 * radians);
                         g_trainer->SetCameraPosition((float)x, (float)y, (float)z);
                     }
 
@@ -307,14 +312,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         }
 
         if (command == SAVE_POS) {
-            g_savedPlayerPos = trainer->GetPlayerPos();
-            g_savedPlayerAngle = trainer->GetPlayerAngle();
-            SetPosText(g_savedPos, g_savedPlayerPos, g_savedPlayerAngle);
+            g_savedState.pos = trainer->GetPlayerPos();
+            g_savedState.ang = trainer->GetPlayerAngle();
+            g_savedState.health = trainer->GetHealth();
+            g_savedState.charge = trainer->GetCharge();
+            SetPosText(g_savedPos, g_savedState.pos, g_savedState.ang);
         } else if (command == LOAD_POS) {
-            if (g_savedPlayerPos[0] != 0.0f || g_savedPlayerPos[1] != 0.0f || g_savedPlayerPos[2] != 0.0f) { // Prevent TP to origin (i.e. if the user hasn't set a position yet)
-                trainer->SetPlayerPos(g_savedPlayerPos);
-                trainer->SetPlayerAngle(g_savedPlayerAngle);
-                SetPosText(g_currentPos, g_savedPlayerPos, g_savedPlayerAngle);
+            if (g_savedState.pos[0] != 0.0f || g_savedState.pos[1] != 0.0f || g_savedState.pos[2] != 0.0f) { // Prevent TP to origin (i.e. if the user hasn't set a position yet)
+                trainer->SetPlayerPos(g_savedState.pos);
+                trainer->SetPlayerAngle(g_savedState.ang);
+                trainer->SetHealth(g_savedState.health);
+                trainer->SetCharge(g_savedState.charge);
+                SetPosText(g_currentPos, g_savedState.pos, g_savedState.ang);
             }
         } else if (command == INFINITE_HEALTH) {
             if (IsDlgButtonChecked(g_hwnd, INFINITE_HEALTH)) {

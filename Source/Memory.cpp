@@ -179,6 +179,9 @@ size_t Memory::ExecuteSigScans() {
 // Technically this is ReadChar*, but this name makes more sense with the return type.
 std::string Memory::ReadString(const std::vector<__int64>& offsets, size_t pointerSize) {
     uintptr_t charAddr = ResolvePointerPath(offsets, pointerSize);
+    // std::vector<byte> charAddrBytes = ReadData<byte>(offsets, pointerSize);
+    // charAddrBytes.resize(8);
+    // __int64 charAddr = *(__int64*)charAddrBytes.data();
     if (charAddr == 0) return ""; // Handle nullptr for strings
 
     std::vector<char> tmp;
