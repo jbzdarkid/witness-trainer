@@ -74,7 +74,7 @@ public:
         WriteDataInternal(&data[0], ComputeOffset(offsets), sizeof(T) * data.size());
     }
 
-    uintptr_t ResolvePointerPath(const std::vector<__int64>& offsets);
+    uintptr_t ResolvePointerPath(const std::vector<__int64>& offsets, size_t pointerSize = 0);
     void ClearComputedAddress(const std::vector<__int64>& offsets);
     void ClearAllComputedAddresses();
 

@@ -86,7 +86,7 @@ private:
 #ifdef NDEBUG
     static constexpr std::chrono::milliseconds s_heartbeat = std::chrono::milliseconds(100);
 #else // Induce more stress in debug, to catch errors more easily.
-    static constexpr std::chrono::milliseconds s_heartbeat = std::chrono::milliseconds(10);
+    static constexpr std::chrono::milliseconds s_heartbeat = std::chrono::milliseconds(100);
 #endif
 
     // Relative to globals

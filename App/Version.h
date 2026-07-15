@@ -5,7 +5,7 @@
 
 #define MAJOR 1
 #define MINOR 10
-#define PATCH 1
+#define PATCH 1 // TODO (before shipping): Investigate and/or fix the issue where "can save the game" isn't preventing you from saving the game.
 
 #define VERSION_STR     TO_STRING(MAJOR) L"." TO_STRING(MINOR) L"." TO_STRING(PATCH)
 #define VERSION         MAJOR, MINOR, PATCH

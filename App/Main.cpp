@@ -185,7 +185,7 @@ void SetActivePanel(int activePanel) {
             if (!previousPanelStart.empty()) {
                 auto cameraPos = g_trainer->GetCameraPos();
                 auto distance = sqrt(pow(previousPanelStart[0] - cameraPos[0], 2) + pow(previousPanelStart[1] - cameraPos[1], 2) + pow(previousPanelStart[2] - cameraPos[2], 2));
-                SetStringText(g_panelDist, "Distance to " + entityData->type + ": " + std::to_string(distance));
+                SetStringText(g_panelDist, "Distance: " + std::to_string(distance));
                 SetStringText(g_snapToLabel, "Lock view to " + entityData->type);
                 EnableWindow(g_snapToLabel, true);
                 EnableWindow(g_snapToPanel, true);
