@@ -1,0 +1,33 @@
+name: Update pinned tags for Hob/Witness releases
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  update-tags:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@main
+    - name: Update tags
+      shell: python
+      run: |
+        import json
+        import os
+        import subprocess
+
+        with open(os.environ['GITHUB_EVENT_PATH']) as f:
+          release = json.load(f)['release']
+        assets = {a['name'] for a in release['assets']}
+        if 'WitnessTrainer.exe' in assets:
+          tag = 'witness-latest'
+        elif 'HobTrainer.exe' in assets:
+          tag = 'hob-latest'
+        else:
+          raise ValueError(f'Latest release {release["tag_name"]} could not be identified as Hob/Witness')
+
+        subprocess.run(['git', 'tag', '-f', tag, release['tag_name']], check=True)
+        subprocess.run(['git', 'push', '-f', 'origin', tag], check=True)
