@@ -246,8 +246,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
 
                         // The camera is always a fixed distance behind hob, in the direction its facing.
                         // For no apparently reason, this computation uses a double angle.
-                        double x = position[0] + 10 * sin(2 * radians);
-                        double z = position[2] + 10 * cos(2 * radians);
+                        double x = position[0] + 13 * sin(2 * radians);
+                        double z = position[2] + 13 * cos(2 * radians);
                         g_trainer->SetCameraPosition((float)x, (float)y, (float)z);
                     }
 
