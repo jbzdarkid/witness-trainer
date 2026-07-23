@@ -1,0 +1,57 @@
+name: Publish latest-release redirect
+on:
+  release:
+    types: [published]
+
+permissions:
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: github-pages
+
+    steps:
+    - uses: actions/checkout@main
+    - uses: actions/configure-pages@main
+    - name: Build redirect page
+      shell: python
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        import json
+        import os
+        import urllib.request
+
+        r = urllib.request.Request(
+          'https://api.github.com/repos/%s/releases?per_page=100' % os.environ['GITHUB_REPOSITORY'],
+          headers={'Authorization': 'Bearer ' + os.environ['GITHUB_TOKEN']})
+        releases = json.load(urllib.request.urlopen(r))
+
+        def latest_release_with(name):
+          for release in releases:
+            if any(asset['name'] == name for asset in release['assets']):
+              return release['html_url']
+          raise ValueError(f'No release found containing asset {name}')
+
+        hob_release = latest_release_with('HobTrainer.exe')
+        witness_release = latest_release_with('WitnessTrainer.exe')
+        os.makedirs('_site', exist_ok=True)
+        with open('_site/latest.html', 'w') as f:
+          f.write(f'''<!doctype html>
+          <script>
+            const trainer = new URLSearchParams(location.search).get("trainer")
+            if (trainer === "hob") location.replace("{hob_release}")
+            else if (trainer === "witness") location.replace("{witness_release}")
+            else location.replace("https://github.com/jbzdarkid/witness-trainer/releases")
+          </script>
+          ''')
+    - uses: actions/upload-pages-artifact@main
+      with:
+        path: _site
+    - uses: actions/deploy-pages@main
