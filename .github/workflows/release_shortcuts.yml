@@ -1,7 +1,8 @@
 name: Publish latest-release redirect
 on:
-  release:
-    types: [published, prereleased, released]
+  schedule:
+    - cron: '52 4 * * *'   # nightly at 04:52 UTC
+  workflow_dispatch:
 
 permissions:
   pages: write
