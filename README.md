@@ -41,6 +41,7 @@ This program is Windows-only for the forseeable future.
   * Psi (Φ) represents your vertical angle (-Φ = rotating down, +Φ = rotating up)
 - Show unsolved panels
   * Fairly self-explanatory, but very helpful for figuring out what you missed in a failed 100% run.
+  * Note: If you do not know the panel names, you can look them up on [this spreadsheet](https://docs.google.com/spreadsheets/d/13Qohr67j9bgDdazimJOCkpmq7avVDjrPwmbyGGfCdsI/edit#gid=2121658720)
 - Lock to entity
   * When you have a previous panel or EP, this checkbox will keep your 3d view snapped into the startpoint of that entity.
   * This is helpful for practicing snipes, or trying to develop new snipes.
