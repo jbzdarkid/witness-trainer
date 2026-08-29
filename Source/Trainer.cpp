@@ -2,16 +2,22 @@
 #include "Trainer.h"
 
 Trainer::Trainer(std::shared_ptr<Memory> memory) : _memory(memory) {
+    // Steam: 0x409CD7
+    // Epic:  0x409CD7
     _memory->AddSigScan("80 BD 00 01 00 00 00", [this](__int64 offset, int index, const std::vector<byte>& data) {
         __int64 getGameWorld = Memory::ReadStaticInt(offset, index + 11, data);
         _gameWorldPtr = _memory->ReadData<uint32_t>({getGameWorld + 1}, 1)[0];
     });
 
-    _memory->AddSigScan("83 EC 1C 56 6A 2C", [this](__int64 offset, int index, const std::vector<byte>& data) {
-        __int64 getGlobalSettings = Memory::ReadStaticInt(offset, index + 7, data);
+    // Steam: 0x9AE9C3
+    // Epic:  0x9AD333
+    _memory->AddSigScan("56 6A 2C E8", [this](__int64 offset, int index, const std::vector<byte>& data) {
+        __int64 getGlobalSettings = Memory::ReadStaticInt(offset, index + 4, data);
         _globalSettingsPtr = _memory->ReadData<uint32_t>({getGlobalSettings + 1}, 1)[0];
     });
 
+    // Steam: 0x4B1271 -> 0x4B1257, 0x4B13D9
+    // Epic:  0x4B27D1 -> 0x4B27B7, 0x4B2939
     _memory->AddSigScan("F3 0F 10 9B BC010000", [this](__int64 offset, int index, const std::vector<byte>& data) {
         _cameraPos = (uint32_t)(offset + index - 0x1A);
         _cameraPosFunc = (uint32_t)Memory::ReadStaticInt(offset, index - 0x1A, data);
