@@ -591,13 +591,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     g_trainer = std::make_shared<Trainer>(g_hobProc);
     g_trainer->StartHeartbeat(g_hwnd, HEARTBEAT);
 
-#ifndef _DEBUG
-    // Don't hook in debug mode. While debugging, we are paused (and thus cannot run the hook). So, we will timeout on every hook call!
-    HHOOK hooks[2] = {
-        SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardAndMouseProc, hInstance, NULL),
-        SetWindowsHookExW(WH_MOUSE_LL, KeyboardAndMouseProc, hInstance, NULL),
-    };
-#endif
+    HHOOK hooks[2] = {};
+    // Don't hook when a debugger is attached. While debugging, we are paused (and thus cannot run the hook). So, we will timeout on every hook call!
+    if (!IsDebuggerPresent()) {
+        hooks[0] = SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardAndMouseProc, hInstance, NULL);
+        hooks[1] = SetWindowsHookExW(WH_MOUSE_LL, KeyboardAndMouseProc, hInstance, NULL);
+    }
 
     MSG msg;
     while (GetMessage(&msg, nullptr, 0, 0)) {
@@ -605,9 +604,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         DispatchMessage(&msg);
     }
 
-#ifndef _DEBUG
-    for (const auto& hook : hooks) UnhookWindowsHookEx(hook);
-#endif
+    for (const auto& hook : hooks) {
+        if (hook) UnhookWindowsHookEx(hook);
+    }
 
     CoUninitialize();
     return (int) msg.wParam;
