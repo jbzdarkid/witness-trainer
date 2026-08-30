@@ -37,7 +37,7 @@ std::pair<uint64_t, uint64_t> DebugUtils::GetModuleBounds(HANDLE process, const 
         std::wstring baseName(256, '\0');
         int size = GetModuleBaseNameW(process, module, &baseName[0], 256);
         baseName.resize(size);
-        if (baseName != moduleName) continue;
+        if (_wcsnicmp(baseName.c_str(), moduleName.c_str(), moduleName.size()) != 0) continue;
 
         MODULEINFO moduleInfo;
         GetModuleInformation(process, module, &moduleInfo, sizeof(moduleInfo));

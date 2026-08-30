@@ -587,7 +587,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     CreateComponents();
     Hotkeys::Get()->SanityCheckHotkeys();
 
-    g_hobProc = std::make_shared<Memory>(L"HOB.exe", L"HOB.exe");
+    g_hobProc = std::make_shared<Memory>(L"HOB.exe", L"Hob.exe");
     g_trainer = std::make_shared<Trainer>(g_hobProc);
     g_trainer->StartHeartbeat(g_hwnd, HEARTBEAT);
 
