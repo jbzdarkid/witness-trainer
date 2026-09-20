@@ -17,6 +17,7 @@ std::shared_ptr<Hotkeys> Hotkeys::Get() {
 }
 
 Hotkeys::Hotkeys() {
+    std::map<const char*, const char*> defaults = {};
     if (!ParseHotkeyFile()) {
         // Default hotkeys (duplicate of what's defined in DEFAULT_HOTKEYS in the header), just in case the parse fails.
         _hotkeyNames["god_mode"] = MASK_CONTROL | 'G';
@@ -25,6 +26,14 @@ Hotkeys::Hotkeys() {
         _hotkeyNames["infinite_health"] = MASK_SHIFT | MASK_CONTROL | 'H';
         _hotkeyNames["infinite_charge"] = MASK_SHIFT | MASK_CONTROL | 'C';
         _hotkeyNames["respawn"] = MASK_SHIFT | MASK_CONTROL | 'R';
+        _hotkeyNames["select_pos_1"] = MASK_SHIFT | MASK_CONTROL | '1';
+        _hotkeyNames["select_pos_2"] = MASK_SHIFT | MASK_CONTROL | '2';
+        _hotkeyNames["select_pos_3"] = MASK_SHIFT | MASK_CONTROL | '3';
+        _hotkeyNames["select_pos_4"] = MASK_SHIFT | MASK_CONTROL | '4';
+        _hotkeyNames["select_pos_5"] = MASK_SHIFT | MASK_CONTROL | '5';
+        _hotkeyNames["select_pos_6"] = MASK_SHIFT | MASK_CONTROL | '6';
+        _hotkeyNames["select_pos_7"] = MASK_SHIFT | MASK_CONTROL | '7';
+        _hotkeyNames["select_pos_8"] = MASK_SHIFT | MASK_CONTROL | '8';
     }
 
     // Can't be changed, used to signal 'end of hold'
@@ -67,11 +76,7 @@ bool Hotkeys::ParseHotkeyFile() {
         if (_wmkdir(path.c_str()) != 0) return false;
     }
     path += L"\\keybinds.txt";
-    if (GetFileAttributes(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
-        HANDLE file = CreateFile(path.c_str(), FILE_GENERIC_WRITE, NULL, nullptr, CREATE_ALWAYS, NULL, nullptr);
-        WriteFile(file, &DEFAULT_KEYBINDS[0], (DWORD)strnlen(DEFAULT_KEYBINDS, 0xFFFF), nullptr, nullptr);
-        CloseHandle(file);
-    }
+    if (GetFileAttributes(path.c_str()) == INVALID_FILE_ATTRIBUTES) return true;
 
     std::ifstream file(path);
     if (file.fail()) return false;
@@ -130,7 +135,7 @@ bool Hotkeys::ParseHotkeyFile() {
             std::string key(keyView.size(), '\0');
             for (int i = 0; i < keyView.size(); i++) {
                 char ch = keyView[i];
-                ASSERT(ch >= 0x40 && ch <= 0x7F, L"Unable to parse key: " + std::wstring(keyView.begin(), keyView.end()));
+                ASSERT(ch >= 0x30 && ch <= 0x7F, L"Unable to parse key: " + std::wstring(keyView.begin(), keyView.end()));
                 if (ch >= 'A' && ch <= 'Z') ch += 'a' - 'A'; // ASCII lowercase
                 key[i] = ch;
             }

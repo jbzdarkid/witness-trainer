@@ -96,7 +96,7 @@ ProcStatus Trainer::Heartbeat() {
 }
 
 void Trainer::OnGameStart() {
-    SetMoney(999999);
+    SetMoney(GetMoney() + 1'000'000);
     AddCameraHooks();
 }
 

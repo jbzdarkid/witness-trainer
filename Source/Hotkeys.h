@@ -48,5 +48,13 @@ private:
         "respawn: Control-Shift-R\n"
         "launch_game:\n"
         "open_save_folder:\n"
-        "open_keybinds:\n";
+        "open_keybinds:\n"
+        "select_pos_1: Control-Shift-1\n"
+        "select_pos_2: Control-Shift-2\n"
+        "select_pos_3: Control-Shift-3\n"
+        "select_pos_4: Control-Shift-4\n"
+        "select_pos_5: Control-Shift-5\n"
+        "select_pos_6: Control-Shift-6\n"
+        "select_pos_7: Control-Shift-7\n"
+        "select_pos_8: Control-Shift-8\n";
 };

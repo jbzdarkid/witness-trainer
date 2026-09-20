@@ -8,11 +8,12 @@
 #include "Hotkeys.h"
 
 #include <fstream>
-#include <unordered_set>
 
 #define HEARTBEAT           0x401
 #define SAVE_POS            0x402
 #define LOAD_POS            0x403
+#define SELECT_POS          0x404
+#define SELECT_POS_MAX      0x40B
 #define ACTIVATE_GAME       0x412
 #define OPEN_SAVES          0x413
 #define KEY_RELEASED        0x426
@@ -42,7 +43,9 @@ struct SavedState {
   std::vector<float> ang = {0.0f, 0.0f, 0.0f, 0.0f};
   int health = 0;
   int charge = 0;
-} g_savedState;
+};
+SavedState g_savedStates[SELECT_POS_MAX - SELECT_POS + 1];
+SavedState* g_savedState = &g_savedStates[0];
 
 std::vector<float> g_position;
 double g_startTime = 0;
@@ -101,7 +104,8 @@ void SetPosText(HWND hwnd, const std::vector<float>& pos, const std::vector<floa
         // Do some math to convert the angle into a polar coordinate (0-360 degrees).
         // I don't know why this is correct, this isn't how quat math works usually.
         double x = angle[3], y = angle[1];
-        double degrees = atan(y / x) * 360.0 / 3.14159 + 90.0;
+        double degrees = 90.0;
+        if (x != 0.0) degrees = atan(y / x) * 360.0 / 3.14159 + 90.0;
         swprintf_s(text.data(), text.size(), L"X %.3f\nY %.3f\nZ %.3f\n\u0398 %.3f", pos[0], pos[1], pos[2], degrees);
     } else {
         swprintf_s(text.data(), text.size(), L"X %.3f\nY %.3f\nZ %.3f", pos[0], pos[1], pos[2]);
@@ -309,21 +313,26 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         } else if (command == OPEN_KEYBINDS) {
             std::wstring hotkeyFile = Hotkeys::Get()->GetHotkeyFilePath();
             ShellExecute(NULL, L"open", hotkeyFile.c_str(), NULL, NULL, SW_SHOWDEFAULT);
-        }
 
-        if (command == SAVE_POS) {
-            g_savedState.pos = trainer->GetPlayerPos();
-            g_savedState.ang = trainer->GetPlayerAngle();
-            g_savedState.health = trainer->GetHealth();
-            g_savedState.charge = trainer->GetCharge();
-            SetPosText(g_savedPos, g_savedState.pos, g_savedState.ang);
+        } else if (command >= SELECT_POS && command <= SELECT_POS_MAX) {
+            g_savedState = &g_savedStates[command - SELECT_POS];
+            SetPosText(g_savedPos, g_savedState->pos, g_savedState->ang);
+            for (int i = SELECT_POS; i <= SELECT_POS_MAX; i++) {
+                CheckDlgButton(g_hwnd, i, i == command);
+            }
+        } else if (command == SAVE_POS) {
+            g_savedState->pos = trainer->GetPlayerPos();
+            g_savedState->ang = trainer->GetPlayerAngle();
+            g_savedState->health = trainer->GetHealth();
+            g_savedState->charge = trainer->GetCharge();
+            SetPosText(g_savedPos, g_savedState->pos, g_savedState->ang);
         } else if (command == LOAD_POS) {
-            if (g_savedState.pos[0] != 0.0f || g_savedState.pos[1] != 0.0f || g_savedState.pos[2] != 0.0f) { // Prevent TP to origin (i.e. if the user hasn't set a position yet)
-                trainer->SetPlayerPos(g_savedState.pos);
-                trainer->SetPlayerAngle(g_savedState.ang);
-                trainer->SetHealth(g_savedState.health);
-                trainer->SetCharge(g_savedState.charge);
-                SetPosText(g_currentPos, g_savedState.pos, g_savedState.ang);
+            if (g_savedState->pos[0] != 0.0f || g_savedState->pos[1] != 0.0f || g_savedState->pos[2] != 0.0f) { // Prevent TP to origin (i.e. if the user hasn't set a position yet)
+                trainer->SetPlayerPos(g_savedState->pos);
+                trainer->SetPlayerAngle(g_savedState->ang);
+                trainer->SetHealth(g_savedState->health);
+                trainer->SetCharge(g_savedState->charge);
+                SetPosText(g_currentPos, g_savedState->pos, g_savedState->ang);
             }
         } else if (command == INFINITE_HEALTH) {
             if (IsDlgButtonChecked(g_hwnd, INFINITE_HEALTH)) {
@@ -475,6 +484,21 @@ HWND CreateText(int x, int& y, int width, LPCWSTR defaultText = L"", __int64 mes
     return text;
 }
 
+void CreateRadioButtons(int x, int& y, int width, __int64 message_low, __int64 message_high, LPCSTR hotkeyName) {
+    for (int i = 0; i < (message_high - message_low + 1); i++) {
+        HWND button = CreateWindow(L"BUTTON", std::to_wstring(i + 1).c_str(),
+            WS_VISIBLE | WS_CHILD | BS_AUTORADIOBUTTON,
+            x + (i * width), y, 26, 26,
+            g_hwnd, (HMENU)(message_low + i), g_hInstance, NULL);
+
+        std::string subHotkeyName = hotkeyName + std::to_string(i + 1);
+        Hotkeys::Get()->RegisterHotkey(subHotkeyName.c_str(), message_low + i);
+        std::wstring hoverText = Hotkeys::Get()->GetHoverText(subHotkeyName.c_str());
+        CreateTooltip(button, hoverText.c_str());
+    }
+    y += 30;
+}
+
 void CreateComponents() {
     // Column 1
     int x = 10;
@@ -491,6 +515,9 @@ void CreateComponents() {
     CreateLabelAndCheckbox(x, y, 100, L"Infinite Charge", INFINITE_CHARGE, "infinite_charge");
 
     CreateButton(x, y, 100, L"Respawn", RESPAWN, "respawn");
+
+    CreateRadioButtons(x, y, 30, SELECT_POS, SELECT_POS_MAX, "select_pos_");
+    CheckDlgButton(g_hwnd, SELECT_POS, TRUE);
 
     CreateButton(x, y, 110, L"Save Position", SAVE_POS, "save_position");
     y -= 30;
