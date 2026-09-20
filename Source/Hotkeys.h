@@ -17,7 +17,7 @@ class Hotkeys {
 public:
     static std::shared_ptr<Hotkeys> Get();
     Hotkeys();
-    std::wstring GetHotkeyFilePath() const { return _hotkeyFilePath; }
+    static std::wstring GetHotkeyFilePath();
 
     int64_t CheckMatchingHotkey(WPARAM wParam, LPARAM lParam);
 
@@ -28,33 +28,15 @@ public:
 private:
     static std::shared_ptr<Hotkeys> _instance;
 
-    bool ParseHotkeyFile();
+    bool ParseHotkeyFile(const std::wstring& path);
     bool CompareNoCase(const std::string_view& a, const char* b);
-    std::wstring GetHoverText(keycode keyCode);
 
-    std::wstring _hotkeyFilePath;
+    std::wstring GetHoverText(keycode keyCode);
+    keycode ParseKeycode(std::string_view text, int lineNo);
+
     keycode _lastCode = 0;
     std::map<keycode, int64_t> _hotkeyCodes;
     std::unordered_set<keycode> _hotkeys;
     std::map<std::string, keycode> _hotkeyNames;
     std::unordered_set<std::string> _registeredHotkeys;
-
-    const LPCSTR DEFAULT_KEYBINDS =
-        "god_mode: Control-G\n"
-        "save_position: Control-P\n"
-        "load_position: Control-Shift-P\n"
-        "infinite_health: Control-Shift-H\n"
-        "infinite_charge: Control-Shift-C\n"
-        "respawn: Control-Shift-R\n"
-        "launch_game:\n"
-        "open_save_folder:\n"
-        "open_keybinds:\n"
-        "select_pos_1: Control-Shift-1\n"
-        "select_pos_2: Control-Shift-2\n"
-        "select_pos_3: Control-Shift-3\n"
-        "select_pos_4: Control-Shift-4\n"
-        "select_pos_5: Control-Shift-5\n"
-        "select_pos_6: Control-Shift-6\n"
-        "select_pos_7: Control-Shift-7\n"
-        "select_pos_8: Control-Shift-8\n";
 };

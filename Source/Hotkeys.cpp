@@ -17,27 +17,61 @@ std::shared_ptr<Hotkeys> Hotkeys::Get() {
 }
 
 Hotkeys::Hotkeys() {
-    std::map<const char*, const char*> defaults = {};
-    if (!ParseHotkeyFile()) {
-        // Default hotkeys (duplicate of what's defined in DEFAULT_HOTKEYS in the header), just in case the parse fails.
-        _hotkeyNames["god_mode"] = MASK_CONTROL | 'G';
-        _hotkeyNames["save_position"] = MASK_CONTROL | 'P';
-        _hotkeyNames["load_position"] = MASK_SHIFT | MASK_CONTROL | 'P';
-        _hotkeyNames["infinite_health"] = MASK_SHIFT | MASK_CONTROL | 'H';
-        _hotkeyNames["infinite_charge"] = MASK_SHIFT | MASK_CONTROL | 'C';
-        _hotkeyNames["respawn"] = MASK_SHIFT | MASK_CONTROL | 'R';
-        _hotkeyNames["select_pos_1"] = MASK_SHIFT | MASK_CONTROL | '1';
-        _hotkeyNames["select_pos_2"] = MASK_SHIFT | MASK_CONTROL | '2';
-        _hotkeyNames["select_pos_3"] = MASK_SHIFT | MASK_CONTROL | '3';
-        _hotkeyNames["select_pos_4"] = MASK_SHIFT | MASK_CONTROL | '4';
-        _hotkeyNames["select_pos_5"] = MASK_SHIFT | MASK_CONTROL | '5';
-        _hotkeyNames["select_pos_6"] = MASK_SHIFT | MASK_CONTROL | '6';
-        _hotkeyNames["select_pos_7"] = MASK_SHIFT | MASK_CONTROL | '7';
-        _hotkeyNames["select_pos_8"] = MASK_SHIFT | MASK_CONTROL | '8';
+    _hotkeyNames = {
+        { "god_mode",           ParseKeycode("Control-G", -2) },
+        { "save_position",      ParseKeycode("Control-P", -2) },
+        { "load_position",      ParseKeycode("Control-Shift-P", -2) },
+        { "infinite_health",    ParseKeycode("Control-Shift-H", -2) },
+        { "infinite_charge",    ParseKeycode("Control-Shift-C", -2) },
+        { "respawn",            ParseKeycode("Control-Shift-R", -2) },
+        { "select_pos_1",       ParseKeycode("Control-Shift-1", -2) },
+        { "select_pos_2",       ParseKeycode("Control-Shift-2", -2) },
+        { "select_pos_3",       ParseKeycode("Control-Shift-3", -2) },
+        { "select_pos_4",       ParseKeycode("Control-Shift-4", -2) },
+        { "select_pos_5",       ParseKeycode("Control-Shift-5", -2) },
+        { "select_pos_6",       ParseKeycode("Control-Shift-6", -2) },
+        { "select_pos_7",       ParseKeycode("Control-Shift-7", -2) },
+        { "select_pos_8",       ParseKeycode("Control-Shift-8", -2) },
+    };
+    std::wstring path = GetHotkeyFilePath();
+
+    if (!path.empty() && ParseHotkeyFile(path)) {
+        // If the file is readable, rewrite with our fully parsed config.
+        // If it's not readable, we'll just fall back to an in-memory config.
+        std::string text;
+        for (const auto& [key, value] : _hotkeyNames) {
+            text += key + ": ";
+            for (wchar_t wch : GetHoverText(value)) text += (char)wch;
+            text += "\n";
+        }
+
+        HANDLE file = CreateFile(path.c_str(), FILE_GENERIC_WRITE, NULL, nullptr, CREATE_ALWAYS, NULL, nullptr);
+        WriteFile(file, text.data(), (DWORD)text.size(), nullptr, nullptr);
+        CloseHandle(file);
     }
 
-    // Can't be changed, used to signal 'end of hold'
+    // Not written to disk, can't be changed, used to signal 'end of held key'
     _hotkeyNames["key_released"] = KEYCODE_RELEASE;
+}
+
+std::wstring Hotkeys::GetHotkeyFilePath() {
+    // Try to open the file, and regenerate it if it doesn't exist.
+    std::wstring path;
+    {
+        PWSTR outPath;
+        SHGetKnownFolderPath(FOLDERID_LocalAppData, SHGFP_TYPE_CURRENT, NULL, &outPath);
+        path = outPath;
+        CoTaskMemFree(outPath);
+    }
+
+    if (GetFileAttributes(path.c_str()) == INVALID_FILE_ATTRIBUTES) return L""; // Do not try to create LocalAppData
+    path += L"\\HobTrainer";
+    if (GetFileAttributes(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        if (_wmkdir(path.c_str()) != 0) return L"";
+    }
+    path += L"\\keybinds.txt";
+
+    return path;
 }
 
 bool Hotkeys::CompareNoCase(const std::string_view& a, const char* b) {
@@ -49,35 +83,13 @@ bool Hotkeys::CompareNoCase(const std::string_view& a, const char* b) {
     return true;
 }
 
-#define ASSERT(condition, message) \
+#define SHOW_HOTKEY_FAILURE(message) \
     do { \
-        if (!(condition)) { \
-            std::wstring __fullMessage = std::wstring(L"Error while parsing hotkey file (") + path + std::wstring(L") on line ") + std::to_wstring(lineNo) + std::wstring(L":\n") + std::wstring(message); \
-            ShowAssertDialogue(__fullMessage.c_str()); \
-        } \
+        std::wstring __fullMessage = std::wstring(L"Error while parsing hotkey file (") + Hotkeys::GetHotkeyFilePath() + std::wstring(L") on line ") + std::to_wstring(lineNo) + std::wstring(L":\n") + std::wstring(message); \
+        ShowAssertDialogue(__fullMessage.c_str()); \
     } while(0)
 
-bool Hotkeys::ParseHotkeyFile() {
-    _hotkeyNames.clear();
-
-    // Try to open the file, and regenerate it if it doesn't exist.
-    std::wstring path;
-    {
-        PWSTR outPath;
-        SHGetKnownFolderPath(FOLDERID_LocalAppData, SHGFP_TYPE_CURRENT, NULL, &outPath);
-        path = outPath;
-        CoTaskMemFree(outPath);
-    }
-    _hotkeyFilePath = path + L"\\HobTrainer\\keybinds.txt";
-
-    if (GetFileAttributes(path.c_str()) == INVALID_FILE_ATTRIBUTES) return false; // Do not try to create LocalAppData
-    path += L"\\HobTrainer";
-    if (GetFileAttributes(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
-        if (_wmkdir(path.c_str()) != 0) return false;
-    }
-    path += L"\\keybinds.txt";
-    if (GetFileAttributes(path.c_str()) == INVALID_FILE_ATTRIBUTES) return true;
-
+bool Hotkeys::ParseHotkeyFile(const std::wstring& path) {
     std::ifstream file(path);
     if (file.fail()) return false;
 
@@ -85,57 +97,18 @@ bool Hotkeys::ParseHotkeyFile() {
     int32_t lineNo = 0;
     while (std::getline(file, line)) {
         ++lineNo;
-        std::string_view lineView(line);
 
-        size_t colonIndex = lineView.find_first_of(':');
+        size_t colonIndex = line.find_first_of(':');
         if (colonIndex == std::string::npos) continue;
-        std::string_view keyView = lineView.substr(0, colonIndex);
-
-        keycode keyCode = 0;
-        size_t valueIndex = lineView.find_first_not_of(' ', colonIndex + 1);
-        while (valueIndex != std::string::npos) {
-            size_t partIndex = lineView.find_first_of('-', valueIndex);
-            std::string_view segment(lineView.substr(valueIndex, partIndex - valueIndex));
-            if (segment.size() == 1) {
-                char ch = segment[0];
-                ASSERT(ch >= 0x20 && ch <= 0x7F, L"Unable to parse letter: " + std::wstring(1, ch));
-                if (ch >= 'a' && ch <= 'z') ch += 'A' - 'a'; // ASCII uppercase, to match the virtual keycodes
-                keyCode |= ch;
-                ASSERT(partIndex == std::string::npos, L"The letter key in a hotkey must go at the end of the line.");
-            }
-            else if (CompareNoCase(segment, "control"))  keyCode |= MASK_CONTROL;
-            else if (CompareNoCase(segment, "shift"))    keyCode |= MASK_SHIFT;
-            else if (CompareNoCase(segment, "alt"))      keyCode |= MASK_ALT;
-            else if (CompareNoCase(segment, "win"))      keyCode |= MASK_WIN;
-            else if (CompareNoCase(segment, "tilde"))    keyCode |= MASK_SHIFT | VK_OEM_3;
-            else if (CompareNoCase(segment, "plus"))     keyCode |= VK_OEM_PLUS;
-            else if (CompareNoCase(segment, "pageup"))   keyCode |= VK_PRIOR;
-            else if (CompareNoCase(segment, "pagedown")) keyCode |= VK_NEXT;
-            else if (CompareNoCase(segment, "home"))     keyCode |= VK_HOME;
-            else if (CompareNoCase(segment, "end"))      keyCode |= VK_END;
-            else if (CompareNoCase(segment, "space"))    keyCode |= VK_SPACE;
-            else if (CompareNoCase(segment, "up"))       keyCode |= VK_UP;
-            else if (CompareNoCase(segment, "down"))     keyCode |= VK_DOWN;
-            else if (CompareNoCase(segment, "left"))     keyCode |= VK_LEFT;
-            else if (CompareNoCase(segment, "right"))    keyCode |= VK_RIGHT;
-            else if (CompareNoCase(segment, "mouse1"))   keyCode |= VK_LBUTTON;
-            else if (CompareNoCase(segment, "mouse2"))   keyCode |= VK_RBUTTON;
-            else if (CompareNoCase(segment, "mouse3"))   keyCode |= VK_MBUTTON;
-            else if (CompareNoCase(segment, "mouse4"))   keyCode |= VK_XBUTTON1;
-            else if (CompareNoCase(segment, "mouse5"))   keyCode |= VK_XBUTTON2;
-            else {
-                ASSERT(false, L"Unable to parse segment: " + std::wstring(segment.begin(), segment.end()));
-            }
-
-            if (partIndex == std::string::npos) break;
-            valueIndex = partIndex + 1;
-        }
+        keycode keyCode = ParseKeycode(line.substr(colonIndex + 1), lineNo);
 
         if (keyCode != 0) {
-            std::string key(keyView.size(), '\0');
-            for (int i = 0; i < keyView.size(); i++) {
-                char ch = keyView[i];
-                ASSERT(ch >= 0x30 && ch <= 0x7F, L"Unable to parse key: " + std::wstring(keyView.begin(), keyView.end()));
+            std::string key = line.substr(0, colonIndex);
+            for (int i = 0; i < key.size(); i++) {
+                char ch = key[i];
+                if (ch < 0x30 || ch > 0x7F) {
+                    SHOW_HOTKEY_FAILURE(L"Unable to parse key: " + std::wstring(key.begin(), key.end()));
+                }
                 if (ch >= 'A' && ch <= 'Z') ch += 'a' - 'A'; // ASCII lowercase
                 key[i] = ch;
             }
@@ -144,6 +117,57 @@ bool Hotkeys::ParseHotkeyFile() {
     }
 
     return true;
+}
+
+Hotkeys::keycode Hotkeys::ParseKeycode(std::string_view text, int lineNo) {
+    keycode keyCode = 0;
+
+    size_t valueIndex = text.find_first_not_of(' ');
+    while (valueIndex != std::string::npos) {
+        size_t partIndex = text.find_first_of('-', valueIndex);
+        std::string_view segment(text.substr(valueIndex, partIndex - valueIndex));
+        if (segment.size() == 1) {
+            char ch = segment[0];
+            if (ch < 0x20 || ch > 0x7F) {
+                SHOW_HOTKEY_FAILURE(L"Unable to parse letter: " + std::wstring(1, ch));
+                return 0;
+            }
+            if (ch >= 'a' && ch <= 'z') ch += 'A' - 'a'; // ASCII uppercase, to match the virtual keycodes
+            keyCode |= ch;
+            if (partIndex != std::string::npos) {
+                SHOW_HOTKEY_FAILURE(L"The letter key in a hotkey must go at the end of the line.");
+            }
+        }
+        else if (CompareNoCase(segment, "control"))  keyCode |= MASK_CONTROL;
+        else if (CompareNoCase(segment, "shift"))    keyCode |= MASK_SHIFT;
+        else if (CompareNoCase(segment, "alt"))      keyCode |= MASK_ALT;
+        else if (CompareNoCase(segment, "win"))      keyCode |= MASK_WIN;
+        else if (CompareNoCase(segment, "tilde"))    keyCode |= MASK_SHIFT | VK_OEM_3;
+        else if (CompareNoCase(segment, "plus"))     keyCode |= VK_OEM_PLUS;
+        else if (CompareNoCase(segment, "pageup"))   keyCode |= VK_PRIOR;
+        else if (CompareNoCase(segment, "pagedown")) keyCode |= VK_NEXT;
+        else if (CompareNoCase(segment, "home"))     keyCode |= VK_HOME;
+        else if (CompareNoCase(segment, "end"))      keyCode |= VK_END;
+        else if (CompareNoCase(segment, "space"))    keyCode |= VK_SPACE;
+        else if (CompareNoCase(segment, "up"))       keyCode |= VK_UP;
+        else if (CompareNoCase(segment, "down"))     keyCode |= VK_DOWN;
+        else if (CompareNoCase(segment, "left"))     keyCode |= VK_LEFT;
+        else if (CompareNoCase(segment, "right"))    keyCode |= VK_RIGHT;
+        else if (CompareNoCase(segment, "mouse1"))   keyCode |= VK_LBUTTON;
+        else if (CompareNoCase(segment, "mouse2"))   keyCode |= VK_RBUTTON;
+        else if (CompareNoCase(segment, "mouse3"))   keyCode |= VK_MBUTTON;
+        else if (CompareNoCase(segment, "mouse4"))   keyCode |= VK_XBUTTON1;
+        else if (CompareNoCase(segment, "mouse5"))   keyCode |= VK_XBUTTON2;
+        else {
+            SHOW_HOTKEY_FAILURE(L"Unable to parse segment: '" + std::wstring(segment.begin(), segment.end()) + L"'");
+            return 0;
+        }
+
+        if (partIndex == std::string::npos) break;
+        valueIndex = partIndex + 1;
+    }
+
+    return keyCode;
 }
 
 int64_t Hotkeys::CheckMatchingHotkey(WPARAM wParam, LPARAM lParam) {
@@ -232,9 +256,8 @@ void Hotkeys::SanityCheckHotkeys() {
     for (const auto& it : _hotkeyNames) {
         auto search = _registeredHotkeys.find(it.first);
         if (search == std::end(_registeredHotkeys)) {
-            std::wstring __fullMessage = std::wstring(L"Error while parsing hotkey file (") + _hotkeyFilePath + std::wstring(L")\n")
-                + std::wstring(L"Found entry for unknown hotkey: ") + std::wstring(it.first.begin(), it.first.end());
-            ShowAssertDialogue(__fullMessage.c_str());
+            int lineNo = -1;
+            SHOW_HOTKEY_FAILURE(L"Found entry for unknown hotkey: " + std::wstring(it.first.begin(), it.first.end()));
         }
     }
 }

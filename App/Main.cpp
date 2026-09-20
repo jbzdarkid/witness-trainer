@@ -311,7 +311,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             const wchar_t* savesFolder = LR"(C:\Users\localhost\Documents\my games\runic games\hob\saves)";
             ShellExecute(NULL, L"open", savesFolder, NULL, NULL, SW_SHOWDEFAULT);
         } else if (command == OPEN_KEYBINDS) {
-            std::wstring hotkeyFile = Hotkeys::Get()->GetHotkeyFilePath();
+            std::wstring hotkeyFile = Hotkeys::GetHotkeyFilePath();
             ShellExecute(NULL, L"open", hotkeyFile.c_str(), NULL, NULL, SW_SHOWDEFAULT);
 
         } else if (command >= SELECT_POS && command <= SELECT_POS_MAX) {
